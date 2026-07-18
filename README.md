@@ -1,7 +1,7 @@
 # opiraja-hindamiskomponent
 Hindamiskomponent (HK) on AI abil toimiv tegum, mis toetab õpiraja teenust kasutaja teadmiste-oskuste automaatse testimise ja tagasisidega. Siinsed materjalid puudutavad demo ja  katse korraldamist.
 
-Hindamiskomponent on loodud kui õpiraja laiendusmoodul, mis töötab taustal. Hindamiskomponent lisab õpirjalae funktsioonid:
+Hindamiskomponent on loodud kui õpiraja laiendusmoodul, mis töötab taustal. Hindamiskomponent lisab õpirajale funktsioonid:
 
  * Kasutaja hindamise tellimuse põhjal testi ülesehituse disainimine
  * Ülesannete koostamine
