@@ -11,4 +11,4 @@ Hindamiskomponent on loodud kui õpiraja laiendusmoodul, mis töötab taustal. H
  * Tagasiside andmine kasutajale (õpiraja UI)
  * Mõõtmiskvaliteedi määratlemine
 
-Hindamiskomponent luuakse autonoomselt töötavana. Kasutajad saavad hindamist täpsustada esitades hindamiskomponendile kontkesti adnvaid amterjale ja reegeid ülesanneete koostamiseks. Hindamistulemust määratlevad põhiprotsessid on komponendis deterministrlikud. 
+Hindamiskomponent luuakse autonoomselt töötavana. Kasutajad saavad hindamist täpsustada esitades hindamiskomponendile kontkesti andvaid amterjale ja reegeid ülesannete koostamiseks. Hindamistulemust määratlevad põhiprotsessid on komponendis deterministrlikud. 
