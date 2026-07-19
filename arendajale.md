@@ -15,7 +15,7 @@ sellest ei ole "mida kood teeb" (see on koodis endas kommentaaridena), vaid
 | **ATA** (Automated Test Assembly) | Testi kokkupanemise mootor: KST-mudeli arvutus, ülesannete sidumine | shinyapps.io, rakendus `ATA_kst` | `app.R`, `api.R` |
 | **TP** (Testipleier) | Kasutajale nähtav testi läbiviimise UI, adaptiivne küsimuste valik | shinyapps.io, rakendus `TP_kst` | `app.R`, `TP_loogika.R` |
 | **YG** (Ülesandegeneraator) | AI-põhine (Gemini) uute testiülesannete loomine | Supabase Edge Function | `index.ts` |
-| **HK_admin** | Arendusaegne simulaator/testtööriist (pole rkenduse osa(!)) | shinyapps.io, rakendus `HK_admin` | `app.R` |
+| **HK_admin** | Arendusaegne simulaator/testimistööriist (pole rkenduse osa(!)) | shinyapps.io, rakendus `HK_admin` | `app.R` |
 
 Kõik komponendid on **täiesti eraldiseisvad protsessid** — nad ei kutsu teineteist
 otse funktsioonikutsetega (nagu tavaliselt monoliitrakenduses), vaid suhtlevad
