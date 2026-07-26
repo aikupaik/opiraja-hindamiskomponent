@@ -3,10 +3,12 @@
 ## Project objective
 
 Transform the existing prototype into a maintainable full-stack application
-according to `pilot_architecture_plan.md`.
+according to `docs/pilot_architecture_plan.md`.
 
 The prototype demonstrates intended behaviour but is not authoritative for
 architecture, security, validation, persistence, or production quality.
+
+Do not alter the code in `ATA_kst/` and `TP_kst`. Only use them as references.
 
 # Python project instructions
 
