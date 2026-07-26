@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "three_node_chain",
+      "nodes": ["A", "B", "C"],
+      "relations": [
+        {
+          "from": "A",
+          "to": "B"
+        },
+        {
+          "from": "B",
+          "to": "C"
+        }
+      ],
+      "expected_states": [
+        [],
+        ["A"],
+        ["A", "B"],
+        ["A", "B", "C"]
+      ]
+    },
+    {
+      "id": "three_node_fork",
+      "nodes": ["A", "B", "C"],
+      "relations": [
+        {
+          "from": "A",
+          "to": "B"
+        },
+        {
+          "from": "A",
+          "to": "C"
+        }
+      ],
+      "expected_states": [
+        [],
+        ["A"],
+        ["A", "B"],
+        ["A", "C"],
+        ["A", "B", "C"]
+      ]
+    },
+    {
+      "id": "three_independent_nodes",
+      "nodes": ["A", "B", "C"],
+      "relations": [],
+      "expected_states": [
+        [],
+        ["A"],
+        ["B"],
+        ["C"],
+        ["A", "B"],
+        ["A", "C"],
+        ["B", "C"],
+        ["A", "B", "C"]
+      ]
+    },
+    {
+      "id": "chain_with_redundant_transitive_relation",
+      "nodes": ["A", "B", "C"],
+      "relations": [
+        {
+          "from": "A",
+          "to": "B"
+        },
+        {
+          "from": "B",
+          "to": "C"
+        },
+        {
+          "from": "A",
+          "to": "C"
+        }
+      ],
+      "expected_states": [
+        [],
+        ["A"],
+        ["A", "B"],
+        ["A", "B", "C"]
+      ],
+      "same_states_as": "three_node_chain"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "fixture_schema_version": 1,
+  "r_version": "4.6.1",
+  "package_versions": {
+    "kst": "0.5-5",
+    "kstMatrix": "2.3-4"
+  },
+  "git_revision": "5dce3cc3929e995a79cbaf4bf229d1d40d41b2f9",
+  "numerical_tolerance": 1e-12,
+  "reference_sha256": {
+    "ata_api": "771d3e6a02dc885716ec1f99197c6cbf35affb99d4fce29dfe00f6b014fc24e0",
+    "tp_logic": "de3c553d5c8ecb3cd8a9cfad56d8ba16adb7ff77fbafa99f0055c3e89b62c782",
+    "tp_app": "0466f73299c6836a89bcd5d05f49f71f0334b784b19d573d83ffedf3886fc21a"
+  },
+  "fixtures": ["knowledge_spaces.json", "models.json", "adaptive.json", "stopping.json", "profiles.json", "configuration.json"]
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "canonical_snapshot": {
+    "feedback_credible_mass": 0.9,
+    "reliability_floor": {
+      "maximum": 10,
+      "minimum": 7,
+      "multiplier": 1.5
+    },
+    "safety_cap": {
+      "minimum_above_floor": 1,
+      "node_multiplier": 2
+    },
+    "schema_version": 1,
+    "stop_confidence": 0.8
+  },
+  "configuration_hash": "kst-config-v1:sha256:89b7af74a8eca453d36a3410e18f8c221000ea67cc06388418ec675de766c774",
+  "formulas": {
+    "reliability_floor": "min(max(7, ceiling(1.5 * n)), 10)",
+    "safety_cap": "max(2 * n, reliability_floor(n) + 1)"
+  }
+}

@@ -4,3 +4,4 @@ developer_notes.md
 .venv/
 __pycache__/
 *.pyc
+R/library/

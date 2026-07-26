@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "tolerance": 1e-12,
+  "model_case": "three_node_chain",
+  "beta": [0.1, 0.15, 0.2],
+  "eta": [0.2, 0.25, 0.3],
+  "initial_posterior": [0.25, 0.25, 0.25, 0.25],
+  "single_updates": {
+    "correct": {
+      "question_index": 2,
+      "question_node": "B",
+      "response_correct": true,
+      "posterior": [0.113636363636364, 0.113636363636364, 0.386363636363636, 0.386363636363636]
+    },
+    "incorrect": {
+      "question_index": 2,
+      "question_node": "B",
+      "response_correct": false,
+      "posterior": [0.416666666666667, 0.416666666666667, 0.0833333333333333, 0.0833333333333333]
+    }
+  },
+  "multi_answer_sequence": [
+    {
+      "question_index": 2,
+      "question_node": "B",
+      "response_correct": true,
+      "posterior": [0.113636363636364, 0.113636363636364, 0.386363636363636, 0.386363636363636]
+    },
+    {
+      "question_index": 3,
+      "question_node": "C",
+      "response_correct": false,
+      "posterior": [0.15695067264574, 0.15695067264574, 0.533632286995516, 0.152466367713005]
+    },
+    {
+      "question_index": 1,
+      "question_node": "A",
+      "response_correct": true,
+      "posterior": [0.039727582292849, 0.178774120317821, 0.60783200908059, 0.17366628830874]
+    },
+    {
+      "question_index": 2,
+      "question_node": "B",
+      "response_correct": true,
+      "posterior": [0.0138154259098445, 0.0621694165943002, 0.71867845583011, 0.205336701665746]
+    }
+  ],
+  "posterior_invariants": {
+    "length": 4,
+    "non_negative": true,
+    "sum": 1,
+    "json_representation": "unnamed_array"
+  },
+  "half_split_tie": {
+    "posterior": [0.5, 0, 0, 0.5],
+    "allowed_indices": [1, 2, 3],
+    "allowed_nodes": ["A", "B", "C"]
+  }
+}

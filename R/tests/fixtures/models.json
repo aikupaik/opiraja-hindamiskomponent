@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "input": {
+    "nodes": ["A", "B", "C"],
+    "relations": [
+      {
+        "from": "A",
+        "to": "B"
+      },
+      {
+        "from": "B",
+        "to": "C"
+      }
+    ],
+    "node_parameters": [
+      {
+        "node": "A",
+        "beta": 0.1,
+        "eta": 0.2,
+        "item_id": "item-a"
+      },
+      {
+        "node": "B",
+        "beta": 0.15,
+        "eta": 0.25,
+        "item_id": "item-b"
+      },
+      {
+        "node": "C",
+        "beta": 0.2,
+        "eta": 0.3,
+        "item_id": "item-c"
+      }
+    ]
+  },
+  "generated_model": {
+    "method": "kst",
+    "nodes": ["A", "B", "C"],
+    "knowledge_states": [
+      [],
+      ["A"],
+      ["A", "B"],
+      ["A", "B", "C"]
+    ],
+    "matrix": [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [1, 1, 1]
+    ],
+    "prior": [0.25, 0.25, 0.25, 0.25],
+    "beta": [0.1, 0.15, 0.2],
+    "eta": [0.2, 0.25, 0.3]
+  },
+  "cached_model": {
+    "method": "kst",
+    "nodes": ["A", "B", "C"],
+    "knowledge_states": [
+      [],
+      ["A"],
+      ["A", "B"],
+      ["A", "B", "C"]
+    ],
+    "matrix": [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [1, 1, 1]
+    ],
+    "prior": [0.25, 0.25, 0.25, 0.25],
+    "beta": [0.1, 0.15, 0.2],
+    "eta": [0.2, 0.25, 0.3]
+  },
+  "generated_equals_cached": true,
+  "initial_half_split": {
+    "candidate_indices": [2],
+    "allowed_nodes": ["B"],
+    "selected_index": 2,
+    "selected_node": "B",
+    "unique_optimum": true
+  }
+}

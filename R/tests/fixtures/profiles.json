@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "credible_mass_threshold": 0.9,
+  "cases": [
+    {
+      "id": "single_credible_state",
+      "model_case": "three_node_chain",
+      "posterior": [0.03, 0.91, 0.04, 0.02],
+      "credible_state_indices": [2],
+      "expected": {
+        "mastered": ["A"],
+        "ready_to_learn": ["B"],
+        "uncertain_ahead": [],
+        "uncertain_prerequisite": [],
+        "not_yet": ["C"],
+        "summary": null,
+        "stop_reason": "natural",
+        "best_state_confidence": 0.91,
+        "credible_mass": 0.91,
+        "credible_state_count": 1
+      }
+    },
+    {
+      "id": "multiple_credible_states",
+      "model_case": "three_node_chain",
+      "posterior": [0.05, 0.45, 0.45, 0.05],
+      "credible_state_indices": [2, 3],
+      "expected": {
+        "mastered": ["A"],
+        "ready_to_learn": [],
+        "uncertain_ahead": ["B", "C"],
+        "uncertain_prerequisite": [],
+        "not_yet": [],
+        "summary": "Sul on nüüd mitu võimalikku suunda, kust jätkata - kõik sobivad järgmiseks võrdselt hästi.",
+        "stop_reason": "natural",
+        "best_state_confidence": 0.45,
+        "credible_mass": 0.9,
+        "credible_state_count": 2
+      }
+    },
+    {
+      "id": "all_mastered",
+      "model_case": "three_node_chain",
+      "posterior": [0.02, 0.02, 0.02, 0.94],
+      "credible_state_indices": [4],
+      "expected": {
+        "mastered": ["A", "B", "C"],
+        "ready_to_learn": [],
+        "uncertain_ahead": [],
+        "uncertain_prerequisite": [],
+        "not_yet": [],
+        "summary": "Teadsid kõike! Võta uus õpiväljund.",
+        "stop_reason": "natural",
+        "best_state_confidence": 0.94,
+        "credible_mass": 0.94,
+        "credible_state_count": 1
+      }
+    },
+    {
+      "id": "multiple_next_directions",
+      "model_case": "three_node_fork",
+      "posterior": [0.01, 0.96, 0.01, 0.01, 0.01],
+      "credible_state_indices": [2],
+      "expected": {
+        "mastered": ["A"],
+        "ready_to_learn": ["B", "C"],
+        "uncertain_ahead": [],
+        "uncertain_prerequisite": [],
+        "not_yet": [],
+        "summary": "Sul on nüüd mitu võimalikku suunda, kust jätkata - kõik sobivad järgmiseks võrdselt hästi.",
+        "stop_reason": "natural",
+        "best_state_confidence": 0.96,
+        "credible_mass": 0.96,
+        "credible_state_count": 1
+      }
+    },
+    {
+      "id": "safety_cap",
+      "model_case": "three_node_chain",
+      "posterior": [0.25, 0.25, 0.25, 0.25],
+      "credible_state_indices": [1, 2, 3, 4],
+      "expected": {
+        "mastered": [],
+        "ready_to_learn": [],
+        "uncertain_ahead": ["A", "B", "C"],
+        "uncertain_prerequisite": [],
+        "not_yet": [],
+        "summary": "Sul on nüüd mitu võimalikku suunda, kust jätkata - kõik sobivad järgmiseks võrdselt hästi.",
+        "stop_reason": "safety_cap",
+        "best_state_confidence": 0.25,
+        "credible_mass": 1,
+        "credible_state_count": 4
+      }
+    }
+  ],
+  "uncertain_prerequisite_note": "The field is preserved but empty in all valid legacy fixtures; no reachable valid knowledge-state case produces it."
+}
