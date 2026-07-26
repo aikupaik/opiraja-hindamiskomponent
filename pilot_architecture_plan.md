@@ -32,8 +32,9 @@ Supabase INSERT webhook → existing YG Edge Function → ylesandepank
 - Keep correctness-dependent answer-processing operations sequentially awaited. Do not parallelize result insertion, telemetry, or session compare-and-set updates merely because the clients are asynchronous.
 - Do not call blocking network or file APIs directly on the event loop; offload any unavoidable blocking operation to a worker thread.
 - Keep the application modular by responsibility—API routes, assessment service, repository, R client, and domain models—but deploy it as one process.
+- Keep OR-facing and player-facing endpoints in separate `APIRouter` modules. Both use an injected authorization dependency that returns a small `AuthContext` (`actor_type`, `subject`, `scopes`, and optional authorized `test_id`); the phase-one implementation permits requests, while the pre-pilot implementation defined below validates bearer credentials. Assessment services do not parse JWTs or depend on FastAPI security classes.
 - Expose dependency-free liveness and bounded dependency-aware readiness endpoints. Readiness checks use short timeouts and report unavailable when Supabase or R is not ready; liveness does not call dependencies.
-- Emit one structured completion log per request with request ID, optional `test_id`, outcome/status, total duration, cumulative Supabase and R durations, and Supabase/R call counts. Keep these as log fields rather than adding monitoring infrastructure.
+- Emit one structured completion log per request with request ID, optional `test_id`, outcome/status, total duration, cumulative Supabase and R durations, and Supabase/R call counts. Keep these as log fields rather than adding monitoring infrastructure, and never log authorization headers, player tokens, or signing secrets.
 - Validate non-empty unique nodes, relation endpoints, supported method `kst`, and `MAX_GRAPH_NODES`. The default limit is `10` and exists in exactly one backend setting.
 - Compute a language-neutral graph hash from canonical sorted UTF-8 JSON and prefix/version the algorithm. Old R-generated cache rows remain untouched and may coexist.
 
@@ -89,16 +90,21 @@ Create and commit an `renv.lock`; the container must restore it rather than rely
 
 ### Public API
 
+The phase-one MVP keeps these routes callable without credentials through the permissive authorization dependency. Their separation and required pre-pilot permissions are defined now so authorization can later be enabled without changing assessment services or persistence.
+
 - `POST /api/v1/tests`
+  - OR-facing; pre-pilot permission: `tests:create`.
   - Input: `user_id`, `learning_path_id`, optional `course`/`goal`, `method="kst"`, optional `cognitive_level`, `nodes: string[]`, and `relations: {from,to}[]`.
   - Output: `test_id`, `status`, `player_url`, and `missing_nodes`.
   - Builds/caches the graph, creates the session, checks item coverage, and either activates immediately or creates one non-duplicate `yg_tellimused` row.
 
 - `GET /api/v1/tests/{test_id}`
-  - Read-only OR-facing polling endpoint.
+  - OR-facing; pre-pilot permission: `tests:read`.
+  - Read-only polling endpoint.
   - Returns `preparing`, `active`, `completed`, or `failed`; completed responses include mapped feedback.
 
 - `POST /api/v1/player/tests/{test_id}/start`
+  - Player-facing; pre-pilot permission: `test:play` for the same `test_id`.
   - Idempotent player command.
   - While YG is pending, returns `202` with `Retry-After: 3`.
   - When coverage becomes complete, builds and stores the R model, activates the session, selects and persists the first question, and returns it.
@@ -106,6 +112,7 @@ Create and commit an `renv.lock`; the container must restore it rather than rely
   - YG status `viga` marks the session failed.
 
 - `POST /api/v1/player/tests/{test_id}/answers`
+  - Player-facing; pre-pilot permission: `test:play` for the same `test_id`.
   - Input: `submission_id` and opaque `option_id`.
   - Resolves the selected text server-side, scores it, calls R `/advance`, commits the result/session state, and returns either the next question or final feedback.
   - Replaying an accepted `submission_id` returns the current session view without inserting another result.
@@ -128,7 +135,7 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 1. Capture the current R behavior in numerical regression fixtures before removing Shiny entrypoints; document the experimental KST configuration and API contracts.
 2. Verify the deployed `vastus_id` constraint/default and its `submission_id` repository mapping, then add the asynchronous repository/domain interfaces with async in-memory fakes.
 3. Extract the pure KST functions into the R service, add Plumber contracts, validation, health checks, `testthat`, and `renv`.
-4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, bounded R-call capacity, operational health endpoints, and structured request/dependency timing logs.
+4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, bounded R-call capacity, operational health endpoints, structured request/dependency timing logs, separate OR/player routers, and the permissive `AuthContext` dependency seam.
 5. Build the React player and behavior tests, then replace the Shiny UI/API entrypoints.
 6. Add Docker Compose with `web`, `api`, and `r-service`; only `web` publishes a host port. Supabase secrets go only to `api`.
 7. Verify the deployed Supabase webhook contract with one real missing-coverage test, then update the README with local startup, configuration, migration, smoke-test, and VM deployment instructions.
@@ -136,12 +143,57 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 ## Test and Acceptance Plan
 
 - R tests: chain and relation-free knowledge spaces, known Bayesian vectors, half-split validity, natural and safety-cap stopping, five-way profile classification, malformed matrices, and configuration snapshots.
-- Backend tests: covered versus missing item banks, duplicate YG prevention, YG success/failure, stable reloads, hidden answer keys, correct/incorrect scoring, stale tokens, duplicate answer replay, completion, R failure, Supabase failure, R pool-acquisition timeout without state advancement, health endpoint semantics, and structured request/dependency timing fields.
+- Backend tests: covered versus missing item banks, duplicate YG prevention, YG success/failure, stable reloads, hidden answer keys, correct/incorrect scoring, stale tokens, duplicate answer replay, completion, R failure, Supabase failure, R pool-acquisition timeout without state advancement, health endpoint semantics, structured request/dependency timing fields, OR/player router separation, and authorization-dependency overrides.
 - Contract tests run FastAPI against the real Dockerized R service; normal backend unit tests replace both async R and Supabase adapters through dependency injection.
 - React tests use Vitest and Testing Library for `Retry-After` polling with deterministic jitter, timer cleanup, accessible option selection, disabled/double-submit behavior, reloads, errors, completion, and all feedback sections.
 - Supabase/YG tests are opt-in smoke tests against the configured pilot project, not part of normal unit-test execution.
 - End-to-end acceptance: `docker compose up --build` starts services that pass their readiness checks; a created link survives browser/API container restarts; missing items progress through the existing webhook; every accepted submission creates exactly one result; and a test reaches reproducible final feedback.
 - Changing `MAX_GRAPH_NODES` in one setting changes the enforced limit; changing the KST configuration file affects new sessions while existing sessions retain their stored configuration.
+
+## Pre-Pilot Security and Authorization
+
+This section is deliberately outside the phase-one MVP implementation and acceptance scope, but it is mandatory before exposing the application for a student pilot. It adds bearer authorization without adding student accounts, login screens, Supabase Auth, RLS changes, or authorization between FastAPI and the internal R service.
+
+### Authorization model
+
+- Replace the permissive phase-one authorization dependency with a JWT-validating implementation while preserving the same `AuthContext` contract and route handlers. FastAPI router/security dependencies enforce route-level scopes. [FastAPI security dependency documentation](https://fastapi.tiangolo.com/reference/dependencies/#fastapisecurity)
+- Treat OR and player credentials as separate token profiles with separate audiences and signing configuration. An OR credential must never authorize a player route, and a player credential must never authorize an OR route.
+- Treat `test_id` and `submission_id` as identifiers, not credentials. `submission_id` remains an idempotency token only.
+- Return `401` for missing, expired, or invalid credentials and `403` for a valid credential that lacks the required scope or is bound to a different test.
+
+### OR service token
+
+- The external õpirada/OR service sends `Authorization: Bearer <token>`.
+- Require a trusted OR issuer, audience `assessment-api`, a service subject, expiration, and the relevant scopes: `tests:create`, `tests:read`, and `tests:launch`.
+- `POST /api/v1/tests` requires `tests:create`; `GET /api/v1/tests/{test_id}` requires `tests:read`.
+- Add `POST /api/v1/tests/{test_id}/player-token`, requiring `tests:launch`, so OR can obtain a fresh test-bound player link when the original token has expired. This endpoint creates no new assessment session and does not change test state.
+- Prefer asymmetric signing when OR can provide a stable public verification key: OR retains its private key and FastAPI receives only the public key. If OR cannot issue JWTs for the first pilot, a configured high-entropy bearer-key validator may implement the same `AuthContext` temporarily without changing routes or services.
+
+### Player token
+
+- FastAPI issues a player JWT when a test is created or when authorized OR calls the player-token endpoint.
+- Require issuer `assessment-api`, audience `assessment-player`, subject, expiration, scope `test:play`, and a `test_id` claim. Do not include the learner's name, answer data, or other unnecessary personal information.
+- On every player request, validate the token and require its `test_id` claim to equal the path `{test_id}` before assessment processing. A token for one test cannot start, read, or answer another test.
+- Make the player-token lifetime a single configurable setting long enough for the scheduled pilot and expected YG preparation delay. There is no refresh-token flow, student login, or per-token revocation list in this pilot; completed and failed session states still prevent further assessment progress.
+- Put the token in the URL fragment, for example `/test/{test_id}#token=...`, rather than a query parameter. React reads the fragment and sends the token in the `Authorization` header; fragments are not sent in HTTP requests or normal reverse-proxy access logs. Keep the token in memory or session storage, not persistent local storage.
+
+### Token validation and transport
+
+- Pin one JWT library when this phase is implemented. Configure a fixed allowed algorithm rather than trusting the token header, and require and validate `iss`, `aud`, `exp`, and `sub`; validate scopes and player `test_id` separately. Allow only a small configured clock-skew leeway. [PyJWT usage documentation](https://pyjwt.readthedocs.io/en/stable/usage.html)
+- Keep OR verification keys, player signing keys, expected issuers/audiences, and token lifetimes in backend environment settings. Never send signing material to React or commit it to the repository.
+- Require HTTPS at Nginx for the externally reachable pilot. Keep the browser and API same-origin, do not enable broad CORS, and set `Referrer-Policy: no-referrer` so player links are not disclosed to external resources.
+
+### Basic abuse controls
+
+- Authorization prevents unauthorized assessment work but is not denial-of-service protection. Configure Nginx request-body limits and bounded request/header timeouts before external exposure.
+- Apply a strict endpoint-specific rate limit to test creation and player-token issuance. Give start/answer/polling endpoints a more generous limit because many students may share one school IP address; validate the limits with the opt-in concurrency smoke test rather than choosing production-scale values speculatively.
+- Keep only Nginx public, keep R unreachable from the public network, and use the VM provider's firewall or upstream protection for traffic floods that cannot be handled inside the application.
+
+### Pre-pilot acceptance
+
+- Tests cover missing, malformed, expired, wrong-issuer, wrong-audience, wrong-scope, and wrong-`test_id` tokens; valid OR and player flows; fresh player-link issuance; redacted logs; and unauthenticated health endpoints.
+- An end-to-end test confirms that an authorized OR can create and poll a test, its issued player token can operate only that test, and requests without valid credentials cannot create tests or advance sessions.
+- The pilot is not opened to external users until HTTPS, authorization enforcement, secret injection, log redaction, and the basic Nginx abuse controls are verified in the deployed environment.
 
 ## Recommendations for the 100-Student Pilot
 
@@ -164,7 +216,7 @@ These are deliberately outside the phase-one MVP implementation and acceptance s
 ## Assumptions and Deferred Work
 
 - The deployed Supabase INSERT webhook invokes the existing YG Edge Function and uses the documented order payload/status values.
-- The pilot runs in a controlled environment with UUID links but no login, Supabase Auth, service-to-service authorization, or RLS changes.
+- The phase-one MVP runs in a controlled development environment with a permissive authorization dependency. The externally reachable pilot enables the mandatory pre-pilot authorization section above, while still having no student login, Supabase Auth, or RLS changes.
 - Only KST and multiple-choice questions are supported.
 - No admin UI, YG migration, OR UI integration, calibration/AN component, WebSockets, queues, Redis, background workers, load balancing, or multi-replica concurrency work is included.
-- Production hardening for approximately 100 simultaneous students, transaction redesign beyond submission idempotency, monitoring infrastructure, and authentication are later phases.
+- Full identity management, student accounts, fine-grained administrative roles, general token revocation, production-scale denial-of-service protection, transaction redesign beyond submission idempotency, monitoring infrastructure, and multi-replica hardening remain later phases.

@@ -18,4 +18,4 @@ Try to follow "supabase_andmemudel.md". The data model should remain unchanged u
 The database will stay in Supabase for now. This means you can use the Supabase SDK. However, I would prefer it, if you built a database interface, where supabase is just one of the implementations for this interface so that we could later switch to a self-hosted PostgreSQL instance instead.
 
 ## Authentication & authorization
-Keep it very simple for now. No log in needed, no supabase auth. No authorization between internal services. JWT and proper authorization will come later.
+Keep it very simple for now.
