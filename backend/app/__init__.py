@@ -1,0 +1,1 @@
+"""Assessment backend application package."""

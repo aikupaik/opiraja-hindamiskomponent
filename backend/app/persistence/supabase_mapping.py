@@ -1,0 +1,673 @@
+"""Pure mapping between Supabase rows and the English domain.
+
+All deployed Estonian table, column, and status vocabulary is confined to this
+module. The functions neither import nor call a Supabase client.
+"""
+
+from collections.abc import Mapping, Sequence
+from datetime import datetime
+from typing import TypeAlias, cast
+from uuid import UUID
+
+from app.domain.models import (
+    KST_CONFIGURATION_SCHEMA_VERSION,
+    KST_MODEL_SCHEMA_VERSION,
+    PLAYER_STATE_SCHEMA_VERSION,
+    AnswerRecord,
+    AnsweredItem,
+    AssessmentItem,
+    AssessmentMethod,
+    AssessmentSession,
+    CurrentQuestion,
+    FinalProfile,
+    GraphCacheEntry,
+    GraphDefinition,
+    GraphRelation,
+    ItemId,
+    ItemStatus,
+    KnowledgeState,
+    KstConfiguration,
+    KstModel,
+    LearningPathId,
+    LegacyPlayerState,
+    OptionId,
+    PlayerState,
+    QuestionOption,
+    ReliabilityFloorConfiguration,
+    SafetyCapConfiguration,
+    SessionStatus,
+    StopReason,
+    SubmissionId,
+    TestId,
+    YgOrder,
+    YgOrderId,
+    YgStatus,
+)
+from app.domain.repository import RepositoryDataError
+
+JsonScalar: TypeAlias = None | bool | int | float | str
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+Row: TypeAlias = Mapping[str, object]
+EncodedRow: TypeAlias = dict[str, JsonValue]
+
+GRAPH_TABLE = "graafid_kst"
+SESSION_TABLE = "testisessioonid"
+ITEM_TABLE = "ylesandepank"
+ANSWER_TABLE = "tulemustepank"
+YG_ORDER_TABLE = "yg_tellimused"
+
+GRAPH_COLUMNS = "graaf_hash,graafi_struktuur,teadmusruum_maatriks,loodud"
+SESSION_COLUMNS = (
+    "test_id,kasutaja_id,rada_id,graaf_hash,staatus,alustatud,"
+    "lopp_profiil,testi_loogika,metoodika,tp_seisund,eesmark"
+)
+ITEM_COLUMNS = (
+    "yp_id,graafi_objekt,juhis,tyvi,stiimul,voti,distraktor_1,"
+    "distraktor_2,distraktor_3,beeta_error,g_guess,staatus,"
+    "kasutamiste_arv,viimane_kasutus"
+)
+ANSWER_COLUMNS = "vastus_id,test_id,yp_id,skoor,valitud_vastus,vastatud_ajal"
+YG_ORDER_COLUMNS = (
+    "id,test_id,kursus,graafi_objektid,kognitiivne_tase,maht,staatus,loodud"
+)
+
+_SESSION_TO_DB = {
+    SessionStatus.PREPARING: "planeerimisel",
+    SessionStatus.ACTIVE: "aktiivne",
+    SessionStatus.COMPLETED: "lõpetatud",
+    SessionStatus.FAILED: "katkenud",
+}
+_SESSION_FROM_DB = {value: key for key, value in _SESSION_TO_DB.items()}
+_YG_TO_DB = {
+    YgStatus.PENDING: "ootel",
+    YgStatus.PROCESSING: "tootmises",
+    YgStatus.COMPLETED: "tehtud",
+    YgStatus.FAILED: "viga",
+}
+_YG_FROM_DB = {value: key for key, value in _YG_TO_DB.items()}
+_ITEM_TO_DB = {
+    ItemStatus.DRAFT: "kavand",
+    ItemStatus.USABLE: "kasutatav",
+    ItemStatus.REVIEW: "läbi vaatamisel",
+    ItemStatus.ARCHIVED: "arhiivis",
+}
+_ITEM_FROM_DB = {value: key for key, value in _ITEM_TO_DB.items()}
+_STOP_TO_DB = {
+    StopReason.NATURAL: "loomulik",
+    StopReason.SAFETY_CAP: "turvapiir",
+}
+_STOP_FROM_DB = {value: key for key, value in _STOP_TO_DB.items()}
+
+
+def item_eligibility_filters(node: str) -> dict[str, str]:
+    """Filters for usable items; course is deliberately not part of identity."""
+
+    return {"graafi_objekt": node, "staatus": _ITEM_TO_DB[ItemStatus.USABLE]}
+
+
+def pending_yg_order_filters(test_id: TestId) -> dict[str, str]:
+    return {"test_id": str(test_id), "staatus": _YG_TO_DB[YgStatus.PENDING]}
+
+
+def encode_graph_entry(entry: GraphCacheEntry) -> EncodedRow:
+    return {
+        "graaf_hash": entry.graph_hash,
+        "graafi_struktuur": {
+            "solmed": list(entry.graph.nodes),
+            "seosed": [
+                {"eeltingimus": relation.prerequisite, "sõltuv": relation.dependent}
+                for relation in entry.graph.relations
+            ],
+        },
+        "teadmusruum_maatriks": [list(state.nodes) for state in entry.knowledge_states],
+    }
+
+
+def decode_graph_entry(row: Row) -> GraphCacheEntry:
+    graph_data = _mapping(row, "graafi_struktuur")
+    relations_data = _sequence(graph_data, "seosed")
+    return GraphCacheEntry(
+        graph_hash=_string(row, "graaf_hash"),
+        graph=GraphDefinition(
+            nodes=_string_tuple(_sequence(graph_data, "solmed"), "solmed"),
+            relations=tuple(
+                GraphRelation(
+                    prerequisite=_string(_as_mapping(value, "seos"), "eeltingimus"),
+                    dependent=_string(_as_mapping(value, "seos"), "sõltuv"),
+                )
+                for value in relations_data
+            ),
+        ),
+        knowledge_states=tuple(
+            KnowledgeState(
+                _string_tuple(_as_sequence(value, "teadmusseisund"), "teadmusseisund")
+            )
+            for value in _sequence(row, "teadmusruum_maatriks")
+        ),
+        created_at=_optional_datetime(row, "loodud"),
+    )
+
+
+def encode_item(item: AssessmentItem) -> EncodedRow:
+    distractors = (*item.distractors, None, None, None)
+    return {
+        "yp_id": int(item.item_id),
+        "graafi_objekt": item.node,
+        "juhis": item.instruction,
+        "tyvi": item.prompt,
+        "stiimul": item.stimulus,
+        "voti": item.answer_key,
+        "distraktor_1": distractors[0],
+        "distraktor_2": distractors[1],
+        "distraktor_3": distractors[2],
+        "beeta_error": item.beta,
+        "g_guess": item.eta,
+        "staatus": _ITEM_TO_DB[item.status],
+        "kasutamiste_arv": item.usage_count,
+        "viimane_kasutus": _encode_datetime(item.last_used_at),
+    }
+
+
+def decode_item(row: Row) -> AssessmentItem:
+    distractors = tuple(
+        value
+        for key in ("distraktor_1", "distraktor_2", "distraktor_3")
+        if (value := _optional_string(row, key)) is not None
+    )
+    return AssessmentItem(
+        item_id=ItemId(_integer(row, "yp_id")),
+        node=_string(row, "graafi_objekt"),
+        instruction=_string(row, "juhis"),
+        prompt=_string(row, "tyvi"),
+        stimulus=_optional_string(row, "stiimul"),
+        answer_key=_string(row, "voti"),
+        distractors=distractors,
+        beta=_number(row, "beeta_error"),
+        eta=_number(row, "g_guess"),
+        status=_enum_value(_ITEM_FROM_DB, row, "staatus"),
+        usage_count=_integer(row, "kasutamiste_arv"),
+        last_used_at=_optional_datetime(row, "viimane_kasutus"),
+    )
+
+
+def encode_answer(answer: AnswerRecord) -> EncodedRow:
+    """Encode an insert and always write the caller's UUID explicitly."""
+
+    return {
+        "vastus_id": str(answer.submission_id),
+        "test_id": str(answer.test_id),
+        "yp_id": int(answer.item_id),
+        "skoor": answer.score,
+        "valitud_vastus": answer.selected_answer,
+        "vastatud_ajal": _encode_datetime(answer.answered_at),
+    }
+
+
+def decode_answer(row: Row) -> AnswerRecord:
+    return AnswerRecord(
+        submission_id=SubmissionId(_uuid(row, "vastus_id")),
+        test_id=TestId(_uuid(row, "test_id")),
+        item_id=ItemId(_integer(row, "yp_id")),
+        score=_integer(row, "skoor"),
+        selected_answer=_string(row, "valitud_vastus"),
+        answered_at=_optional_datetime(row, "vastatud_ajal"),
+    )
+
+
+def encode_yg_order(order: YgOrder) -> EncodedRow:
+    row: EncodedRow = {
+        "test_id": str(order.test_id),
+        "kursus": order.course,
+        "graafi_objektid": list(order.nodes),
+        "kognitiivne_tase": order.cognitive_level,
+        "maht": order.volume,
+        "staatus": _YG_TO_DB[order.status],
+    }
+    if order.order_id is not None:
+        row["id"] = int(order.order_id)
+    return row
+
+
+def decode_yg_order(row: Row) -> YgOrder:
+    raw_id = row.get("id")
+    return YgOrder(
+        order_id=None if raw_id is None else YgOrderId(_expect_int(raw_id, "id")),
+        test_id=TestId(_uuid(row, "test_id")),
+        course=_string(row, "kursus"),
+        nodes=_string_tuple(_sequence(row, "graafi_objektid"), "graafi_objektid"),
+        cognitive_level=_optional_string(row, "kognitiivne_tase"),
+        volume=_integer(row, "maht"),
+        status=_enum_value(_YG_FROM_DB, row, "staatus"),
+        created_at=_optional_datetime(row, "loodud"),
+    )
+
+
+def encode_session(session: AssessmentSession) -> EncodedRow:
+    if not isinstance(session.player_state, PlayerState):
+        raise RepositoryDataError("legacy player state cannot be written")
+    if session.player_state.schema_version != PLAYER_STATE_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            f"unsupported player state schema version: {session.player_state.schema_version}"
+        )
+    return {
+        "test_id": str(session.test_id),
+        "kasutaja_id": session.user_id,
+        "rada_id": str(session.learning_path_id),
+        "graaf_hash": session.graph_hash,
+        "staatus": _SESSION_TO_DB[session.status],
+        "alustatud": _encode_datetime(session.started_at),
+        "lopp_profiil": (
+            None
+            if session.final_profile is None
+            else encode_final_profile(session.final_profile)
+        ),
+        "testi_loogika": (
+            None if session.model is None else encode_kst_model(session.model)
+        ),
+        "metoodika": session.method.value,
+        "tp_seisund": encode_player_state(session.player_state),
+        "eesmark": session.goal,
+    }
+
+
+def decode_session(row: Row) -> AssessmentSession:
+    raw_state = _mapping(row, "tp_seisund")
+    raw_model = row.get("testi_loogika")
+    raw_profile = row.get("lopp_profiil")
+    method_text = _string(row, "metoodika")
+    try:
+        method = AssessmentMethod(method_text)
+    except ValueError as error:
+        raise RepositoryDataError(
+            f"unknown assessment method: {method_text!r}"
+        ) from error
+    return AssessmentSession(
+        test_id=TestId(_uuid(row, "test_id")),
+        user_id=_string(row, "kasutaja_id"),
+        learning_path_id=LearningPathId(_string(row, "rada_id")),
+        graph_hash=_optional_string(row, "graaf_hash"),
+        status=_enum_value(_SESSION_FROM_DB, row, "staatus"),
+        started_at=_datetime(row, "alustatud"),
+        method=method,
+        player_state=decode_player_state(raw_state),
+        model=(
+            None
+            if raw_model is None
+            else decode_kst_model(_as_mapping(raw_model, "testi_loogika"))
+        ),
+        final_profile=(
+            None
+            if raw_profile is None
+            else decode_final_profile(_as_mapping(raw_profile, "lopp_profiil"))
+        ),
+        goal=_optional_string(row, "eesmark"),
+    )
+
+
+def encode_player_state(state: PlayerState) -> dict[str, JsonValue]:
+    if state.schema_version != PLAYER_STATE_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            f"unsupported player state schema version: {state.schema_version}"
+        )
+    return {
+        "schema_version": state.schema_version,
+        "posterior": list(state.posterior),
+        "answered_items": [
+            {
+                "submission_id": str(answer.submission_id),
+                "item_id": int(answer.item_id),
+                "node": answer.node,
+                "response_correct": answer.response_correct,
+            }
+            for answer in state.answered_items
+        ],
+        "current_question": (
+            None
+            if state.current_question is None
+            else _encode_current_question(state.current_question)
+        ),
+    }
+
+
+def decode_player_state(data: Row) -> PlayerState | LegacyPlayerState:
+    version = data.get("schema_version")
+    if version is None:
+        # The deployed legacy shape used kysitud and had no submission tokens.
+        legacy_answers: list[AnsweredItem] = []
+        for index, value in enumerate(_optional_sequence(data, "kysitud")):
+            answer = _as_mapping(value, "kysitud")
+            legacy_answers.append(
+                AnsweredItem(
+                    submission_id=SubmissionId(
+                        UUID(int=index + 1)
+                    ),  # stable sentinel; legacy sessions are never resumed
+                    item_id=ItemId(_integer(answer, "yp_id")),
+                    node=_string(answer, "solm"),
+                    response_correct=_boolean(answer, "vastus_oige"),
+                )
+            )
+        return LegacyPlayerState(
+            posterior=_number_tuple(_optional_sequence(data, "posterior"), "posterior"),
+            answered_items=tuple(legacy_answers),
+        )
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise RepositoryDataError("tp_seisund.schema_version must be an integer")
+    if version != PLAYER_STATE_SCHEMA_VERSION:
+        raise RepositoryDataError(f"unsupported player state schema version: {version}")
+    current = data.get("current_question")
+    return PlayerState(
+        schema_version=version,
+        posterior=_number_tuple(_sequence(data, "posterior"), "posterior"),
+        answered_items=tuple(
+            _decode_answered_item(_as_mapping(value, "answered_item"))
+            for value in _sequence(data, "answered_items")
+        ),
+        current_question=(
+            None
+            if current is None
+            else _decode_current_question(_as_mapping(current, "current_question"))
+        ),
+    )
+
+
+def encode_kst_model(model: KstModel) -> dict[str, JsonValue]:
+    if model.schema_version != KST_MODEL_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            f"unsupported KST model schema version: {model.schema_version}"
+        )
+    return {
+        "schema_version": model.schema_version,
+        "method": model.method.value,
+        "nodes": list(model.nodes),
+        "knowledge_states": [list(state.nodes) for state in model.knowledge_states],
+        "matrix": [list(row) for row in model.matrix],
+        "uniform_prior": list(model.uniform_prior),
+        "beta": list(model.beta),
+        "eta": list(model.eta),
+        "configuration": _encode_kst_configuration(model.configuration),
+        "configuration_hash": model.configuration_hash,
+    }
+
+
+def decode_kst_model(data: Row) -> KstModel:
+    version = _integer(data, "schema_version")
+    if version != KST_MODEL_SCHEMA_VERSION:
+        raise RepositoryDataError(f"unsupported KST model schema version: {version}")
+    method_text = _string(data, "method")
+    if method_text != AssessmentMethod.KST.value:
+        raise RepositoryDataError(f"unknown KST model method: {method_text!r}")
+    return KstModel(
+        schema_version=version,
+        method=AssessmentMethod.KST,
+        nodes=_string_tuple(_sequence(data, "nodes"), "nodes"),
+        knowledge_states=tuple(
+            KnowledgeState(
+                _string_tuple(_as_sequence(value, "knowledge_state"), "knowledge_state")
+            )
+            for value in _sequence(data, "knowledge_states")
+        ),
+        matrix=tuple(
+            _integer_tuple(_as_sequence(value, "matrix row"), "matrix row")
+            for value in _sequence(data, "matrix")
+        ),
+        uniform_prior=_number_tuple(_sequence(data, "uniform_prior"), "uniform_prior"),
+        beta=_number_tuple(_sequence(data, "beta"), "beta"),
+        eta=_number_tuple(_sequence(data, "eta"), "eta"),
+        configuration=_decode_kst_configuration(_mapping(data, "configuration")),
+        configuration_hash=_string(data, "configuration_hash"),
+    )
+
+
+def encode_final_profile(profile: FinalProfile) -> dict[str, JsonValue]:
+    return {
+        "omandatud": list(profile.mastered),
+        "valmis_oppima": list(profile.ready_to_learn),
+        "ebamaarane_edasi": list(profile.uncertain_ahead),
+        "ebamaarane_tagasi": list(profile.uncertain_prerequisite),
+        "veel_mitte": list(profile.not_yet),
+        "kokkuvote": profile.summary,
+        "peatumise_pohjus": _STOP_TO_DB[profile.stop_reason],
+        "kindlus_parim_olek": profile.best_state_confidence,
+        "kindlus_C_hulgas": profile.credible_mass,
+        "n_usutavaid_olekuid": profile.credible_state_count,
+    }
+
+
+def decode_final_profile(data: Row) -> FinalProfile:
+    return FinalProfile(
+        mastered=_string_tuple(_sequence(data, "omandatud"), "omandatud"),
+        ready_to_learn=_string_tuple(_sequence(data, "valmis_oppima"), "valmis_oppima"),
+        uncertain_ahead=_string_tuple(
+            _sequence(data, "ebamaarane_edasi"), "ebamaarane_edasi"
+        ),
+        uncertain_prerequisite=_string_tuple(
+            _sequence(data, "ebamaarane_tagasi"), "ebamaarane_tagasi"
+        ),
+        not_yet=_string_tuple(_sequence(data, "veel_mitte"), "veel_mitte"),
+        summary=_optional_string(data, "kokkuvote"),
+        stop_reason=_enum_value(_STOP_FROM_DB, data, "peatumise_pohjus"),
+        best_state_confidence=_number(data, "kindlus_parim_olek"),
+        credible_mass=_number(data, "kindlus_C_hulgas"),
+        credible_state_count=_integer(data, "n_usutavaid_olekuid"),
+    )
+
+
+def _encode_kst_configuration(configuration: KstConfiguration) -> dict[str, JsonValue]:
+    if configuration.schema_version != KST_CONFIGURATION_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            "unsupported KST configuration schema version: "
+            f"{configuration.schema_version}"
+        )
+    return {
+        "schema_version": configuration.schema_version,
+        "stop_confidence": configuration.stop_confidence,
+        "feedback_credible_mass": configuration.feedback_credible_mass,
+        "reliability_floor": {
+            "minimum": configuration.reliability_floor.minimum,
+            "multiplier": configuration.reliability_floor.multiplier,
+            "maximum": configuration.reliability_floor.maximum,
+        },
+        "safety_cap": {
+            "node_multiplier": configuration.safety_cap.node_multiplier,
+            "responses_above_floor": configuration.safety_cap.responses_above_floor,
+        },
+    }
+
+
+def _decode_kst_configuration(data: Row) -> KstConfiguration:
+    version = _integer(data, "schema_version")
+    if version != KST_CONFIGURATION_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            f"unsupported KST configuration schema version: {version}"
+        )
+    floor = _mapping(data, "reliability_floor")
+    cap = _mapping(data, "safety_cap")
+    return KstConfiguration(
+        schema_version=version,
+        stop_confidence=_number(data, "stop_confidence"),
+        feedback_credible_mass=_number(data, "feedback_credible_mass"),
+        reliability_floor=ReliabilityFloorConfiguration(
+            minimum=_integer(floor, "minimum"),
+            multiplier=_number(floor, "multiplier"),
+            maximum=_integer(floor, "maximum"),
+        ),
+        safety_cap=SafetyCapConfiguration(
+            node_multiplier=_integer(cap, "node_multiplier"),
+            responses_above_floor=_integer(cap, "responses_above_floor"),
+        ),
+    )
+
+
+def _encode_current_question(question: CurrentQuestion) -> dict[str, JsonValue]:
+    return {
+        "submission_id": str(question.submission_id),
+        "item_id": int(question.item_id),
+        "node": question.node,
+        "instruction": question.instruction,
+        "prompt": question.prompt,
+        "stimulus": question.stimulus,
+        "options": [
+            {"id": str(option.option_id), "text": option.text}
+            for option in question.options
+        ],
+    }
+
+
+def _decode_current_question(data: Row) -> CurrentQuestion:
+    return CurrentQuestion(
+        submission_id=SubmissionId(_uuid(data, "submission_id")),
+        item_id=ItemId(_integer(data, "item_id")),
+        node=_string(data, "node"),
+        instruction=_string(data, "instruction"),
+        prompt=_string(data, "prompt"),
+        stimulus=_optional_string(data, "stimulus"),
+        options=tuple(
+            QuestionOption(
+                option_id=OptionId(_string(_as_mapping(value, "option"), "id")),
+                text=_string(_as_mapping(value, "option"), "text"),
+            )
+            for value in _sequence(data, "options")
+        ),
+    )
+
+
+def _decode_answered_item(data: Row) -> AnsweredItem:
+    return AnsweredItem(
+        submission_id=SubmissionId(_uuid(data, "submission_id")),
+        item_id=ItemId(_integer(data, "item_id")),
+        node=_string(data, "node"),
+        response_correct=_boolean(data, "response_correct"),
+    )
+
+
+def _enum_value[T](values: Mapping[str, T], row: Row, key: str) -> T:
+    raw = _string(row, key)
+    try:
+        return values[raw]
+    except KeyError as error:
+        raise RepositoryDataError(f"unknown {key}: {raw!r}") from error
+
+
+def _mapping(row: Row, key: str) -> Row:
+    return _as_mapping(_required(row, key), key)
+
+
+def _as_mapping(value: object, name: str) -> Row:
+    if not isinstance(value, Mapping):
+        raise RepositoryDataError(f"{name} must be an object")
+    return cast(Row, value)
+
+
+def _sequence(row: Row, key: str) -> Sequence[object]:
+    return _as_sequence(_required(row, key), key)
+
+
+def _optional_sequence(row: Row, key: str) -> Sequence[object]:
+    value = row.get(key)
+    return () if value is None else _as_sequence(value, key)
+
+
+def _as_sequence(value: object, name: str) -> Sequence[object]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise RepositoryDataError(f"{name} must be an array")
+    return cast(Sequence[object], value)
+
+
+def _required(row: Row, key: str) -> object:
+    try:
+        return row[key]
+    except KeyError as error:
+        raise RepositoryDataError(f"missing required field: {key}") from error
+
+
+def _string(row: Row, key: str) -> str:
+    value = _required(row, key)
+    if not isinstance(value, str):
+        raise RepositoryDataError(f"{key} must be a string")
+    return value
+
+
+def _optional_string(row: Row, key: str) -> str | None:
+    value = row.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RepositoryDataError(f"{key} must be a string or null")
+    return value
+
+
+def _integer(row: Row, key: str) -> int:
+    return _expect_int(_required(row, key), key)
+
+
+def _expect_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise RepositoryDataError(f"{name} must be an integer")
+    return value
+
+
+def _number(row: Row, key: str) -> float:
+    value = _required(row, key)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise RepositoryDataError(f"{key} must be a number")
+    return float(value)
+
+
+def _boolean(row: Row, key: str) -> bool:
+    value = _required(row, key)
+    if not isinstance(value, bool):
+        raise RepositoryDataError(f"{key} must be a boolean")
+    return value
+
+
+def _uuid(row: Row, key: str) -> UUID:
+    raw = _string(row, key)
+    try:
+        return UUID(raw)
+    except ValueError as error:
+        raise RepositoryDataError(f"{key} must be a UUID") from error
+
+
+def _datetime(row: Row, key: str) -> datetime:
+    value = _optional_datetime(row, key)
+    if value is None:
+        raise RepositoryDataError(f"{key} must be an ISO-8601 timestamp")
+    return value
+
+
+def _optional_datetime(row: Row, key: str) -> datetime | None:
+    value = row.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RepositoryDataError(f"{key} must be an ISO-8601 timestamp or null")
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise RepositoryDataError(f"{key} must be an ISO-8601 timestamp") from error
+
+
+def _encode_datetime(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def _string_tuple(values: Sequence[object], name: str) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            raise RepositoryDataError(f"{name} entries must be strings")
+        result.append(value)
+    return tuple(result)
+
+
+def _integer_tuple(values: Sequence[object], name: str) -> tuple[int, ...]:
+    return tuple(_expect_int(value, name) for value in values)
+
+
+def _number_tuple(values: Sequence[object], name: str) -> tuple[float, ...]:
+    result: list[float] = []
+    for value in values:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise RepositoryDataError(f"{name} entries must be numbers")
+        result.append(float(value))
+    return tuple(result)

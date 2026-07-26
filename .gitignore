@@ -5,3 +5,4 @@ developer_notes.md
 __pycache__/
 *.pyc
 R/library/
+.pytest_cache/
