@@ -27,10 +27,13 @@ Supabase INSERT webhook → existing YG Edge Function → ylesandepank
 - Define one asynchronous, domain-focused `AssessmentRepository` interface rather than generic CRUD. Its Supabase implementation covers graph caching, sessions, item-bank access, YG orders, results, and idempotent answer commits.
 - Use `async def` FastAPI route and service functions with Supabase's official `AsyncClient`. Create one shared client during application lifespan with `await acreate_client(...)`, await all database operations, and close its initialized async transports during shutdown.
 - Pin the stable Python package `supabase==2.31.0`; do not adopt the `3.0.0a1` prerelease during the pilot. [PyPI package metadata](https://pypi.org/project/supabase/2.31.0/)
-- Use one lifespan-managed `httpx.AsyncClient` for R calls, with explicit connection, read, write, and pool timeouts.
+- Use one lifespan-managed `httpx.AsyncClient` for R calls, with explicit connection, read, write, and pool timeouts. Bound its connection pool with the single backend setting `R_MAX_CONNECTIONS` (default `4`) and keep no more idle connections than that limit. [HTTPX resource-limit documentation](https://www.python-httpx.org/advanced/resource-limits/)
+- Treat an R connection-pool acquisition timeout like other R unavailability: return `503` without advancing session state so the same `submission_id` can be retried safely.
 - Keep correctness-dependent answer-processing operations sequentially awaited. Do not parallelize result insertion, telemetry, or session compare-and-set updates merely because the clients are asynchronous.
 - Do not call blocking network or file APIs directly on the event loop; offload any unavoidable blocking operation to a worker thread.
 - Keep the application modular by responsibility—API routes, assessment service, repository, R client, and domain models—but deploy it as one process.
+- Expose dependency-free liveness and bounded dependency-aware readiness endpoints. Readiness checks use short timeouts and report unavailable when Supabase or R is not ready; liveness does not call dependencies.
+- Emit one structured completion log per request with request ID, optional `test_id`, outcome/status, total duration, cumulative Supabase and R durations, and Supabase/R call counts. Keep these as log fields rather than adding monitoring infrastructure.
 - Validate non-empty unique nodes, relation endpoints, supported method `kst`, and `MAX_GRAPH_NODES`. The default limit is `10` and exists in exactly one backend setting.
 - Compute a language-neutral graph hash from canonical sorted UTF-8 JSON and prefix/version the algorithm. Old R-generated cache rows remain untouched and may coexist.
 
@@ -68,13 +71,21 @@ Create and commit an `renv.lock`; the container must restore it rather than rely
 - Use React, TypeScript, and Vite without a router framework or global state library.
 - Load `test_id` from `/test/{test_id}`.
 - Model the UI as explicit states: preparing, question, submitting, completed, and failed.
-- Poll the idempotent start endpoint every three seconds only while it returns `202`; clean up polling when the component unmounts or status changes.
+- Poll the idempotent start endpoint only while it returns `202`. Honor its `Retry-After` value and add fresh positive jitter on every cycle—when the header is `3`, wait randomly between three and four seconds—to avoid synchronized polling bursts. Clean up polling when the component unmounts or status changes.
 - Render one accessible radio-group question at a time, disable submission until an option is selected, and prevent double submission.
 - Never receive the answer key, posterior, node parameters, or correctness result.
 - Preserve current Estonian learner-facing copy and the three feedback sections: “Juba oskad”, “Võid õppida / rohkem süveneda”, and “Tasuks korrata”.
 - Do not reveal correctness after each answer; show only the next question or final feedback.
 
 ## Interfaces, State, and Data Flow
+
+### Operational API
+
+- `GET /health/live`
+  - Dependency-free liveness check for the FastAPI process.
+- `GET /health/ready`
+  - Lightweight readiness check for the lifespan-managed Supabase and R clients.
+  - Uses short bounded dependency timeouts and returns `503` while either required dependency is unavailable.
 
 ### Public API
 
@@ -117,7 +128,7 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 1. Capture the current R behavior in numerical regression fixtures before removing Shiny entrypoints; document the experimental KST configuration and API contracts.
 2. Verify the deployed `vastus_id` constraint/default and its `submission_id` repository mapping, then add the asynchronous repository/domain interfaces with async in-memory fakes.
 3. Extract the pure KST functions into the R service, add Plumber contracts, validation, health checks, `testthat`, and `renv`.
-4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, and structured logs keyed by `test_id`/request ID.
+4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, bounded R-call capacity, operational health endpoints, and structured request/dependency timing logs.
 5. Build the React player and behavior tests, then replace the Shiny UI/API entrypoints.
 6. Add Docker Compose with `web`, `api`, and `r-service`; only `web` publishes a host port. Supabase secrets go only to `api`.
 7. Verify the deployed Supabase webhook contract with one real missing-coverage test, then update the README with local startup, configuration, migration, smoke-test, and VM deployment instructions.
@@ -125,12 +136,30 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 ## Test and Acceptance Plan
 
 - R tests: chain and relation-free knowledge spaces, known Bayesian vectors, half-split validity, natural and safety-cap stopping, five-way profile classification, malformed matrices, and configuration snapshots.
-- Backend tests: covered versus missing item banks, duplicate YG prevention, YG success/failure, stable reloads, hidden answer keys, correct/incorrect scoring, stale tokens, duplicate answer replay, completion, R failure, and Supabase failure.
+- Backend tests: covered versus missing item banks, duplicate YG prevention, YG success/failure, stable reloads, hidden answer keys, correct/incorrect scoring, stale tokens, duplicate answer replay, completion, R failure, Supabase failure, R pool-acquisition timeout without state advancement, health endpoint semantics, and structured request/dependency timing fields.
 - Contract tests run FastAPI against the real Dockerized R service; normal backend unit tests replace both async R and Supabase adapters through dependency injection.
-- React tests use Vitest and Testing Library for preparation polling, timer cleanup, accessible option selection, disabled/double-submit behavior, reloads, errors, completion, and all feedback sections.
+- React tests use Vitest and Testing Library for `Retry-After` polling with deterministic jitter, timer cleanup, accessible option selection, disabled/double-submit behavior, reloads, errors, completion, and all feedback sections.
 - Supabase/YG tests are opt-in smoke tests against the configured pilot project, not part of normal unit-test execution.
-- End-to-end acceptance: `docker compose up --build` starts healthy services; a created link survives browser/API container restarts; missing items progress through the existing webhook; every accepted submission creates exactly one result; and a test reaches reproducible final feedback.
+- End-to-end acceptance: `docker compose up --build` starts services that pass their readiness checks; a created link survives browser/API container restarts; missing items progress through the existing webhook; every accepted submission creates exactly one result; and a test reaches reproducible final feedback.
 - Changing `MAX_GRAPH_NODES` in one setting changes the enforced limit; changing the KST configuration file affects new sessions while existing sessions retain their stored configuration.
+
+## Recommendations for the 100-Student Pilot
+
+These are deliberately outside the phase-one MVP implementation and acceptance scope. Revisit them after the vertical slice works end to end and before running the larger pilot.
+
+### Opt-in concurrency smoke test
+
+- Add a manually run test that ramps to 100 simulated students with realistic answer think time, plus one worst-case scenario where all students open the test together.
+- Exercise preparation polling, starts, answers, temporary `503` retries with the same `submission_id`, completion, and restart-safe reloads.
+- Record error rate, median and p95 response times, R calls in flight, dependency timeout counts, duplicate result count, and invalid/stale transition count.
+- Use its results to tune `R_MAX_CONNECTIONS`, timeouts, and process counts rather than increasing them speculatively. Do not put this test in normal CI.
+
+### Query and index review
+
+- Once repository queries and representative data exist, inspect their query plans and use the Supabase Performance/Index Advisor before adding indexes. [Supabase Index Advisor documentation](https://supabase.com/docs/guides/database/extensions/index_advisor)
+- Verify likely access paths for `ylesandepank (graafi_objekt, staatus)`, `yg_tellimused (test_id, staatus)`, and `tulemustepank (test_id)`.
+- Preserve the indexes already supplied by primary-key and unique constraints, including `testisessioonid.test_id`, `graafid_kst.graaf_hash`, and `tulemustepank.vastus_id`.
+- Add only indexes justified by real query plans because additional indexes also increase write and storage cost.
 
 ## Assumptions and Deferred Work
 
