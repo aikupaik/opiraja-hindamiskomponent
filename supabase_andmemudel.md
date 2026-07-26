@@ -156,6 +156,7 @@ komponent (AN, veel realiseerimata) loeb siit analüüsi sisendi.*
 | skoor          | integer     | Ülesande eest saadud punktid (0/1)        |
 | valitud_vastus | text        | Variandi tekst, mille vastaja valis       |
 | vastatud_ajal  | timestamptz | Vaikeväärtus: praegune aeg                |
+| vastus_id  | uuid | Vaikeväärtus: gen_random_uuid() | Unikaalsuse reegel                |
 
 ## yg_tellimused (25 rida)
 

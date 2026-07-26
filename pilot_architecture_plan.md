@@ -24,9 +24,12 @@ Supabase INSERT webhook → existing YG Edge Function → ylesandepank
 ### FastAPI backend
 
 - Use English code, DTOs, routes, and comments; map existing Estonian database names in one Supabase repository adapter.
-- Define one domain-focused `AssessmentRepository` interface rather than generic CRUD. Its Supabase implementation covers graph caching, sessions, item-bank access, YG orders, results, and idempotent answer commits.
-- Use synchronous FastAPI route functions because `supabase-py` is blocking; FastAPI executes them in its thread pool.
-- Use one lifespan-managed synchronous HTTP client for R calls, with explicit connection/read timeouts.
+- Define one asynchronous, domain-focused `AssessmentRepository` interface rather than generic CRUD. Its Supabase implementation covers graph caching, sessions, item-bank access, YG orders, results, and idempotent answer commits.
+- Use `async def` FastAPI route and service functions with Supabase's official `AsyncClient`. Create one shared client during application lifespan with `await acreate_client(...)`, await all database operations, and close its initialized async transports during shutdown.
+- Pin the stable Python package `supabase==2.31.0`; do not adopt the `3.0.0a1` prerelease during the pilot. [PyPI package metadata](https://pypi.org/project/supabase/2.31.0/)
+- Use one lifespan-managed `httpx.AsyncClient` for R calls, with explicit connection, read, write, and pool timeouts.
+- Keep correctness-dependent answer-processing operations sequentially awaited. Do not parallelize result insertion, telemetry, or session compare-and-set updates merely because the clients are asynchronous.
+- Do not call blocking network or file APIs directly on the event loop; offload any unavoidable blocking operation to a worker thread.
 - Keep the application modular by responsibility—API routes, assessment service, repository, R client, and domain models—but deploy it as one process.
 - Validate non-empty unique nodes, relation endpoints, supported method `kst`, and `MAX_GRAPH_NODES`. The default limit is `10` and exists in exactly one backend setting.
 - Compute a language-neutral graph hash from canonical sorted UTF-8 JSON and prefix/version the algorithm. Old R-generated cache rows remain untouched and may coexist.
@@ -101,10 +104,10 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 
 ### Persistence
 
-- Add one documented migration: `tulemustepank.submission_id uuid NOT NULL DEFAULT gen_random_uuid()` with a unique constraint. No other table changes.
+- The required Supabase schema change is already deployed and documented: `tulemustepank.vastus_id uuid NOT NULL DEFAULT gen_random_uuid()` with a unique constraint. In English domain models and API contracts, map `vastus_id` to `submission_id`; no further table changes are planned.
 - Extend `tp_seisund` JSONB with a schema version and `current_question`, containing the submission token, chosen item/node, and stable option order.
 - Keep posterior and answered-item history in `tp_seisund`; keep the R model and KST configuration snapshot in `testi_loogika`; retain the existing `lopp_profiil` structure.
-- Commit results idempotently using the unique submission ID, then compare-and-set `tp_seisund` against the expected current submission token. A retry can safely finish an interrupted update.
+- Commit results idempotently by writing the API `submission_id` explicitly to the unique `tulemustepank.vastus_id` column, then compare-and-set `tp_seisund` against the expected current submission token. Do not rely on the database UUID default for player submissions, because retries must reuse the same token. A retry can safely finish an interrupted update.
 - Treat `kasutamiste_arv` as pilot telemetry; increment only for the request that first inserts the submission.
 - Do not depend on the undocumented `testisessioonid.kursus` column. Course is used when creating a YG order but not for item eligibility.
 - New sessions are identified by their JSON schema version. Existing rows are preserved but old planning/active sessions are not resumed or migrated.
@@ -112,7 +115,7 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 ## Implementation Order
 
 1. Capture the current R behavior in numerical regression fixtures before removing Shiny entrypoints; document the experimental KST configuration and API contracts.
-2. Add the `submission_id` migration and repository/domain interfaces with in-memory fakes.
+2. Verify the deployed `vastus_id` constraint/default and its `submission_id` repository mapping, then add the asynchronous repository/domain interfaces with async in-memory fakes.
 3. Extract the pure KST functions into the R service, add Plumber contracts, validation, health checks, `testthat`, and `renv`.
 4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, and structured logs keyed by `test_id`/request ID.
 5. Build the React player and behavior tests, then replace the Shiny UI/API entrypoints.
@@ -123,7 +126,7 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 
 - R tests: chain and relation-free knowledge spaces, known Bayesian vectors, half-split validity, natural and safety-cap stopping, five-way profile classification, malformed matrices, and configuration snapshots.
 - Backend tests: covered versus missing item banks, duplicate YG prevention, YG success/failure, stable reloads, hidden answer keys, correct/incorrect scoring, stale tokens, duplicate answer replay, completion, R failure, and Supabase failure.
-- Contract tests run FastAPI against the real Dockerized R service; normal backend unit tests replace both R and Supabase through dependency injection.
+- Contract tests run FastAPI against the real Dockerized R service; normal backend unit tests replace both async R and Supabase adapters through dependency injection.
 - React tests use Vitest and Testing Library for preparation polling, timer cleanup, accessible option selection, disabled/double-submit behavior, reloads, errors, completion, and all feedback sections.
 - Supabase/YG tests are opt-in smoke tests against the configured pilot project, not part of normal unit-test execution.
 - End-to-end acceptance: `docker compose up --build` starts healthy services; a created link survives browser/API container restarts; missing items progress through the existing webhook; every accepted submission creates exactly one result; and a test reaches reproducible final feedback.
