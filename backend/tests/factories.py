@@ -37,6 +37,10 @@ SUBMISSION_ID = SubmissionId(UUID("20000000-0000-4000-8000-000000000001"))
 NEXT_SUBMISSION_ID = SubmissionId(UUID("20000000-0000-4000-8000-000000000002"))
 ITEM_ID = ItemId(41)
 NEXT_ITEM_ID = ItemId(42)
+GRAPH_HASH = (
+    "kst-graph-v1:sha256:"
+    "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+)
 
 
 def make_item(
@@ -123,7 +127,7 @@ def make_session(
         test_id=TEST_ID,
         user_id="user-1",
         learning_path_id=LearningPathId("path-1"),
-        graph_hash="graph-v1:abc",
+        graph_hash=GRAPH_HASH,
         status=status,
         started_at=NOW,
         method=AssessmentMethod.KST,
@@ -210,6 +214,7 @@ def make_profile() -> FinalProfile:
 def make_activation() -> ActivationCommand:
     return ActivationCommand(
         test_id=TEST_ID,
+        graph_hash=GRAPH_HASH,
         model=make_model(),
         first_question=make_question(),
     )

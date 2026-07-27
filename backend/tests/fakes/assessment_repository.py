@@ -77,6 +77,7 @@ class InMemoryAssessmentRepository:
                 raise RepositoryDataError(
                     "new sessions must use player state schema version 1"
                 )
+            self._validate_new_session(session)
             if session.test_id in self._sessions:
                 raise RepositoryDataError(f"session already exists: {session.test_id}")
             self._sessions[session.test_id] = deepcopy(session)
@@ -103,13 +104,34 @@ class InMemoryAssessmentRepository:
                 raise RepositoryDataError(
                     f"cannot activate session in status {session.status.value}"
                 )
+            state = session.player_state
+            if not isinstance(state, PlayerState):
+                raise RepositoryDataError("legacy sessions cannot be activated")
+            expected_hash = (
+                state.pending_graph.graph_hash
+                if state.pending_graph is not None
+                else session.graph_hash
+            )
+            if expected_hash is not None and expected_hash != command.graph_hash:
+                raise RepositoryDataError(
+                    "activation graph hash does not match the preparing session"
+                )
+            if (
+                state.pending_graph is not None
+                and state.pending_graph.nodes != command.model.nodes
+            ):
+                raise RepositoryDataError(
+                    "activation model nodes do not match the pending graph"
+                )
             active = replace(
                 session,
+                graph_hash=command.graph_hash,
                 status=SessionStatus.ACTIVE,
                 model=deepcopy(command.model),
                 player_state=PlayerState.new(
                     posterior=command.model.uniform_prior,
                     current_question=deepcopy(command.first_question),
+                    pending_graph=None,
                 ),
             )
             self._sessions[command.test_id] = active
@@ -385,6 +407,33 @@ class InMemoryAssessmentRepository:
             return self._sessions[test_id]
         except KeyError as error:
             raise RepositoryDataError(f"unknown session: {test_id}") from error
+
+    @staticmethod
+    def _validate_new_session(session: AssessmentSession) -> None:
+        state = session.player_state
+        if not isinstance(state, PlayerState):
+            raise RepositoryDataError("new sessions cannot use legacy player state")
+        if session.status is SessionStatus.PREPARING:
+            if session.model is not None or state.posterior or state.current_question:
+                raise RepositoryDataError(
+                    "preparing sessions cannot contain an active assessment"
+                )
+            if (session.graph_hash is None) == (state.pending_graph is None):
+                raise RepositoryDataError(
+                    "preparing sessions require either a cached graph hash "
+                    "or a pending graph"
+                )
+        if session.status in (SessionStatus.ACTIVE, SessionStatus.COMPLETED):
+            if (
+                session.graph_hash is None
+                or session.model is None
+                or not state.posterior
+                or state.pending_graph is not None
+            ):
+                raise RepositoryDataError(
+                    "active and completed sessions require graph, model, "
+                    "posterior, and no pending graph"
+                )
 
     @staticmethod
     def _validate_transition(

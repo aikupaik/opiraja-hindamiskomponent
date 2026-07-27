@@ -1,3 +1,4 @@
+-r requirements.txt
 black==26.5.1
 click==8.4.2
 iniconfig==2.3.0
@@ -10,5 +11,6 @@ pluggy==1.6.0
 Pygments==2.20.0
 pyright==1.1.411
 pytest==9.1.1
+pytest-asyncio==1.4.0
 pytokens==0.4.1
 typing_extensions==4.16.0

@@ -308,16 +308,14 @@ Implement Step 4 through the following sequential, independently verified
 checkpoints. Keep the full plan above as the acceptance specification for the
 completed vertical slice.
 
-- [ ] **1. Foundation and domain evolution**
+- [x] **1. Foundation and domain evolution**
   - Pin runtime and test dependencies and add strict application settings.
   - Add `PendingGraph`, activation changes, repository exception types,
     graph canonicalization, and versioned hashing.
   - Update Supabase mappings, query descriptors, the in-memory repository,
     factories, and focused domain tests.
-  - Configure Pyright to use the project's Python 3.14 virtual environment so
-    the documented acceptance command works without extra CLI flags.
 
-- [ ] **2. R client and question construction**
+- [x] **2. R client and question construction**
   - Add strict R request/response DTOs, the asynchronous `KstEngine` protocol,
     its HTTPX implementation, and a deterministic fake.
   - Implement configuration-name translation, option validation and ordering,

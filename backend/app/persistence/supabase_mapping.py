@@ -9,46 +9,15 @@ from datetime import datetime
 from typing import TypeAlias, cast
 from uuid import UUID
 
-from app.domain.models import (
-    KST_CONFIGURATION_SCHEMA_VERSION,
-    KST_MODEL_SCHEMA_VERSION,
-    PLAYER_STATE_SCHEMA_VERSION,
-    AnswerRecord,
-    AnsweredItem,
-    AssessmentItem,
-    AssessmentMethod,
-    AssessmentSession,
-    CurrentQuestion,
-    FinalProfile,
-    GraphCacheEntry,
-    GraphDefinition,
-    GraphRelation,
-    ItemId,
-    ItemStatus,
-    KnowledgeState,
-    KstConfiguration,
-    KstModel,
-    LearningPathId,
-    LegacyPlayerState,
-    OptionId,
-    PlayerState,
-    QuestionOption,
-    ReliabilityFloorConfiguration,
-    SafetyCapConfiguration,
-    SessionStatus,
-    StopReason,
-    SubmissionId,
-    TestId,
-    YgOrder,
-    YgOrderId,
-    YgStatus,
-)
+from app.domain.models import *
 from app.domain.repository import RepositoryDataError
 
 JsonScalar: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 Row: TypeAlias = Mapping[str, object]
 EncodedRow: TypeAlias = dict[str, JsonValue]
+FilterValue: TypeAlias = str | int | bool
+Filters: TypeAlias = dict[str, FilterValue]
 
 GRAPH_TABLE = "graafid_kst"
 SESSION_TABLE = "testisessioonid"
@@ -71,6 +40,25 @@ YG_ORDER_COLUMNS = (
     "id,test_id,kursus,graafi_objektid,kognitiivne_tase,maht,staatus,loodud"
 )
 
+# Query/update vocabulary used by the concrete adapter. Keeping these names
+# here prevents database-language details from leaking into repository logic.
+GRAPH_HASH_COLUMN = "graaf_hash"
+SESSION_ID_COLUMN = "test_id"
+SESSION_STATUS_COLUMN = "staatus"
+SESSION_MODEL_COLUMN = "testi_loogika"
+SESSION_PLAYER_STATE_COLUMN = "tp_seisund"
+ITEM_ID_COLUMN = "yp_id"
+ITEM_NODE_COLUMN = "graafi_objekt"
+ITEM_STATUS_COLUMN = "staatus"
+ITEM_USAGE_COUNT_COLUMN = "kasutamiste_arv"
+ITEM_LAST_USED_COLUMN = "viimane_kasutus"
+ANSWER_ID_COLUMN = "vastus_id"
+YG_ORDER_ID_COLUMN = "id"
+YG_ORDER_STATUS_COLUMN = "staatus"
+GRAPH_CONFLICT_COLUMN = GRAPH_HASH_COLUMN
+ITEM_ORDER_COLUMN = ITEM_ID_COLUMN
+YG_ORDER_ORDER_COLUMN = YG_ORDER_ID_COLUMN
+
 _SESSION_TO_DB = {
     SessionStatus.PREPARING: "planeerimisel",
     SessionStatus.ACTIVE: "aktiivne",
@@ -85,6 +73,10 @@ _YG_TO_DB = {
     YgStatus.FAILED: "viga",
 }
 _YG_FROM_DB = {value: key for key, value in _YG_TO_DB.items()}
+IN_FLIGHT_YG_STATUSES = (
+    _YG_TO_DB[YgStatus.PENDING],
+    _YG_TO_DB[YgStatus.PROCESSING],
+)
 _ITEM_TO_DB = {
     ItemStatus.DRAFT: "kavand",
     ItemStatus.USABLE: "kasutatav",
@@ -99,14 +91,61 @@ _STOP_TO_DB = {
 _STOP_FROM_DB = {value: key for key, value in _STOP_TO_DB.items()}
 
 
-def item_eligibility_filters(node: str) -> dict[str, str]:
+def item_eligibility_filters(node: str) -> Filters:
     """Filters for usable items; course is deliberately not part of identity."""
 
     return {"graafi_objekt": node, "staatus": _ITEM_TO_DB[ItemStatus.USABLE]}
 
 
-def pending_yg_order_filters(test_id: TestId) -> dict[str, str]:
+def graph_hash_filters(graph_hash: str) -> Filters:
+    return {GRAPH_HASH_COLUMN: graph_hash}
+
+
+def session_id_filters(test_id: TestId) -> Filters:
+    return {SESSION_ID_COLUMN: str(test_id)}
+
+
+def preparing_session_filters(test_id: TestId) -> Filters:
+    return {
+        SESSION_ID_COLUMN: str(test_id),
+        SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.PREPARING],
+    }
+
+
+def answer_id_filters(submission_id: SubmissionId) -> Filters:
+    return {ANSWER_ID_COLUMN: str(submission_id)}
+
+
+def item_id_filters(item_id: ItemId) -> Filters:
+    return {ITEM_ID_COLUMN: int(item_id)}
+
+
+def yg_order_test_filters(test_id: TestId) -> Filters:
+    return {SESSION_ID_COLUMN: str(test_id)}
+
+
+def pending_yg_order_filters(test_id: TestId) -> Filters:
     return {"test_id": str(test_id), "staatus": _YG_TO_DB[YgStatus.PENDING]}
+
+
+def activation_updates(command: ActivationCommand) -> EncodedRow:
+    """Atomic preparing-to-active update values for the concrete adapter."""
+
+    return {
+        GRAPH_HASH_COLUMN: command.graph_hash,
+        SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.ACTIVE],
+        SESSION_MODEL_COLUMN: encode_kst_model(command.model),
+        SESSION_PLAYER_STATE_COLUMN: encode_player_state(
+            PlayerState.new(
+                posterior=command.model.uniform_prior,
+                current_question=command.first_question,
+            )
+        ),
+    }
+
+
+def failed_session_updates() -> EncodedRow:
+    return {SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.FAILED]}
 
 
 def encode_graph_entry(entry: GraphCacheEntry) -> EncodedRow:
@@ -292,7 +331,7 @@ def decode_session(row: Row) -> AssessmentSession:
         player_state=decode_player_state(raw_state),
         model=(
             None
-            if raw_model is None
+            if raw_model is None or _is_empty_mapping(raw_model)
             else decode_kst_model(_as_mapping(raw_model, "testi_loogika"))
         ),
         final_profile=(
@@ -326,6 +365,11 @@ def encode_player_state(state: PlayerState) -> dict[str, JsonValue]:
             if state.current_question is None
             else _encode_current_question(state.current_question)
         ),
+        "pending_graph": (
+            None
+            if state.pending_graph is None
+            else _encode_pending_graph(state.pending_graph)
+        ),
     }
 
 
@@ -355,6 +399,7 @@ def decode_player_state(data: Row) -> PlayerState | LegacyPlayerState:
     if version != PLAYER_STATE_SCHEMA_VERSION:
         raise RepositoryDataError(f"unsupported player state schema version: {version}")
     current = data.get("current_question")
+    pending = data.get("pending_graph")
     return PlayerState(
         schema_version=version,
         posterior=_number_tuple(_sequence(data, "posterior"), "posterior"),
@@ -366,6 +411,11 @@ def decode_player_state(data: Row) -> PlayerState | LegacyPlayerState:
             None
             if current is None
             else _decode_current_question(_as_mapping(current, "current_question"))
+        ),
+        pending_graph=(
+            None
+            if pending is None
+            else _decode_pending_graph(_as_mapping(pending, "pending_graph"))
         ),
     )
 
@@ -492,7 +542,7 @@ def _decode_kst_configuration(data: Row) -> KstConfiguration:
             maximum=_integer(floor, "maximum"),
         ),
         safety_cap=SafetyCapConfiguration(
-            node_multiplier=_integer(cap, "node_multiplier"),
+            node_multiplier=_number(cap, "node_multiplier"),
             responses_above_floor=_integer(cap, "responses_above_floor"),
         ),
     )
@@ -531,6 +581,31 @@ def _decode_current_question(data: Row) -> CurrentQuestion:
     )
 
 
+def _encode_pending_graph(graph: PendingGraph) -> dict[str, JsonValue]:
+    return {
+        "graph_hash": graph.graph_hash,
+        "nodes": list(graph.nodes),
+        "relations": [
+            {"from": relation.prerequisite, "to": relation.dependent}
+            for relation in graph.relations
+        ],
+    }
+
+
+def _decode_pending_graph(data: Row) -> PendingGraph:
+    return PendingGraph(
+        graph_hash=_string(data, "graph_hash"),
+        nodes=_string_tuple(_sequence(data, "nodes"), "nodes"),
+        relations=tuple(
+            GraphRelation(
+                prerequisite=_string(_as_mapping(value, "relation"), "from"),
+                dependent=_string(_as_mapping(value, "relation"), "to"),
+            )
+            for value in _sequence(data, "relations")
+        ),
+    )
+
+
 def _decode_answered_item(data: Row) -> AnsweredItem:
     return AnsweredItem(
         submission_id=SubmissionId(_uuid(data, "submission_id")),
@@ -556,6 +631,10 @@ def _as_mapping(value: object, name: str) -> Row:
     if not isinstance(value, Mapping):
         raise RepositoryDataError(f"{name} must be an object")
     return cast(Row, value)
+
+
+def _is_empty_mapping(value: object) -> bool:
+    return isinstance(value, Mapping) and not cast(Row, value)
 
 
 def _sequence(row: Row, key: str) -> Sequence[object]:

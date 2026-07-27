@@ -15,6 +15,7 @@ from app.domain.models import (
     ItemStatus,
     KnowledgeState,
     LegacyPlayerState,
+    PendingGraph,
     PlayerState,
     SessionStatus,
     SubmissionId,
@@ -95,6 +96,32 @@ def test_session_creation_activation_and_failure_rules() -> None:
 
         with pytest.raises(RepositoryDataError, match="cannot fail"):
             await repository.mark_session_failed(TEST_ID)
+
+    asyncio.run(scenario())
+
+
+def test_activation_writes_graph_hash_and_clears_pending_snapshot() -> None:
+    async def scenario() -> None:
+        repository = InMemoryAssessmentRepository()
+        activation = make_activation()
+        pending = PendingGraph(
+            graph_hash=activation.graph_hash,
+            nodes=activation.model.nodes,
+            relations=(),
+        )
+        preparing = replace(
+            make_preparing_session(),
+            graph_hash=None,
+            player_state=PlayerState.new(pending_graph=pending),
+        )
+        await repository.create_session(preparing)
+
+        active = await repository.activate_session(activation)
+
+        assert active.graph_hash == activation.graph_hash
+        assert isinstance(active.player_state, PlayerState)
+        assert active.player_state.pending_graph is None
+        assert active.player_state.posterior == activation.model.uniform_prior
 
     asyncio.run(scenario())
 

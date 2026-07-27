@@ -69,6 +69,17 @@ class GraphDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingGraph:
+    graph_hash: str
+    nodes: tuple[str, ...]
+    relations: tuple[GraphRelation, ...]
+
+    @property
+    def graph(self) -> GraphDefinition:
+        return GraphDefinition(nodes=self.nodes, relations=self.relations)
+
+
+@dataclass(frozen=True, slots=True)
 class KnowledgeState:
     nodes: tuple[str, ...]
 
@@ -124,7 +135,7 @@ class ReliabilityFloorConfiguration:
 
 @dataclass(frozen=True, slots=True)
 class SafetyCapConfiguration:
-    node_multiplier: int
+    node_multiplier: float
     responses_above_floor: int
 
 
@@ -166,6 +177,28 @@ class FinalProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelBuildResult:
+    model: KstModel
+    posterior: tuple[float, ...]
+    next_node: str
+
+
+@dataclass(frozen=True, slots=True)
+class AdvanceInProgress:
+    posterior: tuple[float, ...]
+    next_node: str
+
+
+@dataclass(frozen=True, slots=True)
+class AdvanceCompleted:
+    posterior: tuple[float, ...]
+    profile: FinalProfile
+
+
+AdvanceResult = AdvanceInProgress | AdvanceCompleted
+
+
+@dataclass(frozen=True, slots=True)
 class AnsweredItem:
     submission_id: SubmissionId
     item_id: ItemId
@@ -196,6 +229,7 @@ class PlayerState:
     posterior: tuple[float, ...]
     answered_items: tuple[AnsweredItem, ...]
     current_question: CurrentQuestion | None
+    pending_graph: PendingGraph | None = None
 
     @classmethod
     def new(
@@ -203,12 +237,14 @@ class PlayerState:
         *,
         posterior: tuple[float, ...] = (),
         current_question: CurrentQuestion | None = None,
+        pending_graph: PendingGraph | None = None,
     ) -> "PlayerState":
         return cls(
             schema_version=PLAYER_STATE_SCHEMA_VERSION,
             posterior=posterior,
             answered_items=(),
             current_question=current_question,
+            pending_graph=pending_graph,
         )
 
 
@@ -267,6 +303,7 @@ class AnswerRecord:
 @dataclass(frozen=True, slots=True)
 class ActivationCommand:
     test_id: TestId
+    graph_hash: str
     model: KstModel
     first_question: CurrentQuestion
 

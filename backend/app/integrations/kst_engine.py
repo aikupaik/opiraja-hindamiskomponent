@@ -1,0 +1,246 @@
+"""Asynchronous client contract and HTTPX adapter for the internal R service."""
+
+import logging
+from typing import Never, Protocol
+
+import httpx
+from pydantic import TypeAdapter, ValidationError
+
+from app.domain.models import *
+
+from .r_dtos import *
+
+logger = logging.getLogger(__name__)
+_ADVANCE_RESPONSE: TypeAdapter[InProgressResponseDto | CompletedResponseDto] = (
+    TypeAdapter(InProgressResponseDto | CompletedResponseDto)
+)
+
+
+class RUnavailable(RuntimeError):
+    """The internal KST service was unavailable or violated its contract."""
+
+
+class KstEngine(Protocol):
+    async def build_model(
+        self,
+        graph: GraphDefinition,
+        node_parameters: tuple[NodeParameters, ...],
+        cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
+    ) -> ModelBuildResult: ...
+
+    async def advance(
+        self,
+        model: KstModel,
+        posterior: tuple[float, ...],
+        question_node: str,
+        response_correct: bool,
+        response_count: int,
+    ) -> AdvanceResult: ...
+
+    async def is_ready(self) -> bool: ...
+
+
+class HttpxKstEngine:
+    """Typed adapter over one lifespan-managed shared HTTPX client."""
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._client = client
+
+    async def build_model(
+        self,
+        graph: GraphDefinition,
+        node_parameters: tuple[NodeParameters, ...],
+        cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
+    ) -> ModelBuildResult:
+        request = ModelRequestDto(
+            nodes=graph.nodes,
+            relations=tuple(
+                RelationDto.model_validate(
+                    {"from": relation.prerequisite, "to": relation.dependent}
+                )
+                for relation in graph.relations
+            ),
+            node_parameters=tuple(
+                NodeParameterDto(node=value.node, beta=value.beta, eta=value.eta)
+                for value in node_parameters
+            ),
+            cached_knowledge_states=(
+                None
+                if cached_knowledge_states is None
+                else tuple(state.nodes for state in cached_knowledge_states)
+            ),
+        )
+        response = await self._request(
+            "POST",
+            "/internal/v1/kst/model",
+            json=request.model_dump(mode="json", by_alias=True, exclude_none=True),
+        )
+        try:
+            parsed = ModelResponseDto.model_validate(response.json())
+        except (ValueError, ValidationError) as error:
+            self._malformed(error)
+        return ModelBuildResult(
+            model=_model_from_dto(parsed.model),
+            posterior=parsed.posterior,
+            next_node=parsed.next_node,
+        )
+
+    async def advance(
+        self,
+        model: KstModel,
+        posterior: tuple[float, ...],
+        question_node: str,
+        response_correct: bool,
+        response_count: int,
+    ) -> AdvanceResult:
+        request = AdvanceRequestDto(
+            model=_model_to_dto(model),
+            posterior=posterior,
+            question_node=question_node,
+            response_correct=response_correct,
+            response_count=response_count,
+        )
+        response = await self._request(
+            "POST",
+            "/internal/v1/kst/advance",
+            json=request.model_dump(mode="json"),
+        )
+        try:
+            parsed = _ADVANCE_RESPONSE.validate_python(response.json())
+        except (ValueError, ValidationError) as error:
+            self._malformed(error)
+        if isinstance(parsed, InProgressResponseDto):
+            return AdvanceInProgress(
+                posterior=parsed.posterior,
+                next_node=parsed.next_node,
+            )
+        return AdvanceCompleted(
+            posterior=parsed.posterior,
+            profile=_profile_from_dto(parsed.profile),
+        )
+
+    async def is_ready(self) -> bool:
+        try:
+            response = await self._request("GET", "/health")
+            HealthResponseDto.model_validate(response.json())
+        except RUnavailable:
+            return False
+        except (ValueError, ValidationError) as error:
+            logger.warning(
+                "r_health_contract_failure",
+                extra={"diagnostic": type(error).__name__},
+            )
+            return False
+        return True
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: object | None = None,
+    ) -> httpx.Response:
+        try:
+            response = await self._client.request(method, path, json=json)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as error:
+            logger.warning(
+                "r_request_failed",
+                extra={
+                    "diagnostic": type(error).__name__,
+                    "dependency_status": error.response.status_code,
+                },
+            )
+            raise RUnavailable("R service unavailable") from error
+        except (httpx.TimeoutException, httpx.NetworkError) as error:
+            logger.warning(
+                "r_request_failed",
+                extra={"diagnostic": type(error).__name__},
+            )
+            raise RUnavailable("R service unavailable") from error
+
+    @staticmethod
+    def _malformed(error: ValueError | ValidationError) -> Never:
+        logger.warning(
+            "r_response_contract_failure",
+            extra={"diagnostic": type(error).__name__},
+        )
+        raise RUnavailable("R service unavailable") from error
+
+
+def _model_to_dto(model: KstModel) -> KstModelDto:
+    return KstModelDto(
+        schema_version=1,
+        method="kst",
+        nodes=model.nodes,
+        knowledge_states=tuple(state.nodes for state in model.knowledge_states),
+        matrix=model.matrix,
+        uniform_prior=model.uniform_prior,
+        beta=model.beta,
+        eta=model.eta,
+        configuration=KstConfigurationDto(
+            schema_version=1,
+            stop_confidence=model.configuration.stop_confidence,
+            feedback_credible_mass=model.configuration.feedback_credible_mass,
+            reliability_floor=ReliabilityFloorDto(
+                minimum=model.configuration.reliability_floor.minimum,
+                multiplier=model.configuration.reliability_floor.multiplier,
+                maximum=model.configuration.reliability_floor.maximum,
+            ),
+            safety_cap=SafetyCapDto(
+                minimum_above_floor=(
+                    model.configuration.safety_cap.responses_above_floor
+                ),
+                node_multiplier=model.configuration.safety_cap.node_multiplier,
+            ),
+        ),
+        configuration_hash=model.configuration_hash,
+    )
+
+
+def _model_from_dto(model: KstModelDto) -> KstModel:
+    return KstModel(
+        schema_version=model.schema_version,
+        method=AssessmentMethod(model.method),
+        nodes=model.nodes,
+        knowledge_states=tuple(
+            KnowledgeState(nodes) for nodes in model.knowledge_states
+        ),
+        matrix=tuple(tuple(value for value in row) for row in model.matrix),
+        uniform_prior=model.uniform_prior,
+        beta=model.beta,
+        eta=model.eta,
+        configuration=KstConfiguration(
+            schema_version=model.configuration.schema_version,
+            stop_confidence=model.configuration.stop_confidence,
+            feedback_credible_mass=model.configuration.feedback_credible_mass,
+            reliability_floor=ReliabilityFloorConfiguration(
+                minimum=model.configuration.reliability_floor.minimum,
+                multiplier=model.configuration.reliability_floor.multiplier,
+                maximum=model.configuration.reliability_floor.maximum,
+            ),
+            safety_cap=SafetyCapConfiguration(
+                node_multiplier=model.configuration.safety_cap.node_multiplier,
+                responses_above_floor=(
+                    model.configuration.safety_cap.minimum_above_floor
+                ),
+            ),
+        ),
+        configuration_hash=model.configuration_hash,
+    )
+
+
+def _profile_from_dto(profile: FinalProfileDto) -> FinalProfile:
+    return FinalProfile(
+        mastered=profile.mastered,
+        ready_to_learn=profile.ready_to_learn,
+        uncertain_ahead=profile.uncertain_ahead,
+        uncertain_prerequisite=profile.uncertain_prerequisite,
+        not_yet=profile.not_yet,
+        summary=profile.summary,
+        stop_reason=StopReason(profile.stop_reason),
+        best_state_confidence=profile.best_state_confidence,
+        credible_mass=profile.credible_mass,
+        credible_state_count=profile.credible_state_count,
+    )

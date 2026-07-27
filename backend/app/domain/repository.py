@@ -2,24 +2,15 @@
 
 from typing import Protocol
 
-from .models import (
-    ActivationCommand,
-    AnswerCommitResult,
-    AnswerRecord,
-    AnswerTransition,
-    AssessmentItem,
-    AssessmentSession,
-    GraphCacheEntry,
-    ItemId,
-    NodeCoverage,
-    SubmissionId,
-    TestId,
-    YgOrder,
-)
+from .models import *
 
 
 class RepositoryDataError(ValueError):
     """Persisted data cannot be represented by the supported domain schema."""
+
+
+class RepositoryUnavailable(RuntimeError):
+    """The persistence service could not complete a request."""
 
 
 class AssessmentRepository(Protocol):
