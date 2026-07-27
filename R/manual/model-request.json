@@ -1,0 +1,12 @@
+{
+  "nodes": ["A", "B", "C"],
+  "relations": [
+    {"from": "A", "to": "B"},
+    {"from": "B", "to": "C"}
+  ],
+  "node_parameters": [
+    {"node": "A", "beta": 0.1, "eta": 0.2},
+    {"node": "B", "beta": 0.15, "eta": 0.25},
+    {"node": "C", "beta": 0.2, "eta": 0.3}
+  ]
+}
