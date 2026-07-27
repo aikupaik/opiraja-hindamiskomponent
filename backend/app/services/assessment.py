@@ -171,6 +171,14 @@ class AssessmentService:
         await self._repository.create_session(session)
         return self._creation_result(test_id, SessionStatus.ACTIVE, ())
 
+    async def get_assessment(self, test_id: TestId) -> AssessmentView:
+        """Return the persisted public view without triggering activation."""
+
+        session = await self._require_session(test_id)
+        if session.is_legacy:
+            raise AssessmentConflict("legacy assessment cannot be resumed")
+        return self._view(session)
+
     async def start_assessment(self, test_id: TestId) -> AssessmentView:
         """Start once coverage exists and otherwise return a preparing view."""
 

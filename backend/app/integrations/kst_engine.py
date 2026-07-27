@@ -1,12 +1,14 @@
 """Asynchronous client contract and HTTPX adapter for the internal R service."""
 
 import logging
+from time import perf_counter
 from typing import Never, Protocol
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from app.domain.models import *
+from app.observability import record_r_request
 
 from .r_dtos import *
 
@@ -140,6 +142,7 @@ class HttpxKstEngine:
         *,
         json: object | None = None,
     ) -> httpx.Response:
+        started_at = perf_counter()
         try:
             response = await self._client.request(method, path, json=json)
             response.raise_for_status()
@@ -159,6 +162,8 @@ class HttpxKstEngine:
                 extra={"diagnostic": type(error).__name__},
             )
             raise RUnavailable("R service unavailable") from error
+        finally:
+            record_r_request(started_at)
 
     @staticmethod
     def _malformed(error: ValueError | ValidationError) -> Never:

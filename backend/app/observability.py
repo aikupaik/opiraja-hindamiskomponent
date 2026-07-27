@@ -1,10 +1,10 @@
 """Request-local dependency measurements shared by integrations and middleware."""
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from time import perf_counter
-from collections.abc import Generator
 
 
 @dataclass(slots=True)
@@ -41,3 +41,12 @@ def record_supabase_execute(started_at: float) -> None:
     if metrics is not None:
         metrics.supabase_execute_count += 1
         metrics.supabase_seconds += perf_counter() - started_at
+
+
+def record_r_request(started_at: float) -> None:
+    """Record one completed or failed R HTTP request attempt."""
+
+    metrics = _metrics.get()
+    if metrics is not None:
+        metrics.r_request_count += 1
+        metrics.r_seconds += perf_counter() - started_at

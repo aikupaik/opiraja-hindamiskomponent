@@ -354,7 +354,7 @@ completed vertical slice.
   - Cover correct and incorrect answers, all feedback categories, duplicate
     submissions, option conflicts, concurrent answers, and completion.
 
-- [ ] **7. FastAPI application and operational behavior**
+- [x] **7. FastAPI application and operational behavior**
   - Add the application factory, lifespan-managed clients, dependency
     overrides, permissive authorization seams, strict DTOs, separate routers,
     and stable error mapping.

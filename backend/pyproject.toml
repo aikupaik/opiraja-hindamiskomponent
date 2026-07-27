@@ -6,3 +6,8 @@ requires-python = ">= 3.14"
   pythonVersion = "3.14"
   venvPath = "."
   venv = ".venv"
+
+[tool.pytest.ini_options]
+markers = [
+  "r_contract: opt-in API contract check against a running R service",
+]

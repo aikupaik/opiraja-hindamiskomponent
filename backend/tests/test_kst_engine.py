@@ -16,6 +16,7 @@ from app.domain.models import (
     NodeParameters,
 )
 from app.integrations.kst_engine import HttpxKstEngine, RUnavailable
+from app.observability import collect_dependency_metrics
 from tests.factories import make_model, make_profile
 
 
@@ -168,8 +169,11 @@ def test_readiness_requires_exact_health_shape() -> None:
             transport=httpx.MockTransport(handler),
         ) as client:
             engine = HttpxKstEngine(client)
-            assert await engine.is_ready()
-            assert not await engine.is_ready()
+            with collect_dependency_metrics() as metrics:
+                assert await engine.is_ready()
+                assert not await engine.is_ready()
+            assert metrics.r_request_count == 2
+            assert metrics.r_seconds > 0
 
     asyncio.run(scenario())
 
