@@ -5,7 +5,7 @@
     "kst": "0.5-5",
     "kstMatrix": "2.3-4"
   },
-  "git_revision": "8a07583ece06273dcb53a47fa2eeb9c724e9910d",
+  "git_revision": "fd756318cc436f63288fcb4d14425542586e0073",
   "numerical_tolerance": 1e-12,
   "reference_sha256": {
     "ata_api": "771d3e6a02dc885716ec1f99197c6cbf35affb99d4fce29dfe00f6b014fc24e0",

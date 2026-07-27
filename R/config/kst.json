@@ -1,14 +1,1 @@
-{
-    "feedback_credible_mass": 0.9,
-    "reliability_floor": {
-        "maximum": 10,
-        "minimum": 7,
-        "multiplier": 1.5
-    },
-    "safety_cap": {
-        "minimum_above_floor": 1,
-        "node_multiplier": 2
-    },
-    "schema_version": 1,
-    "stop_confidence": 0.8
-}
+{"feedback_credible_mass":0.9,"reliability_floor":{"maximum":10,"minimum":7,"multiplier":1.5},"safety_cap":{"minimum_above_floor":1,"node_multiplier":2},"schema_version":1,"stop_confidence":0.8}

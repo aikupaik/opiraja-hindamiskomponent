@@ -1,7 +1,25 @@
-# R characterization assets
+# Stateless R KST service
 
-This directory contains Step 1 characterization assets only. It does not
-contain a production R service or Plumber handlers.
+This directory contains the production stateless KST calculation service,
+its versioned internal API contract, and the Step 1 characterization assets
+used as its regression baseline. The service performs no database, Shiny,
+item-bank, or external network operations.
+
+`plumber.R` constructs the router. Production logic lives in side-effect-free
+modules under `src/`.
+
+## Reproducible environment
+
+The project uses R 4.6.1 and `renv`. Restore and verify the exact dependency
+set with:
+
+```sh
+cd R
+Rscript -e 'renv::restore(prompt = FALSE); renv::status()'
+```
+
+The ignored legacy `R/library/` directory is not added to `.libPaths()` and is
+excluded from dependency discovery.
 
 ## Reference suite
 
@@ -53,7 +71,7 @@ SHA-256 digest of the exact canonical file bytes.
 
 ## Internal API contract
 
-`contracts/internal-kst-v1.openapi.json` defines the future stateless internal
+`contracts/internal-kst-v1.openapi.json` defines the stateless internal
 service boundary:
 
 - `GET /health`
@@ -64,8 +82,8 @@ HTTP node references are strings. One-based matrix column indices stay inside
 R. Validation failures use HTTP 422 and unexpected failures use HTTP 500, both
 with `{"error":{"code","message","details"}}`.
 
-The English profile mapping is frozen in the contract and tests. One future
-behavior intentionally differs from the characterized prototype:
+The English profile mapping is frozen in the contract and tests. One
+production behavior intentionally differs from the characterized prototype:
 `kmassesshalfsplit()` randomly samples exact ties, while the internal contract
 selects the first tied node in declared node order for reproducible sessions.
 The legacy fixture therefore stores the complete allowed-node set for ties.

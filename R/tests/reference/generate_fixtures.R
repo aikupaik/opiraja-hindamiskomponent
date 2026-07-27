@@ -315,9 +315,18 @@ configuration <- list(
   )
 )
 
-git_revision <- system2(
-  "git", c("-C", root, "rev-parse", "HEAD"), stdout = TRUE
-)
+manifest_path <- file.path(root, "R", "tests", "fixtures", "manifest.json")
+git_revision <- if (identical(mode, "--check") && file.exists(manifest_path)) {
+  existing_manifest <- jsonlite::fromJSON(
+    manifest_path,
+    simplifyVector = TRUE
+  )
+  existing_manifest$git_revision
+} else {
+  unname(system2(
+    "git", c("-C", root, "rev-parse", "HEAD"), stdout = TRUE
+  )[[1L]])
+}
 manifest <- list(
   fixture_schema_version = 1,
   r_version = paste(R.version$major, R.version$minor, sep = "."),
@@ -325,7 +334,7 @@ manifest <- list(
     kst = utils::packageDescription("kst")$Version,
     kstMatrix = utils::packageDescription("kstMatrix")$Version
   ),
-  git_revision = unname(git_revision[[1]]),
+  git_revision = unname(git_revision),
   numerical_tolerance = tolerance,
   reference_sha256 = as.list(reference_hashes(root)),
   fixtures = c(

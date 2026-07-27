@@ -13,9 +13,12 @@ characterization_root <- function() {
 }
 
 characterization_use_local_library <- function(root = characterization_root()) {
-  local_library <- file.path(root, "R", "library")
-  if (dir.exists(local_library)) {
-    .libPaths(c(local_library, .libPaths()))
+  project <- normalizePath(file.path(root, "R"), mustWork = TRUE)
+  active <- Sys.getenv("RENV_PROJECT")
+  if (!nzchar(active) ||
+      !identical(normalizePath(active, mustWork = FALSE), project)) {
+    Sys.setenv(RENV_PROJECT = project)
+    source(file.path(project, "renv", "activate.R"), local = FALSE)
   }
 }
 

@@ -3,7 +3,7 @@
   "info": {
     "title": "Internal KST Calculation API",
     "version": "1.0.0",
-    "description": "Versioned contract for the future stateless R service. This file is a Step 1 contract only; no handlers are implemented yet."
+    "description": "Versioned contract for the stateless internal R KST calculation service."
   },
   "paths": {
     "/health": {
@@ -308,11 +308,13 @@
         "properties": {
           "from": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "to": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           }
         }
       },
@@ -323,7 +325,8 @@
         "properties": {
           "node": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "beta": {
             "type": "number",
@@ -348,7 +351,8 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "pattern": "\\S"
             }
           },
           "relations": {
@@ -365,13 +369,16 @@
             }
           },
           "cached_knowledge_states": {
-            "$ref": "#/components/schemas/KnowledgeStates"
+            "$ref": "#/components/schemas/KnowledgeStates",
+            "description": "Optional canonical prerequisite-closed state list. Members and states must be unique, use declared node order, respect all relations, and include the empty and full states."
           }
         }
       },
       "KnowledgeStates": {
         "type": "array",
         "minItems": 1,
+        "uniqueItems": true,
+        "description": "Knowledge states in canonical declared-node ordering, including the empty and full states.",
         "items": {
           "type": "array",
           "uniqueItems": true,
@@ -383,6 +390,7 @@
       "BinaryMatrix": {
         "type": "array",
         "minItems": 1,
+        "description": "Rectangular state-by-node matrix aligned exactly with knowledge_states and nodes.",
         "items": {
           "type": "array",
           "minItems": 1,
@@ -395,6 +403,7 @@
       "ProbabilityVector": {
         "type": "array",
         "minItems": 1,
+        "description": "Finite probability values. Posterior and prior vectors must sum to 1 within numerical tolerance.",
         "items": {
           "type": "number",
           "minimum": 0,
@@ -413,20 +422,52 @@
         ],
         "properties": {
           "feedback_credible_mass": {
-            "type": "number"
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
           },
           "reliability_floor": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["maximum", "minimum", "multiplier"],
+            "properties": {
+              "maximum": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "minimum": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "multiplier": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
           },
           "safety_cap": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["minimum_above_floor", "node_multiplier"],
+            "properties": {
+              "minimum_above_floor": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "node_multiplier": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
           },
           "schema_version": {
             "type": "integer",
             "const": 1
           },
           "stop_confidence": {
-            "type": "number"
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
           }
         }
       },
@@ -456,8 +497,12 @@
           },
           "nodes": {
             "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
             "items": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
             }
           },
           "knowledge_states": {
@@ -519,7 +564,8 @@
           },
           "question_node": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "response_correct": {
             "type": "boolean"
@@ -642,7 +688,16 @@
       },
       "ErrorDetail": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": false,
+        "required": ["field", "issue"],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "type": "string"
+          }
+        }
       },
       "ErrorEnvelope": {
         "type": "object",
