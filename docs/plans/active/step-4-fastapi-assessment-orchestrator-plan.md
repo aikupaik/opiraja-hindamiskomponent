@@ -339,14 +339,14 @@ completed vertical slice.
   - Cover interrupted writes, retries, concurrency, exact-once telemetry, and
     failure at every persistence stage.
 
-- [ ] **5. Assessment creation and start service**
+- [x] **5. Assessment creation and start service**
   - Implement covered and missing-coverage creation, restart-safe pending
     graphs, graph caching, and one YG order.
   - Implement YG polling and failure, cached or newly built graph activation,
     first-question persistence, and idempotent/concurrent starts.
   - Cover stable reloads and every preparing-to-active transition.
 
-- [ ] **6. Assessment answer and completion service**
+- [x] **6. Assessment answer and completion service**
   - Implement accepted replay, stale-token detection, server-side scoring, R
     advancement, next-question transitions, completion, and feedback mapping.
   - Preserve retry safety across R and repository failures and prevent hidden
