@@ -301,3 +301,67 @@ credentials; health routes have no authorization dependency.
 - Step 5 owns Estonian UI copy and polling jitter; Step 6 owns containers; Step
   7 owns live Supabase/YG verification and operational documentation;
   pre-pilot bearer authorization remains outside Step 4.
+
+## Implementation Progress
+
+Implement Step 4 through the following sequential, independently verified
+checkpoints. Keep the full plan above as the acceptance specification for the
+completed vertical slice.
+
+- [ ] **1. Foundation and domain evolution**
+  - Pin runtime and test dependencies and add strict application settings.
+  - Add `PendingGraph`, activation changes, repository exception types,
+    graph canonicalization, and versioned hashing.
+  - Update Supabase mappings, query descriptors, the in-memory repository,
+    factories, and focused domain tests.
+  - Configure Pyright to use the project's Python 3.14 virtual environment so
+    the documented acceptance command works without extra CLI flags.
+
+- [ ] **2. R client and question construction**
+  - Add strict R request/response DTOs, the asynchronous `KstEngine` protocol,
+    its HTTPX implementation, and a deterministic fake.
+  - Implement configuration-name translation, option validation and ordering,
+    opaque identifiers, and hidden-answer response shaping.
+  - Cover exact payloads, response mapping, timeouts, connection failures,
+    non-success responses, and malformed bodies.
+
+- [ ] **3. Supabase repository reads and preparation writes**
+  - Add the shared instrumented execute helper and concrete repository
+    operations for graphs, sessions, coverage, items, YG orders, and readiness.
+  - Implement strict decoding, conflict-ignore graph caching, preparation
+    compare-and-set behavior, stable selection, and YG deduplication.
+  - Cover exact filters, ordering, encoded rows, readiness, and unavailable
+    versus malformed-data failures with a mocked HTTP transport.
+
+- [ ] **4. Supabase answer commit protocol**
+  - Implement explicit answer UUID insertion, unique-conflict recovery,
+    optimistic telemetry updates, and session compare-and-set transitions in
+    the required sequential order.
+  - Classify applied, recovered, replayed, stale, and payload-conflict results.
+  - Cover interrupted writes, retries, concurrency, exact-once telemetry, and
+    failure at every persistence stage.
+
+- [ ] **5. Assessment creation and start service**
+  - Implement covered and missing-coverage creation, restart-safe pending
+    graphs, graph caching, and one YG order.
+  - Implement YG polling and failure, cached or newly built graph activation,
+    first-question persistence, and idempotent/concurrent starts.
+  - Cover stable reloads and every preparing-to-active transition.
+
+- [ ] **6. Assessment answer and completion service**
+  - Implement accepted replay, stale-token detection, server-side scoring, R
+    advancement, next-question transitions, completion, and feedback mapping.
+  - Preserve retry safety across R and repository failures and prevent hidden
+    assessment data from reaching public responses.
+  - Cover correct and incorrect answers, all feedback categories, duplicate
+    submissions, option conflicts, concurrent answers, and completion.
+
+- [ ] **7. FastAPI application and operational behavior**
+  - Add the application factory, lifespan-managed clients, dependency
+    overrides, permissive authorization seams, strict DTOs, separate routers,
+    and stable error mapping.
+  - Add liveness/readiness, request IDs, dependency timing, structured
+    completion logs, exception handling, and resource shutdown.
+  - Complete API, logging, redaction, health, optional R contract, and full
+    acceptance tests, including Pyright, R tests, and protected-directory
+    verification.

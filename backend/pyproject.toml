@@ -2,4 +2,7 @@
 requires-python = ">= 3.14"
 
 [tool.pyright]
-typeCheckingMode = "strict"
+  typeCheckingMode = "strict"
+  pythonVersion = "3.14"
+  venvPath = "."
+  venv = ".venv"
