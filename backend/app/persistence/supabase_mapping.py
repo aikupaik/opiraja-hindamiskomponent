@@ -47,12 +47,14 @@ SESSION_ID_COLUMN = "test_id"
 SESSION_STATUS_COLUMN = "staatus"
 SESSION_MODEL_COLUMN = "testi_loogika"
 SESSION_PLAYER_STATE_COLUMN = "tp_seisund"
+SESSION_FINAL_PROFILE_COLUMN = "lopp_profiil"
 ITEM_ID_COLUMN = "yp_id"
 ITEM_NODE_COLUMN = "graafi_objekt"
 ITEM_STATUS_COLUMN = "staatus"
 ITEM_USAGE_COUNT_COLUMN = "kasutamiste_arv"
 ITEM_LAST_USED_COLUMN = "viimane_kasutus"
 ANSWER_ID_COLUMN = "vastus_id"
+CURRENT_SUBMISSION_PATH = "tp_seisund->current_question->>submission_id"
 YG_ORDER_ID_COLUMN = "id"
 YG_ORDER_STATUS_COLUMN = "staatus"
 GRAPH_CONFLICT_COLUMN = GRAPH_HASH_COLUMN
@@ -128,6 +130,16 @@ def pending_yg_order_filters(test_id: TestId) -> Filters:
     return {"test_id": str(test_id), "staatus": _YG_TO_DB[YgStatus.PENDING]}
 
 
+def active_answer_session_filters(
+    test_id: TestId, submission_id: SubmissionId
+) -> Filters:
+    return {
+        SESSION_ID_COLUMN: str(test_id),
+        SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.ACTIVE],
+        CURRENT_SUBMISSION_PATH: str(submission_id),
+    }
+
+
 def activation_updates(command: ActivationCommand) -> EncodedRow:
     """Atomic preparing-to-active update values for the concrete adapter."""
 
@@ -146,6 +158,30 @@ def activation_updates(command: ActivationCommand) -> EncodedRow:
 
 def failed_session_updates() -> EncodedRow:
     return {SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.FAILED]}
+
+
+def answer_transition_updates(transition: AnswerTransition) -> EncodedRow:
+    completed = transition.final_profile is not None
+    return {
+        SESSION_STATUS_COLUMN: _SESSION_TO_DB[
+            SessionStatus.COMPLETED if completed else SessionStatus.ACTIVE
+        ],
+        SESSION_PLAYER_STATE_COLUMN: encode_player_state(
+            transition.next_player_state
+        ),
+        SESSION_FINAL_PROFILE_COLUMN: (
+            None
+            if transition.final_profile is None
+            else encode_final_profile(transition.final_profile)
+        ),
+    }
+
+
+def item_telemetry_updates(usage_count: int, used_at: datetime) -> EncodedRow:
+    return {
+        ITEM_USAGE_COUNT_COLUMN: usage_count,
+        ITEM_LAST_USED_COLUMN: _encode_datetime(used_at),
+    }
 
 
 def encode_graph_entry(entry: GraphCacheEntry) -> EncodedRow:

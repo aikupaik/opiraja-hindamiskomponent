@@ -323,7 +323,7 @@ completed vertical slice.
   - Cover exact payloads, response mapping, timeouts, connection failures,
     non-success responses, and malformed bodies.
 
-- [ ] **3. Supabase repository reads and preparation writes**
+- [x] **3. Supabase repository reads and preparation writes**
   - Add the shared instrumented execute helper and concrete repository
     operations for graphs, sessions, coverage, items, YG orders, and readiness.
   - Implement strict decoding, conflict-ignore graph caching, preparation
@@ -331,7 +331,7 @@ completed vertical slice.
   - Cover exact filters, ordering, encoded rows, readiness, and unavailable
     versus malformed-data failures with a mocked HTTP transport.
 
-- [ ] **4. Supabase answer commit protocol**
+- [x] **4. Supabase answer commit protocol**
   - Implement explicit answer UUID insertion, unique-conflict recovery,
     optimistic telemetry updates, and session compare-and-set transitions in
     the required sequential order.
