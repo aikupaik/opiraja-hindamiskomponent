@@ -43,6 +43,7 @@ class QuestionOutput(BaseModel):
 def build_question(
     item: AssessmentItem,
     *,
+    candidate: ItemCandidate | None = None,
     random_source: RandomSource | None = None,
     uuid_factory: Callable[[], UUID] = uuid4,
 ) -> CurrentQuestion:
@@ -75,6 +76,22 @@ def build_question(
         ordered = list(choices)
         (random_source or Random()).shuffle(ordered)
 
+    persisted_options = tuple(
+        QuestionOption(option_id=OptionId(str(uuid_factory())), text=text)
+        for text in ordered
+    )
+    selected_candidate = candidate or ItemCandidate(
+        candidate_id=CandidateId(f"yp:{int(item.item_id)}"),
+        item_id=item.item_id,
+        node=item.node,
+        beta=item.beta,
+        eta=item.eta,
+    )
+    correct_option = next(
+        option.option_id
+        for option in persisted_options
+        if option.text == item.answer_key
+    )
     return CurrentQuestion(
         submission_id=SubmissionId(uuid_factory()),
         item_id=item.item_id,
@@ -82,10 +99,11 @@ def build_question(
         instruction=item.instruction,
         prompt=item.prompt,
         stimulus=item.stimulus,
-        options=tuple(
-            QuestionOption(option_id=OptionId(str(uuid_factory())), text=text)
-            for text in ordered
-        ),
+        options=persisted_options,
+        candidate_id=selected_candidate.candidate_id,
+        beta=selected_candidate.beta,
+        eta=selected_candidate.eta,
+        correct_option_id=correct_option,
     )
 
 

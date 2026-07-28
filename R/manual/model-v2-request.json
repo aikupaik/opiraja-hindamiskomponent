@@ -1,0 +1,7 @@
+{
+  "nodes": ["A", "B", "C"],
+  "relations": [
+    {"from": "A", "to": "B"},
+    {"from": "B", "to": "C"}
+  ]
+}

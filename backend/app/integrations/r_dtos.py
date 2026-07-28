@@ -1,4 +1,4 @@
-"""Strict private DTOs for the committed internal KST v1 OpenAPI contract."""
+"""Strict private DTOs for the candidate-aware internal KST v2 contract."""
 
 from typing import Annotated, Literal
 
@@ -14,7 +14,8 @@ class RelationDto(RDto):
     to: str = Field(min_length=1, pattern=r"\S")
 
 
-class NodeParameterDto(RDto):
+class CandidateDto(RDto):
+    candidate_id: str = Field(min_length=1, pattern=r"\S")
     node: str = Field(min_length=1, pattern=r"\S")
     beta: float = Field(ge=0, le=1)
     eta: float = Field(ge=0, le=1)
@@ -40,7 +41,7 @@ class KstConfigurationDto(RDto):
 
 
 class KstModelDto(RDto):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     method: Literal["kst"]
     nodes: tuple[str, ...] = Field(min_length=1)
     knowledge_states: tuple[tuple[str, ...], ...] = Field(min_length=1)
@@ -48,31 +49,41 @@ class KstModelDto(RDto):
         min_length=1
     )
     uniform_prior: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
-    beta: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
-    eta: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
     configuration: KstConfigurationDto
     configuration_hash: str = Field(pattern=r"^kst-config-v1:sha256:[0-9a-f]{64}$")
+    reliability_floor: int = Field(ge=0)
+    safety_cap: int = Field(ge=0)
 
 
 class ModelRequestDto(RDto):
     nodes: tuple[str, ...] = Field(min_length=1)
     relations: tuple[RelationDto, ...]
-    node_parameters: tuple[NodeParameterDto, ...] = Field(min_length=1)
     cached_knowledge_states: tuple[tuple[str, ...], ...] | None = None
 
 
 class ModelResponseDto(RDto):
     model: KstModelDto
     posterior: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
-    next_node: str
+
+
+class SelectRequestDto(RDto):
+    model: KstModelDto
+    posterior: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
+    candidates: tuple[CandidateDto, ...] = Field(min_length=1)
+
+
+class SelectedCandidateDto(RDto):
+    candidate_id: str = Field(min_length=1, pattern=r"\S")
+    node: str = Field(min_length=1, pattern=r"\S")
 
 
 class AdvanceRequestDto(RDto):
     model: KstModelDto
     posterior: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
-    question_node: str = Field(min_length=1, pattern=r"\S")
+    administered: CandidateDto
     response_correct: bool
     response_count: int = Field(ge=1)
+    remaining_candidates: tuple[CandidateDto, ...]
 
 
 class FinalProfileDto(RDto):
@@ -82,16 +93,19 @@ class FinalProfileDto(RDto):
     uncertain_prerequisite: tuple[str, ...]
     not_yet: tuple[str, ...]
     summary: str | None
-    stop_reason: Literal["natural", "safety_cap"]
+    stop_reason: Literal[
+        "natural", "safety_cap", "item_inventory_exhausted"
+    ]
     best_state_confidence: float
     credible_mass: float
     credible_state_count: int = Field(ge=1)
+    confidence_limited: bool
 
 
 class InProgressResponseDto(RDto):
     status: Literal["in_progress"]
     posterior: tuple[Annotated[float, Field(ge=0, le=1)], ...] = Field(min_length=1)
-    next_node: str
+    next_candidate: SelectedCandidateDto
 
 
 class CompletedResponseDto(RDto):

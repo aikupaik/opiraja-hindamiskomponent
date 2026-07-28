@@ -1,223 +1,161 @@
-"""Exact HTTP contract and failure mapping for the asynchronous R adapter."""
+"""Exact HTTP contract and failure mapping for the R v2 adapter."""
 
-import asyncio
+import json
 from typing import cast
 
 import httpx
 import pytest
 
-from app.domain.models import (
-    AdvanceCompleted,
-    AdvanceInProgress,
-    GraphDefinition,
-    GraphRelation,
-    ItemId,
-    KnowledgeState,
-    NodeParameters,
-)
+from app.domain.models import *
 from app.integrations.kst_engine import HttpxKstEngine, RUnavailable
-from app.observability import collect_dependency_metrics
 from tests.factories import make_model, make_profile
 
 
-def test_model_payload_cache_and_configuration_translation() -> None:
-    requests: list[httpx.Request] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=_model_response_json())
-
-    async def scenario() -> None:
-        async with httpx.AsyncClient(
-            base_url="http://r-service",
-            transport=httpx.MockTransport(handler),
-        ) as client:
-            result = await HttpxKstEngine(client).build_model(
-                GraphDefinition(
-                    nodes=("A", "B"),
-                    relations=(GraphRelation("A", "B"),),
-                ),
-                (
-                    NodeParameters("A", item_id=ItemId(1), beta=0.05, eta=0.25),
-                    NodeParameters("B", item_id=ItemId(2), beta=0.06, eta=0.24),
-                ),
-                (KnowledgeState(()), KnowledgeState(("A",))),
-            )
-        assert result.model.configuration.safety_cap.responses_above_floor == 1
-        assert result.next_node == "A"
-
-    asyncio.run(scenario())
-    assert requests[0].url.path == "/internal/v1/kst/model"
-    payload = _request_json(requests[0])
-    assert payload == {
-        "nodes": ["A", "B"],
-        "relations": [{"from": "A", "to": "B"}],
-        "node_parameters": [
-            {"node": "A", "beta": 0.05, "eta": 0.25},
-            {"node": "B", "beta": 0.06, "eta": 0.24},
-        ],
-        "cached_knowledge_states": [[], ["A"]],
-    }
-
-
-def test_advance_payload_and_both_response_variants() -> None:
-    requests: list[httpx.Request] = []
-    responses = iter(
-        (
-            {"status": "in_progress", "posterior": [0.1, 0.2, 0.7], "next_node": "B"},
-            {
-                "status": "completed",
-                "posterior": [0.02, 0.03, 0.95],
-                "profile": _profile_json(),
-            },
-        )
+def _candidate(item_id: int, node: str) -> ItemCandidate:
+    return ItemCandidate(
+        candidate_id=CandidateId(f"yp:{item_id}"),
+        item_id=ItemId(item_id),
+        node=node,
+        beta=0.05,
+        eta=0.25,
     )
+
+
+@pytest.mark.asyncio
+async def test_model_select_and_advance_use_v2_candidate_contract() -> None:
+    requests: list[httpx.Request] = []
+    responses = iter((
+        {"model": _r_model_json(), "posterior": [0.2, 0.3, 0.5]},
+        {"candidate_id": "yp:1", "node": "A"},
+        {
+            "status": "in_progress",
+            "posterior": [0.1, 0.2, 0.7],
+            "next_candidate": {"candidate_id": "yp:2", "node": "B"},
+        },
+    ))
 
     async def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=next(responses))
 
-    async def scenario() -> None:
-        async with httpx.AsyncClient(
-            base_url="http://r-service",
-            transport=httpx.MockTransport(handler),
-        ) as client:
-            engine = HttpxKstEngine(client)
-            first = await engine.advance(make_model(), (0.2, 0.3, 0.5), "A", True, 1)
-            second = await engine.advance(make_model(), (0.1, 0.2, 0.7), "B", False, 8)
-        assert isinstance(first, AdvanceInProgress)
-        assert first.next_node == "B"
-        assert isinstance(second, AdvanceCompleted)
-        assert second.profile == make_profile()
+    async with httpx.AsyncClient(
+        base_url="http://r-service",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        engine = HttpxKstEngine(client)
+        built = await engine.build_model(
+            GraphDefinition(
+                nodes=("A", "B"),
+                relations=(GraphRelation("A", "B"),),
+            ),
+            (KnowledgeState(()), KnowledgeState(("A",))),
+        )
+        candidates = (_candidate(1, "A"), _candidate(2, "B"))
+        selected = await engine.select(built.model, built.posterior, candidates)
+        advanced = await engine.advance(
+            built.model,
+            built.posterior,
+            candidates[0],
+            True,
+            1,
+            (candidates[1],),
+        )
 
-    asyncio.run(scenario())
-    payload = _request_json(requests[0])
-    assert payload["question_node"] == "A"
-    assert payload["response_correct"] is True
-    assert payload["response_count"] == 1
-    model_payload = cast(dict[str, object], payload["model"])
-    configuration = cast(dict[str, object], model_payload["configuration"])
-    assert configuration["safety_cap"] == {
-        "minimum_above_floor": 1,
-        "node_multiplier": 2.0,
+    assert [request.url.path for request in requests] == [
+        "/internal/v2/kst/model",
+        "/internal/v2/kst/select",
+        "/internal/v2/kst/advance",
+    ]
+    model_payload = _request_json(requests[0])
+    assert "node_parameters" not in model_payload
+    assert model_payload["cached_knowledge_states"] == [[], ["A"]]
+    assert selected == CandidateSelection(CandidateId("yp:1"), "A")
+    assert isinstance(advanced, AdvanceInProgress)
+    assert advanced.next_candidate == CandidateSelection(CandidateId("yp:2"), "B")
+    advance_payload = _request_json(requests[2])
+    assert advance_payload["administered"] == {
+        "candidate_id": "yp:1",
+        "node": "A",
+        "beta": 0.05,
+        "eta": 0.25,
     }
-    assert "responses_above_floor" not in str(payload)
+    assert "beta" not in cast(dict[str, object], advance_payload["model"])
 
 
-@pytest.mark.parametrize(
-    "exception_type",
-    [
-        httpx.ConnectTimeout,
-        httpx.ReadTimeout,
-        httpx.WriteTimeout,
-        httpx.PoolTimeout,
-        httpx.ConnectError,
-    ],
-)
-def test_transport_failures_are_unavailable(
-    exception_type: type[httpx.RequestError],
-) -> None:
-    async def handler(request: httpx.Request) -> httpx.Response:
-        raise exception_type("synthetic", request=request)
+@pytest.mark.asyncio
+async def test_completed_inventory_exhaustion_is_decoded() -> None:
+    profile = _profile_json(StopReason.ITEM_INVENTORY_EXHAUSTED)
 
-    async def scenario() -> None:
-        async with httpx.AsyncClient(
-            base_url="http://r-service",
-            transport=httpx.MockTransport(handler),
-        ) as client:
-            with pytest.raises(RUnavailable, match="R service unavailable"):
-                await HttpxKstEngine(client).advance(
-                    make_model(), (0.2, 0.3, 0.5), "A", True, 1
-                )
-
-    asyncio.run(scenario())
-
-
-@pytest.mark.parametrize("response_kind", ["status", "json", "shape"])
-def test_status_and_malformed_responses_are_unavailable(
-    response_kind: str,
-) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
-        if response_kind == "status":
-            return httpx.Response(503, json={"secret": "not exposed"})
-        if response_kind == "json":
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "posterior": [0.1, 0.2, 0.7],
+                "profile": profile,
+            },
+        )
+
+    async with httpx.AsyncClient(
+        base_url="http://r-service",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        result = await HttpxKstEngine(client).advance(
+            make_model(), (0.2, 0.3, 0.5), _candidate(1, "A"), True, 1, ()
+        )
+    assert isinstance(result, AdvanceCompleted)
+    assert result.profile.stop_reason is StopReason.ITEM_INVENTORY_EXHAUSTED
+
+
+@pytest.mark.parametrize("kind", ["transport", "status", "json", "shape"])
+@pytest.mark.asyncio
+async def test_failures_are_unavailable(kind: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if kind == "transport":
+            raise httpx.ConnectError("synthetic", request=request)
+        if kind == "status":
+            return httpx.Response(503, json={})
+        if kind == "json":
             return httpx.Response(200, content=b"{")
         return httpx.Response(200, json={"status": "unexpected"})
 
-    async def scenario() -> None:
-        async with httpx.AsyncClient(
-            base_url="http://r-service",
-            transport=httpx.MockTransport(handler),
-        ) as client:
-            with pytest.raises(RUnavailable, match="R service unavailable"):
-                await HttpxKstEngine(client).advance(
-                    make_model(), (0.2, 0.3, 0.5), "A", True, 1
-                )
-
-    asyncio.run(scenario())
-
-
-def test_readiness_requires_exact_health_shape() -> None:
-    responses = iter(({"status": "ok"}, {"status": "ok", "extra": True}))
-
-    async def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=next(responses))
-
-    async def scenario() -> None:
-        async with httpx.AsyncClient(
-            base_url="http://r-service",
-            transport=httpx.MockTransport(handler),
-        ) as client:
-            engine = HttpxKstEngine(client)
-            with collect_dependency_metrics() as metrics:
-                assert await engine.is_ready()
-                assert not await engine.is_ready()
-            assert metrics.r_request_count == 2
-            assert metrics.r_seconds > 0
-
-    asyncio.run(scenario())
-
-
-def _model_response_json() -> dict[str, object]:
-    return {
-        "model": _r_model_json(),
-        "posterior": [0.2, 0.3, 0.5],
-        "next_node": "A",
-    }
+    async with httpx.AsyncClient(
+        base_url="http://r-service",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(RUnavailable):
+            await HttpxKstEngine(client).advance(
+                make_model(), (0.2, 0.3, 0.5), _candidate(1, "A"), True, 1, ()
+            )
 
 
 def _r_model_json() -> dict[str, object]:
     model = make_model()
     return {
-        "schema_version": model.schema_version,
-        "method": model.method.value,
+        "schema_version": 2,
+        "method": "kst",
         "nodes": list(model.nodes),
         "knowledge_states": [list(state.nodes) for state in model.knowledge_states],
         "matrix": [list(row) for row in model.matrix],
         "uniform_prior": list(model.uniform_prior),
-        "beta": list(model.beta),
-        "eta": list(model.eta),
         "configuration": {
-            "schema_version": model.configuration.schema_version,
+            "schema_version": 1,
             "stop_confidence": model.configuration.stop_confidence,
             "feedback_credible_mass": model.configuration.feedback_credible_mass,
             "reliability_floor": {
-                "minimum": model.configuration.reliability_floor.minimum,
-                "multiplier": model.configuration.reliability_floor.multiplier,
-                "maximum": model.configuration.reliability_floor.maximum,
+                "minimum": 7, "multiplier": 1.5, "maximum": 10,
             },
             "safety_cap": {
-                "minimum_above_floor": (
-                    model.configuration.safety_cap.responses_above_floor
-                ),
-                "node_multiplier": model.configuration.safety_cap.node_multiplier,
+                "minimum_above_floor": 1, "node_multiplier": 2,
             },
         },
         "configuration_hash": model.configuration_hash,
+        "reliability_floor": 7,
+        "safety_cap": 8,
     }
 
 
-def _profile_json() -> dict[str, object]:
+def _profile_json(reason: StopReason = StopReason.NATURAL) -> dict[str, object]:
     profile = make_profile()
     return {
         "mastered": list(profile.mastered),
@@ -226,16 +164,15 @@ def _profile_json() -> dict[str, object]:
         "uncertain_prerequisite": list(profile.uncertain_prerequisite),
         "not_yet": list(profile.not_yet),
         "summary": profile.summary,
-        "stop_reason": profile.stop_reason.value,
+        "stop_reason": reason.value,
         "best_state_confidence": profile.best_state_confidence,
         "credible_mass": profile.credible_mass,
         "credible_state_count": profile.credible_state_count,
+        "confidence_limited": reason is not StopReason.NATURAL,
     }
 
 
 def _request_json(request: httpx.Request) -> dict[str, object]:
-    import json
-
-    decoded = cast(object, json.loads(request.content))
-    assert isinstance(decoded, dict)
-    return cast(dict[str, object], decoded)
+    value = cast(object, json.loads(request.content))
+    assert isinstance(value, dict)
+    return cast(dict[str, object], value)

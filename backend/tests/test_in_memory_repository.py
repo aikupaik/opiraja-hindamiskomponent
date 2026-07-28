@@ -77,7 +77,7 @@ def test_session_creation_activation_and_failure_rules() -> None:
         preparing = make_preparing_session()
         created = await repository.create_session(preparing)
         assert isinstance(created.player_state, PlayerState)
-        assert created.player_state.schema_version == 1
+        assert created.player_state.schema_version == 2
 
         active = await repository.activate_session(make_activation())
         repeated = await repository.activate_session(make_activation())
@@ -143,7 +143,7 @@ def test_legacy_session_cannot_activate() -> None:
     asyncio.run(scenario())
 
 
-def test_coverage_filtering_and_deterministic_selection() -> None:
+def test_complete_inventory_reads_and_exact_pool_loading() -> None:
     async def scenario() -> None:
         repository = InMemoryAssessmentRepository()
         first = make_item()
@@ -151,16 +151,14 @@ def test_coverage_filtering_and_deterministic_selection() -> None:
         archived = replace(make_item(ItemId(43), node="B"), status=ItemStatus.ARCHIVED)
         await repository.seed_items(first, second, archived)
 
-        coverage = await repository.resolve_usable_coverage(("B", "A", "C"))
-        assert [entry.node for entry in coverage] == ["B", "A", "C"]
-        assert [entry.covered for entry in coverage] == [False, True, False]
-        assert coverage[1].parameters is not None
-        assert coverage[1].parameters.item_id == ITEM_ID
-
-        unused_first = await repository.list_usable_items("A", (ITEM_ID,))
-        all_used = await repository.list_usable_items("A", (ITEM_ID, NEXT_ITEM_ID))
-        assert [item.item_id for item in unused_first] == [NEXT_ITEM_ID, ITEM_ID]
-        assert all_used[0].item_id == ITEM_ID
+        inventory = await repository.list_usable_items_for_nodes(("B", "A", "C"))
+        assert [item.item_id for item in inventory] == [ITEM_ID, NEXT_ITEM_ID]
+        exact = await repository.load_items_by_ids(
+            (NEXT_ITEM_ID, ItemId(43), ITEM_ID)
+        )
+        assert [item.item_id for item in exact] == [NEXT_ITEM_ID, ITEM_ID]
+        with pytest.raises(RepositoryDataError, match="unique"):
+            await repository.load_items_by_ids((ITEM_ID, ITEM_ID))
 
     asyncio.run(scenario())
 

@@ -30,20 +30,28 @@ class AssessmentRepository(Protocol):
         """Idempotently activate a non-legacy preparing session."""
         ...
 
+    async def update_preparing_inventory_plan(
+        self, test_id: TestId, state: PlayerState
+    ) -> AssessmentSession:
+        """Persist a recalculated v2 plan while the session remains preparing."""
+        ...
+
     async def mark_session_failed(self, test_id: TestId) -> AssessmentSession: ...
 
     async def is_ready(self) -> bool:
         """Perform the lightweight storage readiness check used by Step 4."""
         ...
 
-    async def resolve_usable_coverage(
+    async def list_usable_items_for_nodes(
         self, nodes: tuple[str, ...]
-    ) -> tuple[NodeCoverage, ...]: ...
-
-    async def list_usable_items(
-        self, node: str, used_item_ids: tuple[ItemId, ...] = ()
     ) -> tuple[AssessmentItem, ...]:
-        """Return stable candidates, unused first, then usable fallbacks."""
+        """Return every domain-valid usable item in node then item-ID order."""
+        ...
+
+    async def load_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        """Load exact usable pool members in the caller's order."""
         ...
 
     async def get_item(self, item_id: ItemId) -> AssessmentItem | None: ...

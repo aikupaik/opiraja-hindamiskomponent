@@ -7,16 +7,23 @@ testthat::test_that("router exposes exact contract paths", {
     unlist(lapply(value, route_paths), use.names = FALSE)
   }
   actual <- route_paths(router$routes)
-  contract <- jsonlite::fromJSON(
+  contract_v1 <- jsonlite::fromJSON(
     file.path(
       test_root, "R", "contracts", "internal-kst-v1.openapi.json"
     ),
     simplifyVector = FALSE
   )
-  testthat::expect_setequal(unique(actual), names(contract$paths))
-  testthat::expect_identical(
+  contract_v2 <- jsonlite::fromJSON(
+    file.path(
+      test_root, "R", "contracts", "internal-kst-v2.openapi.json"
+    ),
+    simplifyVector = FALSE
+  )
+  expected <- c(names(contract_v1$paths), names(contract_v2$paths))
+  testthat::expect_setequal(unique(actual), expected)
+  testthat::expect_setequal(
     names(router$getApiSpec()$paths),
-    names(contract$paths)
+    expected
   )
 })
 
@@ -102,6 +109,33 @@ testthat::test_that("model and advance routes preserve JSON arrays", {
   testthat::expect_true(
     is.list(parsed_completed$profile$ready_to_learn)
   )
+})
+
+testthat::test_that("v2 model route omits v1 item parameter vectors", {
+  environment <- new.env(parent = globalenv())
+  sys.source(file.path(test_root, "R", "plumber.R"), envir = environment)
+  router <- environment$create_kst_router()
+  body <- jsonlite::toJSON(
+    list(
+      nodes = list("A", "B"),
+      relations = list(list(from = "A", to = "B"))
+    ),
+    auto_unbox = TRUE,
+    null = "null",
+    digits = NA
+  )
+
+  response <- router$call(mock_http_request(
+    "POST", "/internal/v2/kst/model", body
+  ))
+
+  testthat::expect_identical(response$status, 200L)
+  parsed <- jsonlite::fromJSON(response$body, simplifyVector = FALSE)
+  testthat::expect_identical(parsed$model$schema_version, 2L)
+  testthat::expect_false("beta" %in% names(parsed$model))
+  testthat::expect_false("eta" %in% names(parsed$model))
+  testthat::expect_true(is.list(parsed$model$nodes))
+  testthat::expect_true(is.list(parsed$model$uniform_prior))
 })
 
 testthat::test_that("router returns exact 422 and redacted 500 envelopes", {

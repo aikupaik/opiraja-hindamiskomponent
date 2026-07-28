@@ -13,6 +13,7 @@ from app.domain.models import (
     GraphDefinition,
     GraphRelation,
     KnowledgeState,
+    InventoryRequest,
     LearningPathId,
     LegacyPlayerState,
     PlayerState,
@@ -122,6 +123,10 @@ def test_yg_order_round_trip_preserves_course_only_on_order() -> None:
         cognitive_level="mõistab",
         volume=3,
         status=YgStatus.PENDING,
+        item_requests=(
+            InventoryRequest(node="A", amount=3),
+            InventoryRequest(node="B", amount=3),
+        ),
     )
 
     assert decode_yg_order(encode_yg_order(order)) == order
@@ -173,14 +178,14 @@ def test_malformed_session_row_is_rejected(
 def test_unknown_player_state_schema_is_rejected() -> None:
     encoded: dict[str, object] = dict(encode_session(make_session()))
     state = dict(cast(dict[str, object], encoded["tp_seisund"]))
-    state["schema_version"] = 2
+    state["schema_version"] = 3
     encoded["tp_seisund"] = state
 
     with pytest.raises(RepositoryDataError, match="unsupported player state"):
         decode_session(encoded)
 
 
-def test_new_session_encoder_requires_v1() -> None:
+def test_new_session_encoder_requires_v2() -> None:
     invalid = AssessmentSession(
         test_id=TestId(UUID("10000000-0000-4000-8000-000000000099")),
         user_id="user",
@@ -190,7 +195,7 @@ def test_new_session_encoder_requires_v1() -> None:
         started_at=datetime(2026, 1, 1, tzinfo=UTC),
         method=AssessmentMethod.KST,
         player_state=PlayerState(
-            schema_version=2,
+            schema_version=3,
             posterior=(),
             answered_items=(),
             current_question=None,

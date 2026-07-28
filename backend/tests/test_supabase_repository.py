@@ -112,14 +112,14 @@ def test_reads_use_exact_filters_stable_order_and_request_metrics() -> None:
         requests.append(request)
         table = _path_table(request)
         if table == ITEM_TABLE:
-            if "yp_id" in request.url.params:
+            item_filter = request.url.params.get("yp_id")
+            if item_filter == f"eq.{int(NEXT_ITEM_ID)}":
+                return _response([encode_item(second)])
+            if item_filter == f"eq.{int(ITEM_ID)}":
                 return _response([encode_item(first)])
             node = request.url.params.get("graafi_objekt")
             assert request.url.params.get("staatus") == "eq.kasutatav"
             assert request.url.params.get("order") == "yp_id.asc"
-            if node == "eq.A,B":
-                assert request.url.params.get("limit") == "1"
-                return _response([encode_item(first)])
             if node == "eq.A":
                 return _response([encode_item(first), encode_item(second)])
             return _response([])
@@ -131,13 +131,13 @@ def test_reads_use_exact_filters_stable_order_and_request_metrics() -> None:
     async def scenario(repository: SupabaseAssessmentRepository) -> None:
         with collect_dependency_metrics() as metrics:
             session = await repository.get_session(TEST_ID)
-            coverage = await repository.resolve_usable_coverage(("A,B", "missing"))
-            items = await repository.list_usable_items("A", (ITEM_ID,))
+            items = await repository.list_usable_items_for_nodes(("A", "missing"))
+            exact = await repository.load_items_by_ids((NEXT_ITEM_ID,))
             item = await repository.get_item(ITEM_ID)
 
         assert session == make_session()
-        assert [entry.covered for entry in coverage] == [True, False]
-        assert [candidate.item_id for candidate in items] == [NEXT_ITEM_ID, ITEM_ID]
+        assert [candidate.item_id for candidate in items] == [ITEM_ID, NEXT_ITEM_ID]
+        assert [candidate.item_id for candidate in exact] == [NEXT_ITEM_ID]
         assert item == first
         assert metrics.supabase_execute_count == 5
         assert metrics.supabase_seconds >= 0

@@ -104,7 +104,15 @@ async def test_liveness_is_dependency_free_and_readiness_is_bounded() -> None:
 @pytest.mark.asyncio
 async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -> None:
     repository = InMemoryAssessmentRepository()
-    app = _app(repository, FakeKstEngine())
+    model = make_model()
+    app = _app(
+        repository,
+        FakeKstEngine(
+            model_results=(
+                ModelBuildResult(model=model, posterior=model.uniform_prior),
+            )
+        ),
+    )
 
     async with _client(app) as client:
         created = await client.post(
@@ -176,7 +184,16 @@ async def test_player_start_and_completion_never_expose_internal_assessment_data
             },
         }
         serialized = json.dumps(question)
-        for hidden in ("answer_key", "node", "posterior", "beta", "eta"):
+        for hidden in (
+            "answer_key",
+            "correct_option_id",
+            "candidate_id",
+            "session_pool",
+            "node",
+            "posterior",
+            "beta",
+            "eta",
+        ):
             assert hidden not in serialized
 
         completed = await client.post(
@@ -297,15 +314,14 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
 
     app.dependency_overrides.clear()
     await state_repository.seed_items(
-        make_item(),
-        make_item(ItemId(42), node="B"),
+        *(make_item(ItemId(value), node="A") for value in range(1, 5)),
+        *(make_item(ItemId(value), node="B") for value in range(11, 15)),
     )
     override_engine = FakeKstEngine(
         model_results=(
             ModelBuildResult(
                 model=make_model(),
                 posterior=make_model().uniform_prior,
-                next_node="A",
             ),
         )
     )
@@ -326,7 +342,10 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
         )
     assert created.status_code == 201
     assert created.json()["status"] == "active"
-    assert [call.method for call in override_engine.calls] == ["build_model"]
+    assert [call.method for call in override_engine.calls] == [
+        "build_model",
+        "select",
+    ]
 
 
 @pytest.mark.asyncio

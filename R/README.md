@@ -72,7 +72,7 @@ SHA-256 digest of the exact canonical file bytes.
 ## Internal API contract
 
 `contracts/internal-kst-v1.openapi.json` defines the stateless internal
-service boundary:
+legacy boundary and remains frozen:
 
 - `GET /health`
 - `POST /internal/v1/kst/model`
@@ -87,6 +87,18 @@ production behavior intentionally differs from the characterized prototype:
 `kmassesshalfsplit()` randomly samples exact ties, while the internal contract
 selects the first tied node in declared node order for reproducible sessions.
 The legacy fixture therefore stores the complete allowed-node set for ties.
+
+`contracts/internal-kst-v2.openapi.json` defines the candidate-aware boundary:
+
+- `POST /internal/v2/kst/model` builds the graph model and returns the
+  configuration-derived `reliability_floor` and `safety_cap`;
+- `POST /internal/v2/kst/select` selects only from ordered item candidates;
+- `POST /internal/v2/kst/advance` updates with the administered candidate's
+  scalar `beta` and `eta`, then completes or selects from remaining candidates.
+
+Candidate IDs are opaque, nonblank, and unique. Candidate order resolves exact
+half-split ties. If no candidate remains after a nonterminal update, v2
+completes with `item_inventory_exhausted` and `confidence_limited=true`.
 
 ## Lühiraport: seadistus ja lepingud
 
@@ -104,13 +116,14 @@ võimaldab hiljem võrrelda katseid ja kontrollida, kas tulemuste erinevus võis
 tuleneda seadistuse muutmisest. Parameetri muutmine mõjutab tulevikus uusi
 teste; juba alanud testi juures tuleb säilitada selle algne seadistus ja räsi.
 
-Fail `contracts/internal-kst-v1.openapi.json` kirjeldab R-arvutusteenuse
+Fail `contracts/internal-kst-v1.openapi.json` kirjeldab külmutatud pärand-
+andmevahetust. Fail `contracts/internal-kst-v2.openapi.json` kirjeldab uute
+sessioonide kandidaaditeadlikku R-arvutusteenuse
 andmevahetust. Mudeli päring võtab vastu järjestatud sõlmed, eeldusseosed ja
-sõlmepõhised vea- ning äraarvamisparameetrid ning tagastab teadmusruumi,
-ühtlase priorjaotuse ja esimese küsimuse sõlme. Edasiliikumise päring uuendab
-vastuse põhjal posteriorjaotust ning tagastab kas järgmise sõlme või
-lõpp-profiili. Leping kasutab välises andmevahetuses sõlmede nimetusi, et
-maatriksi R-spetsiifilised indeksid ei lekiks teistesse süsteemidesse.
+tagastab teadmusruumi, ühtlase priorjaotuse ja tuletatud peatamispiirid.
+Valiku päring saab ainult kasutamata ülesandekandidaadid. Edasiliikumise päring
+kasutab vastatud konkreetse ülesande vea- ja äraarvamisparameetreid ning
+tagastab järgmise kandidaadi või lõpp-profiili.
 
 Leping fikseerib ka ingliskeelsed väljanimed ja veavastuste kuju. Täpsete
 poolitusviikide korral valib tulevane teenus deklareeritud sõlmejärjestuses

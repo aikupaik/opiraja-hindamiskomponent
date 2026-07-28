@@ -19,23 +19,23 @@ answer keys and KST internals to API clients.
 1. OR submits a graph through `POST /api/v1/tests`.
 2. The graph is validated, normalized, and assigned a deterministic
    `kst-graph-v1:sha256:...` hash.
-3. The item bank is checked for one usable item with BLIM parameters for every
-   graph node.
-4. When coverage is complete, the backend asks R to build the KST model,
-   persists the first question, and creates an `active` session.
-5. When coverage is incomplete, the backend creates a restart-safe
-   `preparing` session and one YG order for the missing nodes. The player polls
-   the start endpoint until coverage becomes complete.
+3. R builds the v2 KST model and returns its derived safety cap.
+4. The backend requires `ceiling(safety_cap / node_count)` distinct usable
+   items per node and orders each node's exact deficit from YG.
+5. Once every target is met, the backend snapshots a fixed session pool and
+   asks R to select the first ordered candidate. Partial generation remains
+   `preparing`; later polls recount the bank and order only the remainder.
 6. For every answer, the backend resolves the opaque option ID against the
-   persisted question, scores it against the server-side answer key, asks R to
-   advance the assessment, and atomically advances the persisted session using
+   persisted question, scores it using the persisted correct option, asks R to
+   advance with that item's concrete parameters and unused candidates, and
+   atomically advances the persisted session using
    the question's submission ID as a compare-and-set token.
 7. When R completes the assessment, its five-way profile is reduced to the
    three public feedback groups: `already_mastered`, `learn_next`, and
    `review`.
 
-Sessions use a versioned player-state document. Pre-version-1 sessions remain
-readable as legacy data but cannot be activated or resumed.
+New sessions use v2 model and player-state documents. Completed v1 sessions
+remain readable; nonterminal v1 sessions cannot be started or answered.
 
 ## Running the API
 
@@ -248,11 +248,12 @@ ID that does not belong to the current question returns `409`.
 
 ## Internal dependencies and persistence
 
-The R adapter calls the internal KST v1 endpoints:
+The R adapter calls the internal KST v2 endpoints:
 
 - `GET /health`;
-- `POST /internal/v1/kst/model`; and
-- `POST /internal/v1/kst/advance`.
+- `POST /internal/v2/kst/model`;
+- `POST /internal/v2/kst/select`; and
+- `POST /internal/v2/kst/advance`.
 
 The Supabase mapping layer is the only production module that knows the
 Estonian table and column names. It maps the domain to:

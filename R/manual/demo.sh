@@ -2,7 +2,7 @@
 
 set -eu
 
-base_url="${KST_BASE_URL:-http://127.0.0.1:8000}"
+base_url="${KST_BASE_URL:-http://127.0.0.1:8001}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 if ! command -v curl >/dev/null 2>&1; then

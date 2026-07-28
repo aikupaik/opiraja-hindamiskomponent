@@ -1,4 +1,4 @@
-"""Asynchronous client contract and HTTPX adapter for the internal R service."""
+"""Asynchronous adapter for the candidate-aware internal R v2 service."""
 
 import logging
 from time import perf_counter
@@ -26,17 +26,24 @@ class KstEngine(Protocol):
     async def build_model(
         self,
         graph: GraphDefinition,
-        node_parameters: tuple[NodeParameters, ...],
         cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
     ) -> ModelBuildResult: ...
+
+    async def select(
+        self,
+        model: KstModel,
+        posterior: tuple[float, ...],
+        candidates: tuple[ItemCandidate, ...],
+    ) -> CandidateSelection: ...
 
     async def advance(
         self,
         model: KstModel,
         posterior: tuple[float, ...],
-        question_node: str,
+        administered: ItemCandidate,
         response_correct: bool,
         response_count: int,
+        remaining_candidates: tuple[ItemCandidate, ...],
     ) -> AdvanceResult: ...
 
     async def is_ready(self) -> bool: ...
@@ -51,7 +58,6 @@ class HttpxKstEngine:
     async def build_model(
         self,
         graph: GraphDefinition,
-        node_parameters: tuple[NodeParameters, ...],
         cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
     ) -> ModelBuildResult:
         request = ModelRequestDto(
@@ -62,10 +68,6 @@ class HttpxKstEngine:
                 )
                 for relation in graph.relations
             ),
-            node_parameters=tuple(
-                NodeParameterDto(node=value.node, beta=value.beta, eta=value.eta)
-                for value in node_parameters
-            ),
             cached_knowledge_states=(
                 None
                 if cached_knowledge_states is None
@@ -74,7 +76,7 @@ class HttpxKstEngine:
         )
         response = await self._request(
             "POST",
-            "/internal/v1/kst/model",
+            "/internal/v2/kst/model",
             json=request.model_dump(mode="json", by_alias=True, exclude_none=True),
         )
         try:
@@ -84,27 +86,55 @@ class HttpxKstEngine:
         return ModelBuildResult(
             model=_model_from_dto(parsed.model),
             posterior=parsed.posterior,
-            next_node=parsed.next_node,
+        )
+
+    async def select(
+        self,
+        model: KstModel,
+        posterior: tuple[float, ...],
+        candidates: tuple[ItemCandidate, ...],
+    ) -> CandidateSelection:
+        request = SelectRequestDto(
+            model=_model_to_dto(model),
+            posterior=posterior,
+            candidates=tuple(_candidate_to_dto(value) for value in candidates),
+        )
+        response = await self._request(
+            "POST",
+            "/internal/v2/kst/select",
+            json=request.model_dump(mode="json"),
+        )
+        try:
+            parsed = SelectedCandidateDto.model_validate(response.json())
+        except (ValueError, ValidationError) as error:
+            self._malformed(error)
+        return CandidateSelection(
+            candidate_id=CandidateId(parsed.candidate_id),
+            node=parsed.node,
         )
 
     async def advance(
         self,
         model: KstModel,
         posterior: tuple[float, ...],
-        question_node: str,
+        administered: ItemCandidate,
         response_correct: bool,
         response_count: int,
+        remaining_candidates: tuple[ItemCandidate, ...],
     ) -> AdvanceResult:
         request = AdvanceRequestDto(
             model=_model_to_dto(model),
             posterior=posterior,
-            question_node=question_node,
+            administered=_candidate_to_dto(administered),
             response_correct=response_correct,
             response_count=response_count,
+            remaining_candidates=tuple(
+                _candidate_to_dto(value) for value in remaining_candidates
+            ),
         )
         response = await self._request(
             "POST",
-            "/internal/v1/kst/advance",
+            "/internal/v2/kst/advance",
             json=request.model_dump(mode="json"),
         )
         try:
@@ -114,7 +144,10 @@ class HttpxKstEngine:
         if isinstance(parsed, InProgressResponseDto):
             return AdvanceInProgress(
                 posterior=parsed.posterior,
-                next_node=parsed.next_node,
+                next_candidate=CandidateSelection(
+                    candidate_id=CandidateId(parsed.next_candidate.candidate_id),
+                    node=parsed.next_candidate.node,
+                ),
             )
         return AdvanceCompleted(
             posterior=parsed.posterior,
@@ -174,16 +207,23 @@ class HttpxKstEngine:
         raise RUnavailable("R service unavailable") from error
 
 
+def _candidate_to_dto(candidate: ItemCandidate) -> CandidateDto:
+    return CandidateDto(
+        candidate_id=str(candidate.candidate_id),
+        node=candidate.node,
+        beta=candidate.beta,
+        eta=candidate.eta,
+    )
+
+
 def _model_to_dto(model: KstModel) -> KstModelDto:
     return KstModelDto(
-        schema_version=1,
+        schema_version=2,
         method="kst",
         nodes=model.nodes,
         knowledge_states=tuple(state.nodes for state in model.knowledge_states),
         matrix=model.matrix,
         uniform_prior=model.uniform_prior,
-        beta=model.beta,
-        eta=model.eta,
         configuration=KstConfigurationDto(
             schema_version=1,
             stop_confidence=model.configuration.stop_confidence,
@@ -201,6 +241,8 @@ def _model_to_dto(model: KstModel) -> KstModelDto:
             ),
         ),
         configuration_hash=model.configuration_hash,
+        reliability_floor=model.derived_limits.reliability_floor,
+        safety_cap=model.derived_limits.safety_cap,
     )
 
 
@@ -214,8 +256,6 @@ def _model_from_dto(model: KstModelDto) -> KstModel:
         ),
         matrix=tuple(tuple(value for value in row) for row in model.matrix),
         uniform_prior=model.uniform_prior,
-        beta=model.beta,
-        eta=model.eta,
         configuration=KstConfiguration(
             schema_version=model.configuration.schema_version,
             stop_confidence=model.configuration.stop_confidence,
@@ -233,6 +273,10 @@ def _model_from_dto(model: KstModelDto) -> KstModel:
             ),
         ),
         configuration_hash=model.configuration_hash,
+        derived_limits=DerivedLimits(
+            reliability_floor=model.reliability_floor,
+            safety_cap=model.safety_cap,
+        ),
     )
 
 

@@ -17,9 +17,7 @@ from app.domain.models import (
     AssessmentSession,
     GraphCacheEntry,
     ItemId,
-    ItemStatus,
-    NodeCoverage,
-    NodeParameters,
+    is_domain_valid_usable_item,
     PlayerState,
     SessionStatus,
     SubmissionId,
@@ -75,7 +73,7 @@ class InMemoryAssessmentRepository:
                 raise RepositoryDataError("new sessions cannot use legacy player state")
             if session.player_state.schema_version != PLAYER_STATE_SCHEMA_VERSION:
                 raise RepositoryDataError(
-                    "new sessions must use player state schema version 1"
+                    "new sessions must use player state schema version 2"
                 )
             self._validate_new_session(session)
             if session.test_id in self._sessions:
@@ -132,6 +130,7 @@ class InMemoryAssessmentRepository:
                     posterior=command.model.uniform_prior,
                     current_question=deepcopy(command.first_question),
                     pending_graph=None,
+                    session_pool=deepcopy(command.session_pool),
                 ),
             )
             self._sessions[command.test_id] = active
@@ -152,61 +151,59 @@ class InMemoryAssessmentRepository:
             self._sessions[test_id] = failed
             return deepcopy(failed)
 
+    async def update_preparing_inventory_plan(
+        self, test_id: TestId, state: PlayerState
+    ) -> AssessmentSession:
+        async with self._lock:
+            self._record("update_preparing_inventory_plan", test_id, state)
+            self._raise_injected("update_preparing_inventory_plan")
+            session = self._require_session(test_id)
+            if session.status is not SessionStatus.PREPARING:
+                return deepcopy(session)
+            updated = replace(session, player_state=deepcopy(state))
+            self._sessions[test_id] = updated
+            return deepcopy(updated)
+
     async def is_ready(self) -> bool:
         async with self._lock:
             self._record("is_ready")
             self._raise_injected("is_ready")
             return True
 
-    async def resolve_usable_coverage(
+    async def list_usable_items_for_nodes(
         self, nodes: tuple[str, ...]
-    ) -> tuple[NodeCoverage, ...]:
-        async with self._lock:
-            self._record("resolve_usable_coverage", nodes)
-            self._raise_injected("resolve_usable_coverage")
-            coverage: list[NodeCoverage] = []
-            for node in nodes:
-                item = next(
-                    (
-                        candidate
-                        for candidate in self._items.values()
-                        if candidate.node == node
-                        and candidate.status is ItemStatus.USABLE
-                    ),
-                    None,
-                )
-                parameters = (
-                    None
-                    if item is None
-                    else NodeParameters(
-                        node=node,
-                        item_id=item.item_id,
-                        beta=item.beta,
-                        eta=item.eta,
-                    )
-                )
-                coverage.append(NodeCoverage(node=node, parameters=parameters))
-            return deepcopy(tuple(coverage))
-
-    async def list_usable_items(
-        self, node: str, used_item_ids: tuple[ItemId, ...] = ()
     ) -> tuple[AssessmentItem, ...]:
         async with self._lock:
-            self._record("list_usable_items", node, used_item_ids)
-            self._raise_injected("list_usable_items")
-            candidates = tuple(
+            self._record("list_usable_items_for_nodes", nodes)
+            self._raise_injected("list_usable_items_for_nodes")
+            return deepcopy(tuple(
                 item
-                for item in self._items.values()
-                if item.node == node and item.status is ItemStatus.USABLE
-            )
-            unused = tuple(
-                item for item in candidates if item.item_id not in used_item_ids
-            )
-            # The first entry is always the deterministic selection: first
-            # unused, or the first usable item once all candidates were used.
-            selected = unused[:1] or candidates[:1]
-            remainder = tuple(item for item in candidates if item not in selected)
-            return deepcopy(selected + remainder)
+                for node in nodes
+                for item in sorted(
+                    (
+                        value
+                        for value in self._items.values()
+                        if value.node == node
+                        and is_domain_valid_usable_item(value)
+                    ),
+                    key=lambda value: int(value.item_id),
+                )
+            ))
+
+    async def load_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        async with self._lock:
+            self._record("load_items_by_ids", item_ids)
+            self._raise_injected("load_items_by_ids")
+            if len(item_ids) != len(set(item_ids)):
+                raise RepositoryDataError("pool item IDs must be unique")
+            return deepcopy(tuple(
+                item
+                for item_id in item_ids
+                if (item := self._items.get(item_id)) is not None
+                and is_domain_valid_usable_item(item)
+            ))
 
     async def get_item(self, item_id: ItemId) -> AssessmentItem | None:
         async with self._lock:
@@ -356,6 +353,15 @@ class InMemoryAssessmentRepository:
         async with self._lock:
             self._yg_orders.setdefault(order.test_id, []).append(deepcopy(order))
 
+    async def set_latest_yg_status(
+        self, test_id: TestId, status: YgStatus
+    ) -> None:
+        async with self._lock:
+            orders = self._yg_orders.get(test_id)
+            if not orders:
+                raise AssertionError("no YG order to update")
+            orders[-1] = replace(orders[-1], status=status)
+
     async def seed_answer(self, answer: AnswerRecord) -> None:
         """Seed an answer insert without its session transition for recovery tests."""
 
@@ -414,14 +420,13 @@ class InMemoryAssessmentRepository:
         if not isinstance(state, PlayerState):
             raise RepositoryDataError("new sessions cannot use legacy player state")
         if session.status is SessionStatus.PREPARING:
-            if session.model is not None or state.posterior or state.current_question:
+            if state.current_question is not None:
                 raise RepositoryDataError(
-                    "preparing sessions cannot contain an active assessment"
+                    "preparing sessions cannot contain a current question"
                 )
-            if (session.graph_hash is None) == (state.pending_graph is None):
+            if session.graph_hash is None and state.pending_graph is None:
                 raise RepositoryDataError(
-                    "preparing sessions require either a cached graph hash "
-                    "or a pending graph"
+                    "preparing sessions require a graph"
                 )
         if session.status in (SessionStatus.ACTIVE, SessionStatus.COMPLETED):
             if (
@@ -444,7 +449,7 @@ class InMemoryAssessmentRepository:
     ) -> None:
         next_state = transition.next_player_state
         if next_state.schema_version != PLAYER_STATE_SCHEMA_VERSION:
-            raise RepositoryDataError("answer transition must use schema version 1")
+            raise RepositoryDataError("answer transition must use schema version 2")
         if not isinstance(session.player_state, PlayerState):
             raise RepositoryDataError("legacy sessions cannot transition")
         previous_count = len(session.player_state.answered_items)
@@ -472,6 +477,14 @@ class InMemoryAssessmentRepository:
             raise RepositoryDataError(
                 "a completed answer transition cannot have a current question"
             )
+        answered_ids = tuple(item.item_id for item in next_state.answered_items)
+        if len(answered_ids) != len(set(answered_ids)):
+            raise RepositoryDataError("answer history contains duplicate item IDs")
+        if (
+            next_state.current_question is not None
+            and next_state.current_question.item_id in set(answered_ids)
+        ):
+            raise RepositoryDataError("current item already appears in answer history")
 
 
 def _same_answer_payload(left: AnswerRecord, right: AnswerRecord) -> bool:

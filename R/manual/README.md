@@ -22,7 +22,7 @@ From the repository root:
 Rscript R/manual/run_service.R
 ```
 
-The service listens on `http://127.0.0.1:8000`. Leave this terminal open.
+The service listens on `http://127.0.0.1:8001`. Leave this terminal open.
 Every request produces a method, path, response status, and duration log.
 Press Ctrl+C to stop the service.
 
@@ -41,28 +41,33 @@ KST_HOST=127.0.0.1 KST_PORT=8080 Rscript R/manual/run_service.R
 Keep the host as `127.0.0.1` for a local-only demonstration. Binding to
 `0.0.0.0` makes the service reachable through other network interfaces.
 
-## Run the presentation demo
+## Run the v2 experiment
 
 Open a second terminal at the repository root and run:
 
 ```sh
-R/manual/demo.sh
+R/manual/demo_v2.sh
 ```
 
-The demo checks service health, creates a three-node prerequisite model, and
-repeatedly submits correct answers until the service returns a final profile.
-It prints every JSON response with `jq`.
+The experiment checks service health, creates a three-node prerequisite
+model, selects from the supplied candidate inventory, and submits correct
+answers without reusing candidates. The small example inventory deliberately
+demonstrates explicit `item_inventory_exhausted` completion. Every JSON
+response is printed with `jq`.
+
+The original v1 characterization demo remains available as
+`R/manual/demo.sh`.
 
 If the service uses another port:
 
 ```sh
-KST_BASE_URL=http://127.0.0.1:8080 R/manual/demo.sh
+KST_BASE_URL=http://127.0.0.1:8080 R/manual/demo_v2.sh
 ```
 
 The interactive OpenAPI page is available at:
 
 ```text
-http://127.0.0.1:8000/__docs__/
+http://127.0.0.1:8001/__docs__/
 ```
 
 ## Send individual requests
@@ -70,7 +75,7 @@ http://127.0.0.1:8000/__docs__/
 Health check:
 
 ```sh
-curl --silent http://127.0.0.1:8000/health | jq .
+curl --silent http://127.0.0.1:8001/health | jq .
 ```
 
 Create a model:
@@ -79,12 +84,14 @@ Create a model:
 curl --silent \
   --request POST \
   --header 'Content-Type: application/json' \
-  --data-binary @R/manual/model-request.json \
-  http://127.0.0.1:8000/internal/v1/kst/model | jq .
+  --data-binary @R/manual/model-v2-request.json \
+  http://127.0.0.1:8001/internal/v2/kst/model | jq .
 ```
 
-An advance request must include the model and posterior returned by the model
-request. The demo script shows how to assemble that request with `jq`.
+For v2, pass the returned model and posterior to `/internal/v2/kst/select`
+with `R/manual/candidates-v2.json`. Advancement also includes the concrete
+administered descriptor and the ordered remaining candidates. The existing
+`demo.sh` remains the frozen v1 characterization demo.
 
 ## Try alternate KST parameters
 

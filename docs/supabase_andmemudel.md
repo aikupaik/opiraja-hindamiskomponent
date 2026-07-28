@@ -160,13 +160,10 @@ komponent (AN, veel realiseerimata) loeb siit analüüsi sisendi.*
 
 ## yg_tellimused (25 rida)
 
-*YG (ülesandegeneraator, Edge Function + LLM) tööjärjekord. ATA lisab
-siia rea, kui mõne õpiväljundi jaoks pole veel ülesandeid; YG jälgib
-tabelit (Supabase Database Webhook INSERT peale) ja täidab tellimuse.
-Maht ühe defineeritud ülesande kohta on hetkel fikseeritud väärtusega 3,
-sõltumata testi kavandatud pikkusest. Demos tagas see kogus testile
-piisavalt ülesandeid ning samas ei ammendanud tasuta LLM litsentsi
-piiranguid*
+*YG (ülesandegeneraator, Edge Function + LLM) tööjärjekord. Backend lisab
+rea täpsete sõlmepõhiste puudujääkidega; INSERT-webhook käivitab YG. Backend
+arvutab kordusteta sessiooni varu R-mudeli turvapiiri järgi ja loob osalise
+tulemuse järel vajadusel väiksema järeltellimuse.*
 
 | **Veerg** | **Tüüp** | **Märkused** |
 |----------------|------------|------------------------------------|
@@ -175,9 +172,23 @@ piiranguid*
 | kursus | text | — |
 | graafi_objektid | jsonb | Puuduvate sõlmede loend |
 | kognitiivne_tase | text | Sama valikute loend, mis ylesandepank |
-| maht | integer | Nullable, vaikeväärtus 1; ATA saadab praktikas alati 3 |
+| maht | integer | Pärandühilduvus; uutes tellimustes pole autoriteetne |
+| ylesande_taotlused | jsonb | Uute tellimuste autoriteetne massiiv: `[{"node":"A","amount":1}]` |
+| taitmise_tulemus | jsonb | Sõlmepõhine `requested`, `baseline_usable`, `created`, `usable_after`, `remaining` |
 | staatus | text | ootel / tootmises / tehtud / viga (CHECK piirang) |
 | loodud | timestamptz | Vaikeväärtus: praegune aeg |
+
+`graafi_objektid` ja `maht` jäävad üleminekuajal pärandväljadeks. Edge
+Function võtab tellimuse töötlusse ainult tingimusliku
+`ootel -> tootmises` uuendusega, loeb kasutatava algtaseme, genereerib iga
+sõlme täpse koguse ja märgib `tehtud` ainult siis, kui
+`usable_after >= baseline_usable + requested`. Muidu jäävad osalised lisamised
+alles ning tellimus saab staatuse `viga`; retry-arvutus kuulub backendile.
+
+`testisessioonid.tp_seisund` v2 hoiab sessiooni fikseeritud kandidaadivaru,
+hetkeküsimuse kandidaadi ID-d, sõlme, `beta`/`eta` väärtusi ja õige variandi
+ID-d. Neid välju mängija API ei väljasta. Kasutatava `yp_id` sisu või
+mõõteparameetrite muutmine peab looma uue rea ja vana arhiveerima.
 
 ## repo_materjalid (3 rida)
 

@@ -1,0 +1,323 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Internal KST Candidate API",
+    "version": "2.0.0",
+    "description": "Candidate-aware stateless KST model, selection, and advancement contract."
+  },
+  "paths": {
+    "/internal/v2/kst/model": {
+      "post": {
+        "operationId": "buildKstModelV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ModelRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Versioned model, prior, and derived limits",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ModelResponse"}
+              }
+            }
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "500": {"$ref": "#/components/responses/UnexpectedError"}
+        }
+      }
+    },
+    "/internal/v2/kst/select": {
+      "post": {
+        "operationId": "selectKstCandidateV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/SelectRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selected supplied candidate",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SelectedCandidate"}
+              }
+            }
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "500": {"$ref": "#/components/responses/UnexpectedError"}
+        }
+      }
+    },
+    "/internal/v2/kst/advance": {
+      "post": {
+        "operationId": "advanceKstAssessmentV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AdvanceRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated posterior and next candidate or final profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {"$ref": "#/components/schemas/InProgressResponse"},
+                    {"$ref": "#/components/schemas/CompletedResponse"}
+                  ],
+                  "discriminator": {
+                    "propertyName": "status",
+                    "mapping": {
+                      "in_progress": "#/components/schemas/InProgressResponse",
+                      "completed": "#/components/schemas/CompletedResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "500": {"$ref": "#/components/responses/UnexpectedError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Relation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": {"type": "string", "minLength": 1, "pattern": "\\S"},
+          "to": {"type": "string", "minLength": 1, "pattern": "\\S"}
+        }
+      },
+      "Candidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate_id", "node", "beta", "eta"],
+        "properties": {
+          "candidate_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+          "node": {"type": "string", "minLength": 1, "pattern": "\\S"},
+          "beta": {"type": "number", "minimum": 0, "maximum": 1},
+          "eta": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "Configuration": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "Model": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version", "method", "nodes", "knowledge_states", "matrix",
+          "uniform_prior", "configuration", "configuration_hash",
+          "reliability_floor", "safety_cap"
+        ],
+        "properties": {
+          "schema_version": {"const": 2},
+          "method": {"const": "kst"},
+          "nodes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "knowledge_states": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "array", "items": {"type": "string"}}
+          },
+          "matrix": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "array",
+              "items": {"type": "integer", "minimum": 0, "maximum": 1}
+            }
+          },
+          "uniform_prior": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "configuration": {"$ref": "#/components/schemas/Configuration"},
+          "configuration_hash": {"type": "string"},
+          "reliability_floor": {"type": "integer", "minimum": 0},
+          "safety_cap": {"type": "integer", "minimum": 0}
+        }
+      },
+      "ModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodes", "relations"],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "pattern": "\\S"}
+          },
+          "relations": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Relation"}
+          },
+          "cached_knowledge_states": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      },
+      "ModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "posterior"],
+        "properties": {
+          "model": {"$ref": "#/components/schemas/Model"},
+          "posterior": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        }
+      },
+      "SelectedCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate_id", "node"],
+        "properties": {
+          "candidate_id": {"type": "string"},
+          "node": {"type": "string"}
+        }
+      },
+      "SelectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "posterior", "candidates"],
+        "properties": {
+          "model": {"$ref": "#/components/schemas/Model"},
+          "posterior": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "candidates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/components/schemas/Candidate"}
+          }
+        }
+      },
+      "AdvanceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model", "posterior", "administered", "response_correct",
+          "response_count", "remaining_candidates"
+        ],
+        "properties": {
+          "model": {"$ref": "#/components/schemas/Model"},
+          "posterior": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "administered": {"$ref": "#/components/schemas/Candidate"},
+          "response_correct": {"type": "boolean"},
+          "response_count": {"type": "integer", "minimum": 1},
+          "remaining_candidates": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Candidate"}
+          }
+        }
+      },
+      "FinalProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mastered", "ready_to_learn", "uncertain_ahead",
+          "uncertain_prerequisite", "not_yet", "summary", "stop_reason",
+          "best_state_confidence", "credible_mass", "credible_state_count",
+          "confidence_limited"
+        ],
+        "properties": {
+          "mastered": {"type": "array", "items": {"type": "string"}},
+          "ready_to_learn": {"type": "array", "items": {"type": "string"}},
+          "uncertain_ahead": {"type": "array", "items": {"type": "string"}},
+          "uncertain_prerequisite": {"type": "array", "items": {"type": "string"}},
+          "not_yet": {"type": "array", "items": {"type": "string"}},
+          "summary": {"type": ["string", "null"]},
+          "stop_reason": {
+            "enum": ["natural", "safety_cap", "item_inventory_exhausted"]
+          },
+          "best_state_confidence": {"type": "number"},
+          "credible_mass": {"type": "number"},
+          "credible_state_count": {"type": "integer", "minimum": 1},
+          "confidence_limited": {"type": "boolean"}
+        }
+      },
+      "InProgressResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "posterior", "next_candidate"],
+        "properties": {
+          "status": {"const": "in_progress"},
+          "posterior": {"type": "array", "items": {"type": "number"}},
+          "next_candidate": {"$ref": "#/components/schemas/SelectedCandidate"}
+        }
+      },
+      "CompletedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "posterior", "profile"],
+        "properties": {
+          "status": {"const": "completed"},
+          "posterior": {"type": "array", "items": {"type": "number"}},
+          "profile": {"$ref": "#/components/schemas/FinalProfile"}
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message", "details"],
+            "properties": {
+              "code": {"type": "string"},
+              "message": {"type": "string"},
+              "details": {"type": "array"}
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Request validation failed",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"}
+          }
+        }
+      },
+      "UnexpectedError": {
+        "description": "Unexpected internal error",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"}
+          }
+        }
+      }
+    }
+  }
+}

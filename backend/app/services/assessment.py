@@ -1,22 +1,26 @@
-"""Assessment creation, activation, answering, and player-safe views."""
+"""Candidate-aware assessment creation, activation, answering, and safe views."""
 
 import asyncio
-from collections import defaultdict
+import logging
+import math
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from app.domain.graphs import graph_hash, make_pending_graph, normalize_graph
+from app.domain.graphs import graph_hash, normalize_graph
 from app.domain.models import *
 from app.domain.repository import AssessmentRepository, RepositoryDataError
 from app.integrations.kst_engine import KstEngine
 
 from .questions import QuestionOutput, RandomSource, build_question, to_question_output
 
+logger = logging.getLogger(__name__)
+
 
 class AssessmentServiceError(RuntimeError):
-    """Base class for stable service failures mapped by the future API layer."""
+    """Base class for stable service failures mapped by the API layer."""
 
 
 class AssessmentNotFound(AssessmentServiceError):
@@ -64,7 +68,7 @@ class AssessmentView:
 
 
 class AssessmentService:
-    """Coordinate persistence and R without exposing either implementation."""
+    """Coordinate fixed item pools, persistence, and candidate-aware R calls."""
 
     def __init__(
         self,
@@ -87,8 +91,6 @@ class AssessmentService:
     async def create_assessment(
         self, command: CreateAssessmentCommand
     ) -> CreateAssessmentResult:
-        """Create an active assessment or one restart-safe preparation."""
-
         if command.method is not AssessmentMethod.KST:
             raise AssessmentConflict("unsupported assessment method")
         graph = normalize_graph(
@@ -98,60 +100,56 @@ class AssessmentService:
         )
         identifier = graph_hash(graph)
         cached = await self._repository.get_cached_graph(identifier)
-        coverage = await self._repository.resolve_usable_coverage(graph.nodes)
-        missing_nodes = tuple(
-            entry.node for entry in coverage if entry.parameters is None
-        )
-        test_id = TestId(self._uuid_factory())
-
-        if missing_nodes:
-            session = AssessmentSession(
-                test_id=test_id,
-                user_id=command.user_id,
-                learning_path_id=LearningPathId(command.learning_path_id),
-                graph_hash=identifier if cached is not None else None,
-                status=SessionStatus.PREPARING,
-                started_at=self._now(),
-                method=command.method,
-                player_state=PlayerState.new(
-                    pending_graph=make_pending_graph(graph) if cached is None else None
-                ),
-                goal=command.goal,
-            )
-            await self._repository.create_session(session)
-            await self._repository.create_yg_order_if_no_pending(
-                YgOrder(
-                    order_id=None,
-                    test_id=test_id,
-                    course=command.course,
-                    nodes=missing_nodes,
-                    cognitive_level=command.cognitive_level,
-                    volume=3,
-                    status=YgStatus.PENDING,
-                )
-            )
-            return self._creation_result(
-                test_id, SessionStatus.PREPARING, missing_nodes
-            )
-
-        parameters = self._covered_parameters(coverage)
         built = await self._engine.build_model(
             graph,
-            parameters,
             None if cached is None else cached.knowledge_states,
         )
         self._validate_model_build(graph, built)
         if cached is None:
-            await self._repository.insert_cached_graph_if_absent(
+            cached = await self._repository.insert_cached_graph_if_absent(
                 GraphCacheEntry(
                     graph_hash=identifier,
                     graph=graph,
                     knowledge_states=built.model.knowledge_states,
                 )
             )
-        first_question = await self._question_for_node(
-            built.next_node,
-            used_item_ids=(),
+        items = await self._repository.list_usable_items_for_nodes(graph.nodes)
+        plan = self._inventory_plan(graph.nodes, built.model, items)
+        test_id = TestId(self._uuid_factory())
+        if plan.requests:
+            session = AssessmentSession(
+                test_id=test_id,
+                user_id=command.user_id,
+                learning_path_id=LearningPathId(command.learning_path_id),
+                graph_hash=identifier,
+                status=SessionStatus.PREPARING,
+                started_at=self._now(),
+                method=command.method,
+                player_state=PlayerState.new(
+                    posterior=built.posterior,
+                    inventory_plan=plan,
+                ),
+                model=built.model,
+                goal=command.goal,
+            )
+            await self._repository.create_session(session)
+            await self._repository.create_yg_order_if_no_pending(
+                self._yg_order(
+                    test_id,
+                    command.course,
+                    command.cognitive_level,
+                    plan.requests,
+                )
+            )
+            return self._creation_result(
+                test_id,
+                SessionStatus.PREPARING,
+                tuple(request.node for request in plan.requests),
+            )
+
+        pool = self._snapshot_pool(graph.nodes, built.model, items, plan)
+        first_question = await self._first_question(
+            built.model, built.posterior, pool
         )
         session = AssessmentSession(
             test_id=test_id,
@@ -164,6 +162,7 @@ class AssessmentService:
             player_state=PlayerState.new(
                 posterior=built.posterior,
                 current_question=first_question,
+                session_pool=pool,
             ),
             model=built.model,
             goal=command.goal,
@@ -172,61 +171,77 @@ class AssessmentService:
         return self._creation_result(test_id, SessionStatus.ACTIVE, ())
 
     async def get_assessment(self, test_id: TestId) -> AssessmentView:
-        """Return the persisted public view without triggering activation."""
-
         session = await self._require_session(test_id)
-        if session.is_legacy:
-            raise AssessmentConflict("legacy assessment cannot be resumed")
+        if session.is_legacy and session.status is not SessionStatus.COMPLETED:
+            raise AssessmentConflict("v1 assessment cannot be resumed")
         return self._view(session)
 
     async def start_assessment(self, test_id: TestId) -> AssessmentView:
-        """Start once coverage exists and otherwise return a preparing view."""
-
         async with self._start_locks[test_id]:
             session = await self._require_session(test_id)
             if session.is_legacy:
-                raise AssessmentConflict("legacy assessment cannot be resumed")
-            if session.status is SessionStatus.FAILED:
-                raise AssessmentConflict("assessment preparation failed")
+                if session.status is SessionStatus.COMPLETED:
+                    return self._view(session)
+                raise AssessmentConflict("v1 assessment cannot be resumed")
             if session.status in (SessionStatus.ACTIVE, SessionStatus.COMPLETED):
                 return self._view(session)
+            if session.status is SessionStatus.FAILED:
+                raise AssessmentConflict("assessment preparation failed")
             if session.status is not SessionStatus.PREPARING:
                 raise AssessmentConflict("assessment cannot be started")
+            state = self._player_state(session)
+            if not isinstance(session.model, KstModel):
+                raise RepositoryDataError("preparing v2 session has no v2 model")
+            if session.graph_hash is None:
+                raise RepositoryDataError("preparing session has no graph")
+            cached = await self._repository.get_cached_graph(session.graph_hash)
+            if cached is None:
+                raise RepositoryDataError("preparing session references a missing graph")
 
-            order = await self._repository.get_latest_yg_order(test_id)
-            if order is not None and order.status is YgStatus.FAILED:
-                await self._repository.mark_session_failed(test_id)
-                raise AssessmentConflict("assessment preparation failed")
-
-            graph, identifier, cached = await self._preparing_graph(session)
-            coverage = await self._repository.resolve_usable_coverage(graph.nodes)
-            if any(entry.parameters is None for entry in coverage):
+            items = await self._repository.list_usable_items_for_nodes(
+                cached.graph.nodes
+            )
+            plan = self._inventory_plan(cached.graph.nodes, session.model, items)
+            if plan.requests:
+                if state.inventory_plan != plan:
+                    state = PlayerState(
+                        schema_version=PLAYER_STATE_SCHEMA_VERSION,
+                        posterior=state.posterior,
+                        answered_items=state.answered_items,
+                        current_question=None,
+                        inventory_plan=plan,
+                    )
+                    await self._repository.update_preparing_inventory_plan(
+                        test_id, state
+                    )
+                latest = await self._repository.get_latest_yg_order(test_id)
+                if latest is None or latest.status not in (
+                    YgStatus.PENDING,
+                    YgStatus.PROCESSING,
+                ):
+                    await self._repository.create_yg_order_if_no_pending(
+                        self._yg_order(
+                            test_id,
+                            "" if latest is None else latest.course,
+                            None if latest is None else latest.cognitive_level,
+                            plan.requests,
+                        )
+                    )
                 return AssessmentView(status=SessionStatus.PREPARING)
 
-            built = await self._engine.build_model(
-                graph,
-                self._covered_parameters(coverage),
-                None if cached is None else cached.knowledge_states,
+            pool = self._snapshot_pool(
+                cached.graph.nodes, session.model, items, plan
             )
-            self._validate_model_build(graph, built)
-            if cached is None:
-                await self._repository.insert_cached_graph_if_absent(
-                    GraphCacheEntry(
-                        graph_hash=identifier,
-                        graph=graph,
-                        knowledge_states=built.model.knowledge_states,
-                    )
-                )
-            first_question = await self._question_for_node(
-                built.next_node,
-                used_item_ids=(),
+            first_question = await self._first_question(
+                session.model, state.posterior, pool
             )
             activated = await self._repository.activate_session(
                 ActivationCommand(
                     test_id=test_id,
-                    graph_hash=identifier,
-                    model=built.model,
+                    graph_hash=session.graph_hash,
+                    model=session.model,
                     first_question=first_question,
+                    session_pool=pool,
                 )
             )
             return self._view(activated)
@@ -237,9 +252,9 @@ class AssessmentService:
         submission_id: SubmissionId,
         option_id: OptionId,
     ) -> AssessmentView:
-        """Score one persisted option and commit the R transition idempotently."""
-
         session = await self._require_session(test_id)
+        if session.is_legacy:
+            raise AssessmentConflict("v1 assessment cannot be resumed")
         state = self._player_state(session)
         if any(
             answered.submission_id == submission_id for answered in state.answered_items
@@ -249,33 +264,35 @@ class AssessmentService:
             raise AssessmentConflict("assessment does not accept answers")
         question = state.current_question
         model = session.model
-        if question is None or model is None:
+        pool = state.session_pool
+        if question is None or not isinstance(model, KstModel) or pool is None:
             raise AssessmentConflict("assessment has no current question")
         if question.submission_id != submission_id:
             raise AssessmentConflict("stale submission")
-
         selected = next(
-            (
-                option.text
-                for option in question.options
-                if option.option_id == option_id
-            ),
+            (option for option in question.options if option.option_id == option_id),
             None,
         )
         if selected is None:
             raise AssessmentConflict("option is unavailable")
-        item = await self._repository.get_item(question.item_id)
-        if item is None:
-            raise RepositoryDataError(f"unknown item: {question.item_id}")
-        if item.node != question.node:
-            raise RepositoryDataError("persisted question item node changed")
-        response_correct = selected == item.answer_key
+        if any(answer.item_id == question.item_id for answer in state.answered_items):
+            raise RepositoryDataError("current item is already in answer history")
+        response_correct = option_id == question.correct_option_id
+        administered = ItemCandidate(
+            candidate_id=question.candidate_id,
+            item_id=question.item_id,
+            node=question.node,
+            beta=question.beta,
+            eta=question.eta,
+        )
+        remaining = await self._remaining_candidates(state)
         advanced = await self._engine.advance(
             model,
             state.posterior,
-            question.node,
+            administered,
             response_correct,
             len(state.answered_items) + 1,
+            remaining,
         )
         answered = AnsweredItem(
             submission_id=submission_id,
@@ -284,31 +301,41 @@ class AssessmentService:
             response_correct=response_correct,
         )
         if isinstance(advanced, AdvanceInProgress):
-            used_ids = tuple(previous.item_id for previous in state.answered_items) + (
-                question.item_id,
+            candidate = self._verify_selection(
+                advanced.next_candidate, remaining
             )
-            next_question = await self._question_for_node(
-                advanced.next_node,
-                used_item_ids=used_ids,
+            next_question = await self._question_for_candidate(candidate)
+            next_state = PlayerState(
+                schema_version=PLAYER_STATE_SCHEMA_VERSION,
+                posterior=advanced.posterior,
+                answered_items=state.answered_items + (answered,),
+                current_question=next_question,
+                session_pool=pool,
             )
-            transition = AnswerTransition(
-                next_player_state=PlayerState(
-                    schema_version=PLAYER_STATE_SCHEMA_VERSION,
-                    posterior=advanced.posterior,
-                    answered_items=state.answered_items + (answered,),
-                    current_question=next_question,
-                )
-            )
+            transition = AnswerTransition(next_player_state=next_state)
         else:
+            next_state = PlayerState(
+                schema_version=PLAYER_STATE_SCHEMA_VERSION,
+                posterior=advanced.posterior,
+                answered_items=state.answered_items + (answered,),
+                current_question=None,
+                session_pool=pool,
+            )
             transition = AnswerTransition(
-                next_player_state=PlayerState(
-                    schema_version=PLAYER_STATE_SCHEMA_VERSION,
-                    posterior=advanced.posterior,
-                    answered_items=state.answered_items + (answered,),
-                    current_question=None,
-                ),
+                next_player_state=next_state,
                 final_profile=advanced.profile,
             )
+            if advanced.profile.stop_reason is StopReason.ITEM_INVENTORY_EXHAUSTED:
+                logger.warning(
+                    "item_inventory_exhausted",
+                    extra={
+                        "test_id": str(test_id),
+                        "safety_cap": model.derived_limits.safety_cap,
+                        "response_count": len(next_state.answered_items),
+                        "original_pool_size": len(pool.candidates),
+                        "remaining_usable_count": len(remaining),
+                    },
+                )
         committed = await self._repository.commit_answer(
             submission_id,
             AnswerRecord(
@@ -316,7 +343,7 @@ class AssessmentService:
                 test_id=test_id,
                 item_id=question.item_id,
                 score=1 if response_correct else 0,
-                selected_answer=selected,
+                selected_answer=selected.text,
                 answered_at=self._now(),
             ),
             transition,
@@ -332,34 +359,174 @@ class AssessmentService:
             )
         return self._view(committed.session)
 
-    async def _preparing_graph(
-        self, session: AssessmentSession
-    ) -> tuple[GraphDefinition, str, GraphCacheEntry | None]:
-        state = self._player_state(session)
-        pending = state.pending_graph
-        if pending is not None:
-            cached = await self._repository.get_cached_graph(pending.graph_hash)
-            return pending.graph, pending.graph_hash, cached
-        if session.graph_hash is None:
-            raise RepositoryDataError("preparing session has no graph")
-        cached = await self._repository.get_cached_graph(session.graph_hash)
-        if cached is None:
-            raise RepositoryDataError("preparing session references a missing graph")
-        return cached.graph, cached.graph_hash, cached
-
-    async def _question_for_node(
+    async def _first_question(
         self,
-        node: str,
-        *,
-        used_item_ids: tuple[ItemId, ...],
+        model: KstModel,
+        posterior: tuple[float, ...],
+        pool: SessionPool,
     ) -> CurrentQuestion:
-        items = await self._repository.list_usable_items(node, used_item_ids)
-        if not items:
-            raise RepositoryDataError(f"no usable item for node: {node}")
+        selected = await self._engine.select(model, posterior, pool.candidates)
+        return await self._question_for_candidate(
+            self._verify_selection(selected, pool.candidates)
+        )
+
+    async def _question_for_candidate(
+        self, candidate: ItemCandidate
+    ) -> CurrentQuestion:
+        loaded = await self._repository.load_items_by_ids((candidate.item_id,))
+        if len(loaded) != 1:
+            raise RepositoryDataError(
+                f"selected pool item is not usable: {candidate.item_id}"
+            )
+        item = loaded[0]
+        self._validate_item_matches_candidate(item, candidate)
         return build_question(
-            items[0],
+            item,
+            candidate=candidate,
             random_source=self._random_source,
             uuid_factory=self._uuid_factory,
+        )
+
+    async def _remaining_candidates(
+        self, state: PlayerState
+    ) -> tuple[ItemCandidate, ...]:
+        if state.session_pool is None or state.current_question is None:
+            raise RepositoryDataError("active state has no pool or current question")
+        excluded = {
+            state.current_question.item_id,
+            *(answer.item_id for answer in state.answered_items),
+        }
+        eligible = tuple(
+            candidate
+            for candidate in state.session_pool.candidates
+            if candidate.item_id not in excluded
+        )
+        loaded = await self._repository.load_items_by_ids(
+            tuple(candidate.item_id for candidate in eligible)
+        )
+        loaded_by_id = {item.item_id: item for item in loaded}
+        remaining: list[ItemCandidate] = []
+        for candidate in eligible:
+            item = loaded_by_id.get(candidate.item_id)
+            if item is None:
+                continue
+            self._validate_item_matches_candidate(item, candidate)
+            remaining.append(candidate)
+        return tuple(remaining)
+
+    @staticmethod
+    def _inventory_plan(
+        nodes: tuple[str, ...],
+        model: KstModel,
+        items: tuple[AssessmentItem, ...],
+    ) -> InventoryPlan:
+        required = math.ceil(model.derived_limits.safety_cap / len(nodes))
+        counts = Counter(item.node for item in items)
+        requests = tuple(
+            InventoryRequest(node=node, amount=max(0, required - counts[node]))
+            for node in nodes
+            if counts[node] < required
+        )
+        return InventoryPlan(required_per_node=required, requests=requests)
+
+    @staticmethod
+    def _snapshot_pool(
+        nodes: tuple[str, ...],
+        model: KstModel,
+        items: tuple[AssessmentItem, ...],
+        plan: InventoryPlan,
+    ) -> SessionPool:
+        candidates = tuple(
+            ItemCandidate(
+                candidate_id=CandidateId(f"yp:{int(item.item_id)}"),
+                item_id=item.item_id,
+                node=item.node,
+                beta=item.beta,
+                eta=item.eta,
+            )
+            for item in items
+        )
+        item_ids = [candidate.item_id for candidate in candidates]
+        candidate_ids = [candidate.candidate_id for candidate in candidates]
+        if len(item_ids) != len(set(item_ids)):
+            raise RepositoryDataError("activation pool contains duplicate item IDs")
+        if len(candidate_ids) != len(set(candidate_ids)):
+            raise RepositoryDataError("activation pool contains duplicate candidate IDs")
+        if any(
+            not str(candidate.candidate_id).strip()
+            or not math.isfinite(candidate.beta)
+            or not math.isfinite(candidate.eta)
+            or not 0 <= candidate.beta <= 1
+            or not 0 <= candidate.eta <= 1
+            for candidate in candidates
+        ):
+            raise RepositoryDataError("activation pool has invalid candidate metadata")
+        if any(candidate.node not in model.nodes for candidate in candidates):
+            raise RepositoryDataError("activation pool contains a foreign node")
+        counts = Counter(candidate.node for candidate in candidates)
+        if any(counts[node] < plan.required_per_node for node in nodes):
+            raise RepositoryDataError("activation pool does not meet per-node target")
+        if len(candidates) < model.derived_limits.safety_cap:
+            raise RepositoryDataError("activation pool is smaller than safety cap")
+        return SessionPool(candidates=candidates)
+
+    @staticmethod
+    def _verify_selection(
+        selected: CandidateSelection,
+        supplied: tuple[ItemCandidate, ...],
+    ) -> ItemCandidate:
+        matches = tuple(
+            candidate
+            for candidate in supplied
+            if candidate.candidate_id == selected.candidate_id
+            and candidate.node == selected.node
+        )
+        if len(matches) != 1:
+            raise RepositoryDataError("R selected a candidate outside the supplied set")
+        return matches[0]
+
+    @staticmethod
+    def _validate_item_matches_candidate(
+        item: AssessmentItem, candidate: ItemCandidate
+    ) -> None:
+        if (
+            item.item_id != candidate.item_id
+            or item.node != candidate.node
+            or item.beta != candidate.beta
+            or item.eta != candidate.eta
+        ):
+            raise RepositoryDataError("pool metadata no longer matches the item bank")
+
+    @staticmethod
+    def _validate_model_build(
+        graph: GraphDefinition, built: ModelBuildResult
+    ) -> None:
+        if built.model.schema_version != KST_MODEL_SCHEMA_VERSION:
+            raise RepositoryDataError("R returned an unsupported model version")
+        if built.model.nodes != graph.nodes:
+            raise RepositoryDataError("R model nodes do not match graph")
+        if built.posterior != built.model.uniform_prior:
+            raise RepositoryDataError("R initial posterior does not match model prior")
+        limits = built.model.derived_limits
+        if limits.reliability_floor < 0 or limits.safety_cap < limits.reliability_floor:
+            raise RepositoryDataError("R returned invalid derived limits")
+
+    @staticmethod
+    def _yg_order(
+        test_id: TestId,
+        course: str,
+        cognitive_level: str | None,
+        requests: tuple[InventoryRequest, ...],
+    ) -> YgOrder:
+        return YgOrder(
+            order_id=None,
+            test_id=test_id,
+            course=course,
+            nodes=tuple(request.node for request in requests),
+            cognitive_level=cognitive_level,
+            volume=max((request.amount for request in requests), default=0),
+            status=YgStatus.PENDING,
+            item_requests=requests,
         )
 
     async def _require_session(self, test_id: TestId) -> AssessmentSession:
@@ -371,31 +538,18 @@ class AssessmentService:
     @staticmethod
     def _player_state(session: AssessmentSession) -> PlayerState:
         if not isinstance(session.player_state, PlayerState):
-            raise AssessmentConflict("legacy assessment cannot be resumed")
+            raise AssessmentConflict("v1 assessment cannot be resumed")
         return session.player_state
 
     @staticmethod
-    def _covered_parameters(
-        coverage: tuple[NodeCoverage, ...],
-    ) -> tuple[NodeParameters, ...]:
-        parameters: list[NodeParameters] = []
-        for entry in coverage:
-            if entry.parameters is None:
-                raise RepositoryDataError("coverage unexpectedly incomplete")
-            parameters.append(entry.parameters)
-        return tuple(parameters)
-
-    @staticmethod
-    def _validate_model_build(graph: GraphDefinition, built: ModelBuildResult) -> None:
-        if built.model.nodes != graph.nodes:
-            raise RepositoryDataError("R model nodes do not match graph")
-        if built.posterior != built.model.uniform_prior:
-            raise RepositoryDataError("R initial posterior does not match model prior")
-        if built.next_node not in graph.nodes:
-            raise RepositoryDataError("R next node is outside graph")
-
-    @staticmethod
     def _view(session: AssessmentSession) -> AssessmentView:
+        if session.status is SessionStatus.COMPLETED:
+            if session.final_profile is None:
+                raise RepositoryDataError("completed assessment has no profile")
+            return AssessmentView(
+                status=SessionStatus.COMPLETED,
+                feedback=feedback_from_profile(session.final_profile),
+            )
         state = AssessmentService._player_state(session)
         if session.status is SessionStatus.ACTIVE:
             if state.current_question is None:
@@ -403,13 +557,6 @@ class AssessmentService:
             return AssessmentView(
                 status=SessionStatus.ACTIVE,
                 question=to_question_output(state.current_question),
-            )
-        if session.status is SessionStatus.COMPLETED:
-            if session.final_profile is None:
-                raise RepositoryDataError("completed assessment has no profile")
-            return AssessmentView(
-                status=SessionStatus.COMPLETED,
-                feedback=feedback_from_profile(session.final_profile),
             )
         return AssessmentView(status=session.status)
 
@@ -435,12 +582,11 @@ class AssessmentService:
 
 
 def feedback_from_profile(profile: FinalProfile) -> Feedback:
-    """Map internal five-way KST output to the three public sections."""
-
     return Feedback(
         already_mastered=profile.mastered,
         learn_next=profile.ready_to_learn + profile.uncertain_ahead,
         review=profile.uncertain_prerequisite,
         summary=profile.summary,
-        confidence_limited=profile.stop_reason is StopReason.SAFETY_CAP,
+        confidence_limited=profile.stop_reason
+        in (StopReason.SAFETY_CAP, StopReason.ITEM_INVENTORY_EXHAUSTED),
     )

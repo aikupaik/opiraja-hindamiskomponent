@@ -115,18 +115,35 @@ class SupabaseAssessmentRepository:
             return session
         raise RepositoryDataError(f"cannot fail session in status {session.status.value}")
 
+    async def update_preparing_inventory_plan(
+        self, test_id: TestId, state: PlayerState
+    ) -> AssessmentSession:
+        response = await self._execute(
+            self._apply_filters(
+                self._client.table(SESSION_TABLE)
+                .update(preparing_inventory_updates(state))
+                .select(SESSION_COLUMNS),
+                preparing_session_filters(test_id),
+            )
+        )
+        row = self._zero_or_one(response, SESSION_TABLE)
+        if row is not None:
+            return decode_session(row)
+        session = await self._require_session(test_id)
+        if session.status is not SessionStatus.PREPARING:
+            return session
+        raise RepositoryUnavailable("preparing inventory plan update was not observable")
+
     async def is_ready(self) -> bool:
         await self._execute(
             self._client.table(SESSION_TABLE).select(SESSION_ID_COLUMN).limit(1)
         )
         return True
 
-    async def resolve_usable_coverage(
+    async def list_usable_items_for_nodes(
         self, nodes: tuple[str, ...]
-    ) -> tuple[NodeCoverage, ...]:
-        coverage: list[NodeCoverage] = []
-        # Exact per-node queries deliberately avoid PostgREST list syntax: a node
-        # may itself contain a comma.
+    ) -> tuple[AssessmentItem, ...]:
+        items: list[AssessmentItem] = []
         for node in nodes:
             response = await self._execute(
                 self._apply_filters(
@@ -134,41 +151,49 @@ class SupabaseAssessmentRepository:
                     item_eligibility_filters(node),
                 )
                 .order(ITEM_ORDER_COLUMN)
-                .limit(1)
+            )
+            decoded_values: list[AssessmentItem] = []
+            for row in self._rows(response, ITEM_TABLE):
+                try:
+                    item = decode_item(row)
+                except RepositoryDataError:
+                    continue
+                if is_domain_valid_usable_item(item):
+                    decoded_values.append(item)
+            decoded = tuple(decoded_values)
+            if any(item.node != node for item in decoded):
+                raise RepositoryDataError(
+                    "usable item query returned an item for another node"
+                )
+            items.extend(decoded)
+        if len({item.item_id for item in items}) != len(items):
+            raise RepositoryDataError("usable item query returned duplicate IDs")
+        return tuple(items)
+
+    async def load_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        if len(set(item_ids)) != len(item_ids):
+            raise RepositoryDataError("pool item IDs must be unique")
+        items: list[AssessmentItem] = []
+        for item_id in item_ids:
+            filters = item_id_filters(item_id)
+            filters[ITEM_STATUS_COLUMN] = USABLE_ITEM_STATUS
+            response = await self._execute(
+                self._apply_filters(
+                    self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
+                    filters,
+                ).limit(1)
             )
             row = self._zero_or_one(response, ITEM_TABLE)
-            item = None if row is None else decode_item(row)
-            coverage.append(
-                NodeCoverage(
-                    node=node,
-                    parameters=(
-                        None
-                        if item is None
-                        else NodeParameters(
-                            node=node,
-                            item_id=item.item_id,
-                            beta=item.beta,
-                            eta=item.eta,
-                        )
-                    ),
-                )
-            )
-        return tuple(coverage)
-
-    async def list_usable_items(
-        self, node: str, used_item_ids: tuple[ItemId, ...] = ()
-    ) -> tuple[AssessmentItem, ...]:
-        response = await self._execute(
-            self._apply_filters(
-                self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
-                item_eligibility_filters(node),
-            ).order(ITEM_ORDER_COLUMN)
-        )
-        items = tuple(decode_item(row) for row in self._rows(response, ITEM_TABLE))
-        used = frozenset(used_item_ids)
-        return tuple(item for item in items if item.item_id not in used) + tuple(
-            item for item in items if item.item_id in used
-        )
+            if row is not None:
+                try:
+                    item = decode_item(row)
+                except RepositoryDataError:
+                    continue
+                if is_domain_valid_usable_item(item):
+                    items.append(item)
+        return tuple(items)
 
     async def get_item(self, item_id: ItemId) -> AssessmentItem | None:
         response = await self._execute(
@@ -406,7 +431,7 @@ class SupabaseAssessmentRepository:
     ) -> None:
         state = transition.next_player_state
         if state.schema_version != PLAYER_STATE_SCHEMA_VERSION:
-            raise RepositoryDataError("answer transition must use schema version 1")
+            raise RepositoryDataError("answer transition must use schema version 2")
         if not state.answered_items:
             raise RepositoryDataError("answer transition must append an answered item")
         appended = state.answered_items[-1]
@@ -421,3 +446,11 @@ class SupabaseAssessmentRepository:
             raise RepositoryDataError(
                 "a completed answer transition cannot have a current question"
             )
+        answered_ids = tuple(item.item_id for item in state.answered_items)
+        if len(answered_ids) != len(set(answered_ids)):
+            raise RepositoryDataError("answer history contains duplicate item IDs")
+        if (
+            state.current_question is not None
+            and state.current_question.item_id in set(answered_ids)
+        ):
+            raise RepositoryDataError("current item already appears in answer history")

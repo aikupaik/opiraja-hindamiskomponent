@@ -6,6 +6,7 @@ module. The functions neither import nor call a Supabase client.
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+import math
 from typing import TypeAlias, cast
 from uuid import UUID
 
@@ -37,7 +38,8 @@ ITEM_COLUMNS = (
 )
 ANSWER_COLUMNS = "vastus_id,test_id,yp_id,skoor,valitud_vastus,vastatud_ajal"
 YG_ORDER_COLUMNS = (
-    "id,test_id,kursus,graafi_objektid,kognitiivne_tase,maht,staatus,loodud"
+    "id,test_id,kursus,graafi_objektid,kognitiivne_tase,maht,staatus,loodud,"
+    "ylesande_taotlused,taitmise_tulemus"
 )
 
 # Query/update vocabulary used by the concrete adapter. Keeping these names
@@ -86,9 +88,11 @@ _ITEM_TO_DB = {
     ItemStatus.ARCHIVED: "arhiivis",
 }
 _ITEM_FROM_DB = {value: key for key, value in _ITEM_TO_DB.items()}
+USABLE_ITEM_STATUS = _ITEM_TO_DB[ItemStatus.USABLE]
 _STOP_TO_DB = {
     StopReason.NATURAL: "loomulik",
     StopReason.SAFETY_CAP: "turvapiir",
+    StopReason.ITEM_INVENTORY_EXHAUSTED: "ülesandevaru_ammendunud",
 }
 _STOP_FROM_DB = {value: key for key, value in _STOP_TO_DB.items()}
 
@@ -151,6 +155,7 @@ def activation_updates(command: ActivationCommand) -> EncodedRow:
             PlayerState.new(
                 posterior=command.model.uniform_prior,
                 current_question=command.first_question,
+                session_pool=command.session_pool,
             )
         ),
     }
@@ -158,6 +163,12 @@ def activation_updates(command: ActivationCommand) -> EncodedRow:
 
 def failed_session_updates() -> EncodedRow:
     return {SESSION_STATUS_COLUMN: _SESSION_TO_DB[SessionStatus.FAILED]}
+
+
+def preparing_inventory_updates(state: PlayerState) -> EncodedRow:
+    if state.current_question is not None or state.session_pool is not None:
+        raise RepositoryDataError("preparing inventory state cannot be active")
+    return {SESSION_PLAYER_STATE_COLUMN: encode_player_state(state)}
 
 
 def answer_transition_updates(transition: AnswerTransition) -> EncodedRow:
@@ -251,14 +262,14 @@ def decode_item(row: Row) -> AssessmentItem:
     )
     return AssessmentItem(
         item_id=ItemId(_integer(row, "yp_id")),
-        node=_string(row, "graafi_objekt"),
-        instruction=_string(row, "juhis"),
-        prompt=_string(row, "tyvi"),
+        node=_nonblank_string(row, "graafi_objekt"),
+        instruction=_nonblank_string(row, "juhis"),
+        prompt=_nonblank_string(row, "tyvi"),
         stimulus=_optional_string(row, "stiimul"),
-        answer_key=_string(row, "voti"),
+        answer_key=_nonblank_string(row, "voti"),
         distractors=distractors,
-        beta=_number(row, "beeta_error"),
-        eta=_number(row, "g_guess"),
+        beta=_probability(row, "beeta_error"),
+        eta=_probability(row, "g_guess"),
         status=_enum_value(_ITEM_FROM_DB, row, "staatus"),
         usage_count=_integer(row, "kasutamiste_arv"),
         last_used_at=_optional_datetime(row, "viimane_kasutus"),
@@ -297,6 +308,10 @@ def encode_yg_order(order: YgOrder) -> EncodedRow:
         "kognitiivne_tase": order.cognitive_level,
         "maht": order.volume,
         "staatus": _YG_TO_DB[order.status],
+        "ylesande_taotlused": [
+            {"node": request.node, "amount": request.amount}
+            for request in order.item_requests
+        ],
     }
     if order.order_id is not None:
         row["id"] = int(order.order_id)
@@ -305,15 +320,46 @@ def encode_yg_order(order: YgOrder) -> EncodedRow:
 
 def decode_yg_order(row: Row) -> YgOrder:
     raw_id = row.get("id")
+    request_values = _optional_sequence(row, "ylesande_taotlused")
+    requests = tuple(
+        _decode_inventory_request(_as_mapping(value, "ylesande_taotlus"))
+        for value in request_values
+    )
+    result_values = _optional_sequence(row, "taitmise_tulemus")
+    results = tuple(
+        _decode_inventory_result(_as_mapping(value, "taitmise_tulemus"))
+        for value in result_values
+    )
+    legacy_nodes = _string_tuple(
+        _sequence(row, "graafi_objektid"), "graafi_objektid"
+    )
+    legacy_volume = _integer(row, "maht")
+    if not requests:
+        requests = tuple(
+            InventoryRequest(node=node, amount=legacy_volume)
+            for node in legacy_nodes
+        )
+        effective_nodes = legacy_nodes
+        effective_volume = legacy_volume
+    else:
+        request_nodes = tuple(request.node for request in requests)
+        if len(request_nodes) != len(set(request_nodes)):
+            raise RepositoryDataError(
+                "ylesande_taotlused must not contain duplicate nodes"
+            )
+        effective_nodes = request_nodes
+        effective_volume = max(request.amount for request in requests)
     return YgOrder(
         order_id=None if raw_id is None else YgOrderId(_expect_int(raw_id, "id")),
         test_id=TestId(_uuid(row, "test_id")),
         course=_string(row, "kursus"),
-        nodes=_string_tuple(_sequence(row, "graafi_objektid"), "graafi_objektid"),
+        nodes=effective_nodes,
         cognitive_level=_optional_string(row, "kognitiivne_tase"),
-        volume=_integer(row, "maht"),
+        volume=effective_volume,
         status=_enum_value(_YG_FROM_DB, row, "staatus"),
         created_at=_optional_datetime(row, "loodud"),
+        item_requests=requests,
+        fulfillment_results=results,
     )
 
 
@@ -337,7 +383,9 @@ def encode_session(session: AssessmentSession) -> EncodedRow:
             else encode_final_profile(session.final_profile)
         ),
         "testi_loogika": (
-            None if session.model is None else encode_kst_model(session.model)
+            None
+            if session.model is None
+            else encode_kst_model(_require_v2_model(session.model))
         ),
         "metoodika": session.method.value,
         "tp_seisund": encode_player_state(session.player_state),
@@ -384,6 +432,7 @@ def encode_player_state(state: PlayerState) -> dict[str, JsonValue]:
         raise RepositoryDataError(
             f"unsupported player state schema version: {state.schema_version}"
         )
+    _validate_player_state_invariants(state)
     return {
         "schema_version": state.schema_version,
         "posterior": list(state.posterior),
@@ -405,6 +454,27 @@ def encode_player_state(state: PlayerState) -> dict[str, JsonValue]:
             None
             if state.pending_graph is None
             else _encode_pending_graph(state.pending_graph)
+        ),
+        "session_pool": (
+            None
+            if state.session_pool is None
+            else {
+                "candidates": [
+                    _encode_candidate(candidate)
+                    for candidate in state.session_pool.candidates
+                ]
+            }
+        ),
+        "inventory_plan": (
+            None
+            if state.inventory_plan is None
+            else {
+                "required_per_node": state.inventory_plan.required_per_node,
+                "requests": [
+                    {"node": request.node, "amount": request.amount}
+                    for request in state.inventory_plan.requests
+                ],
+            }
         ),
     }
 
@@ -432,11 +502,21 @@ def decode_player_state(data: Row) -> PlayerState | LegacyPlayerState:
         )
     if not isinstance(version, int) or isinstance(version, bool):
         raise RepositoryDataError("tp_seisund.schema_version must be an integer")
+    if version == 1:
+        return LegacyPlayerState(
+            posterior=_number_tuple(_sequence(data, "posterior"), "posterior"),
+            answered_items=tuple(
+                _decode_answered_item(_as_mapping(value, "answered_item"))
+                for value in _sequence(data, "answered_items")
+            ),
+        )
     if version != PLAYER_STATE_SCHEMA_VERSION:
         raise RepositoryDataError(f"unsupported player state schema version: {version}")
     current = data.get("current_question")
     pending = data.get("pending_graph")
-    return PlayerState(
+    pool = data.get("session_pool")
+    inventory = data.get("inventory_plan")
+    state = PlayerState(
         schema_version=version,
         posterior=_number_tuple(_sequence(data, "posterior"), "posterior"),
         answered_items=tuple(
@@ -453,7 +533,28 @@ def decode_player_state(data: Row) -> PlayerState | LegacyPlayerState:
             if pending is None
             else _decode_pending_graph(_as_mapping(pending, "pending_graph"))
         ),
+        session_pool=(
+            None
+            if pool is None
+            else SessionPool(
+                candidates=tuple(
+                    _decode_candidate(_as_mapping(value, "candidate"))
+                    for value in _sequence(
+                        _as_mapping(pool, "session_pool"), "candidates"
+                    )
+                )
+            )
+        ),
+        inventory_plan=(
+            None
+            if inventory is None
+            else _decode_inventory_plan(
+                _as_mapping(inventory, "inventory_plan")
+            )
+        ),
     )
+    _validate_player_state_invariants(state)
+    return state
 
 
 def encode_kst_model(model: KstModel) -> dict[str, JsonValue]:
@@ -468,39 +569,62 @@ def encode_kst_model(model: KstModel) -> dict[str, JsonValue]:
         "knowledge_states": [list(state.nodes) for state in model.knowledge_states],
         "matrix": [list(row) for row in model.matrix],
         "uniform_prior": list(model.uniform_prior),
-        "beta": list(model.beta),
-        "eta": list(model.eta),
         "configuration": _encode_kst_configuration(model.configuration),
         "configuration_hash": model.configuration_hash,
+        "reliability_floor": model.derived_limits.reliability_floor,
+        "safety_cap": model.derived_limits.safety_cap,
     }
 
 
-def decode_kst_model(data: Row) -> KstModel:
+def decode_kst_model(data: Row) -> KstModel | LegacyKstModel:
     version = _integer(data, "schema_version")
-    if version != KST_MODEL_SCHEMA_VERSION:
+    if version not in (1, KST_MODEL_SCHEMA_VERSION):
         raise RepositoryDataError(f"unsupported KST model schema version: {version}")
     method_text = _string(data, "method")
     if method_text != AssessmentMethod.KST.value:
         raise RepositoryDataError(f"unknown KST model method: {method_text!r}")
+    nodes = _string_tuple(_sequence(data, "nodes"), "nodes")
+    knowledge_states = tuple(
+        KnowledgeState(
+            _string_tuple(_as_sequence(value, "knowledge_state"), "knowledge_state")
+        )
+        for value in _sequence(data, "knowledge_states")
+    )
+    matrix = tuple(
+        _integer_tuple(_as_sequence(value, "matrix row"), "matrix row")
+        for value in _sequence(data, "matrix")
+    )
+    uniform_prior = _number_tuple(
+        _sequence(data, "uniform_prior"), "uniform_prior"
+    )
+    configuration = _decode_kst_configuration(_mapping(data, "configuration"))
+    configuration_hash = _string(data, "configuration_hash")
+    if version == 1:
+        return LegacyKstModel(
+            schema_version=version,
+            method=AssessmentMethod.KST,
+            nodes=nodes,
+            knowledge_states=knowledge_states,
+            matrix=matrix,
+            uniform_prior=uniform_prior,
+            configuration=configuration,
+            configuration_hash=configuration_hash,
+            beta=_number_tuple(_sequence(data, "beta"), "beta"),
+            eta=_number_tuple(_sequence(data, "eta"), "eta"),
+        )
     return KstModel(
         schema_version=version,
         method=AssessmentMethod.KST,
-        nodes=_string_tuple(_sequence(data, "nodes"), "nodes"),
-        knowledge_states=tuple(
-            KnowledgeState(
-                _string_tuple(_as_sequence(value, "knowledge_state"), "knowledge_state")
-            )
-            for value in _sequence(data, "knowledge_states")
+        nodes=nodes,
+        knowledge_states=knowledge_states,
+        matrix=matrix,
+        uniform_prior=uniform_prior,
+        configuration=configuration,
+        configuration_hash=configuration_hash,
+        derived_limits=DerivedLimits(
+            reliability_floor=_nonnegative_integer(data, "reliability_floor"),
+            safety_cap=_nonnegative_integer(data, "safety_cap"),
         ),
-        matrix=tuple(
-            _integer_tuple(_as_sequence(value, "matrix row"), "matrix row")
-            for value in _sequence(data, "matrix")
-        ),
-        uniform_prior=_number_tuple(_sequence(data, "uniform_prior"), "uniform_prior"),
-        beta=_number_tuple(_sequence(data, "beta"), "beta"),
-        eta=_number_tuple(_sequence(data, "eta"), "eta"),
-        configuration=_decode_kst_configuration(_mapping(data, "configuration")),
-        configuration_hash=_string(data, "configuration_hash"),
     )
 
 
@@ -596,6 +720,10 @@ def _encode_current_question(question: CurrentQuestion) -> dict[str, JsonValue]:
             {"id": str(option.option_id), "text": option.text}
             for option in question.options
         ],
+        "candidate_id": str(question.candidate_id),
+        "beta": question.beta,
+        "eta": question.eta,
+        "correct_option_id": str(question.correct_option_id),
     }
 
 
@@ -614,6 +742,10 @@ def _decode_current_question(data: Row) -> CurrentQuestion:
             )
             for value in _sequence(data, "options")
         ),
+        candidate_id=CandidateId(_string(data, "candidate_id")),
+        beta=_probability(data, "beta"),
+        eta=_probability(data, "eta"),
+        correct_option_id=OptionId(_string(data, "correct_option_id")),
     )
 
 
@@ -649,6 +781,153 @@ def _decode_answered_item(data: Row) -> AnsweredItem:
         node=_string(data, "node"),
         response_correct=_boolean(data, "response_correct"),
     )
+
+
+def _encode_candidate(candidate: ItemCandidate) -> dict[str, JsonValue]:
+    return {
+        "candidate_id": str(candidate.candidate_id),
+        "item_id": int(candidate.item_id),
+        "node": candidate.node,
+        "beta": candidate.beta,
+        "eta": candidate.eta,
+    }
+
+
+def _decode_candidate(data: Row) -> ItemCandidate:
+    candidate_id = _string(data, "candidate_id")
+    if not candidate_id.strip():
+        raise RepositoryDataError("candidate_id must not be blank")
+    return ItemCandidate(
+        candidate_id=CandidateId(candidate_id),
+        item_id=ItemId(_integer(data, "item_id")),
+        node=_string(data, "node"),
+        beta=_probability(data, "beta"),
+        eta=_probability(data, "eta"),
+    )
+
+
+def _decode_inventory_plan(data: Row) -> InventoryPlan:
+    return InventoryPlan(
+        required_per_node=_nonnegative_integer(data, "required_per_node"),
+        requests=tuple(
+            _decode_inventory_request(
+                _as_mapping(value, "inventory_request")
+            )
+            for value in _sequence(data, "requests")
+        ),
+    )
+
+
+def _decode_inventory_request(data: Row) -> InventoryRequest:
+    _require_exact_fields(data, {"node", "amount"}, "ylesande_taotlus")
+    return InventoryRequest(
+        node=_nonblank_string(data, "node"),
+        amount=_positive_integer(data, "amount"),
+    )
+
+
+def _decode_inventory_result(data: Row) -> InventoryResult:
+    _require_exact_fields(
+        data,
+        {
+            "node",
+            "requested",
+            "baseline_usable",
+            "created",
+            "usable_after",
+            "remaining",
+        },
+        "taitmise_tulemus",
+    )
+    return InventoryResult(
+        node=_nonblank_string(data, "node"),
+        requested=_nonnegative_integer(data, "requested"),
+        baseline_usable=_nonnegative_integer(data, "baseline_usable"),
+        created=_nonnegative_integer(data, "created"),
+        usable_after=_nonnegative_integer(data, "usable_after"),
+        remaining=_nonnegative_integer(data, "remaining"),
+    )
+
+
+def _require_exact_fields(data: Row, expected: set[str], name: str) -> None:
+    actual = set(data)
+    if actual != expected:
+        raise RepositoryDataError(
+            f"{name} fields must be exactly {sorted(expected)}"
+        )
+
+
+def _validate_player_state_invariants(state: PlayerState) -> None:
+    answered_ids = tuple(answer.item_id for answer in state.answered_items)
+    if len(answered_ids) != len(set(answered_ids)):
+        raise RepositoryDataError("answered item IDs must be unique")
+    if (
+        state.current_question is not None
+        and state.current_question.item_id in set(answered_ids)
+    ):
+        raise RepositoryDataError("current item must not appear in answer history")
+    if state.current_question is not None:
+        option_ids = tuple(
+            option.option_id for option in state.current_question.options
+        )
+        if (
+            len(option_ids) != len(set(option_ids))
+            or state.current_question.correct_option_id not in option_ids
+        ):
+            raise RepositoryDataError(
+                "current question must have unique options and a valid correct option"
+            )
+    if state.session_pool is not None:
+        candidates = state.session_pool.candidates
+        candidate_ids = tuple(candidate.candidate_id for candidate in candidates)
+        pool_item_ids = tuple(candidate.item_id for candidate in candidates)
+        if (
+            len(candidate_ids) != len(set(candidate_ids))
+            or len(pool_item_ids) != len(set(pool_item_ids))
+        ):
+            raise RepositoryDataError("session pool IDs must be unique")
+        if any(
+            not str(candidate.candidate_id).strip()
+            or not candidate.node.strip()
+            or not math.isfinite(candidate.beta)
+            or not math.isfinite(candidate.eta)
+            or not 0 <= candidate.beta <= 1
+            or not 0 <= candidate.eta <= 1
+            for candidate in candidates
+        ):
+            raise RepositoryDataError("session pool candidate metadata is invalid")
+        if (
+            state.current_question is not None
+            and not any(
+                candidate.candidate_id == state.current_question.candidate_id
+                and candidate.item_id == state.current_question.item_id
+                and candidate.node == state.current_question.node
+                and candidate.beta == state.current_question.beta
+                and candidate.eta == state.current_question.eta
+                for candidate in candidates
+            )
+        ):
+            raise RepositoryDataError(
+                "current question must match one session pool candidate"
+            )
+    if state.inventory_plan is not None:
+        requests = state.inventory_plan.requests
+        request_nodes = tuple(request.node for request in requests)
+        if (
+            state.inventory_plan.required_per_node < 0
+            or len(request_nodes) != len(set(request_nodes))
+            or any(
+                not request.node.strip() or request.amount < 1
+                for request in requests
+            )
+        ):
+            raise RepositoryDataError("inventory plan is invalid")
+
+
+def _require_v2_model(model: KstModel | LegacyKstModel) -> KstModel:
+    if not isinstance(model, KstModel):
+        raise RepositoryDataError("legacy KST models cannot be written")
+    return model
 
 
 def _enum_value[T](values: Mapping[str, T], row: Row, key: str) -> T:
@@ -702,6 +981,13 @@ def _string(row: Row, key: str) -> str:
     return value
 
 
+def _nonblank_string(row: Row, key: str) -> str:
+    value = _string(row, key)
+    if not value.strip():
+        raise RepositoryDataError(f"{key} must not be blank")
+    return value
+
+
 def _optional_string(row: Row, key: str) -> str | None:
     value = row.get(key)
     if value is None:
@@ -726,6 +1012,27 @@ def _number(row: Row, key: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise RepositoryDataError(f"{key} must be a number")
     return float(value)
+
+
+def _probability(row: Row, key: str) -> float:
+    value = _number(row, key)
+    if not 0 <= value <= 1:
+        raise RepositoryDataError(f"{key} must be between 0 and 1")
+    return value
+
+
+def _nonnegative_integer(row: Row, key: str) -> int:
+    value = _integer(row, key)
+    if value < 0:
+        raise RepositoryDataError(f"{key} must be non-negative")
+    return value
+
+
+def _positive_integer(row: Row, key: str) -> int:
+    value = _integer(row, key)
+    if value < 1:
+        raise RepositoryDataError(f"{key} must be positive")
+    return value
 
 
 def _boolean(row: Row, key: str) -> bool:

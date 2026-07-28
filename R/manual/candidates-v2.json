@@ -1,0 +1,6 @@
+[
+  {"candidate_id": "yp:101", "node": "A", "beta": 0.05, "eta": 0.25},
+  {"candidate_id": "yp:102", "node": "B", "beta": 0.05, "eta": 0.25},
+  {"candidate_id": "yp:103", "node": "C", "beta": 0.05, "eta": 0.25},
+  {"candidate_id": "yp:104", "node": "C", "beta": 0.05, "eta": 0.25}
+]

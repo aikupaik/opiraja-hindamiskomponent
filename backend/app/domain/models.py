@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+import math
 from typing import NewType
 from uuid import UUID
 
@@ -12,9 +13,10 @@ ItemId = NewType("ItemId", int)
 YgOrderId = NewType("YgOrderId", int)
 LearningPathId = NewType("LearningPathId", str)
 OptionId = NewType("OptionId", str)
+CandidateId = NewType("CandidateId", str)
 
-PLAYER_STATE_SCHEMA_VERSION = 1
-KST_MODEL_SCHEMA_VERSION = 1
+PLAYER_STATE_SCHEMA_VERSION = 2
+KST_MODEL_SCHEMA_VERSION = 2
 KST_CONFIGURATION_SCHEMA_VERSION = 1
 
 
@@ -46,6 +48,7 @@ class AssessmentMethod(StrEnum):
 class StopReason(StrEnum):
     NATURAL = "natural"
     SAFETY_CAP = "safety_cap"
+    ITEM_INVENTORY_EXHAUSTED = "item_inventory_exhausted"
 
 
 class AnswerCommitOutcome(StrEnum):
@@ -108,22 +111,65 @@ class AssessmentItem:
     last_used_at: datetime | None = None
 
 
+def is_domain_valid_usable_item(item: AssessmentItem) -> bool:
+    choices = {
+        value
+        for value in (item.answer_key, *item.distractors)
+        if value.strip()
+    }
+    return (
+        item.status is ItemStatus.USABLE
+        and bool(item.node.strip())
+        and bool(item.instruction.strip())
+        and bool(item.prompt.strip())
+        and len(choices) >= 2
+        and math.isfinite(item.beta)
+        and math.isfinite(item.eta)
+        and 0 <= item.beta <= 1
+        and 0 <= item.eta <= 1
+    )
+
+
 @dataclass(frozen=True, slots=True)
-class NodeParameters:
-    node: str
+class ItemCandidate:
+    candidate_id: CandidateId
     item_id: ItemId
+    node: str
     beta: float
     eta: float
 
 
 @dataclass(frozen=True, slots=True)
-class NodeCoverage:
-    node: str
-    parameters: NodeParameters | None
+class DerivedLimits:
+    reliability_floor: int
+    safety_cap: int
 
-    @property
-    def covered(self) -> bool:
-        return self.parameters is not None
+
+@dataclass(frozen=True, slots=True)
+class InventoryRequest:
+    node: str
+    amount: int
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryResult:
+    node: str
+    requested: int
+    baseline_usable: int
+    created: int
+    usable_after: int
+    remaining: int
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryPlan:
+    required_per_node: int
+    requests: tuple[InventoryRequest, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionPool:
+    candidates: tuple[ItemCandidate, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +202,21 @@ class KstModel:
     knowledge_states: tuple[KnowledgeState, ...]
     matrix: tuple[tuple[int, ...], ...]
     uniform_prior: tuple[float, ...]
+    configuration: KstConfiguration
+    configuration_hash: str
+    derived_limits: DerivedLimits
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyKstModel:
+    """Readable v1 model retained only for completed historical sessions."""
+
+    schema_version: int
+    method: AssessmentMethod
+    nodes: tuple[str, ...]
+    knowledge_states: tuple[KnowledgeState, ...]
+    matrix: tuple[tuple[int, ...], ...]
+    uniform_prior: tuple[float, ...]
     beta: tuple[float, ...]
     eta: tuple[float, ...]
     configuration: KstConfiguration
@@ -180,13 +241,18 @@ class FinalProfile:
 class ModelBuildResult:
     model: KstModel
     posterior: tuple[float, ...]
-    next_node: str
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateSelection:
+    candidate_id: CandidateId
+    node: str
 
 
 @dataclass(frozen=True, slots=True)
 class AdvanceInProgress:
     posterior: tuple[float, ...]
-    next_node: str
+    next_candidate: CandidateSelection
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +287,10 @@ class CurrentQuestion:
     prompt: str
     stimulus: str | None
     options: tuple[QuestionOption, ...]
+    candidate_id: CandidateId
+    beta: float
+    eta: float
+    correct_option_id: OptionId
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +300,8 @@ class PlayerState:
     answered_items: tuple[AnsweredItem, ...]
     current_question: CurrentQuestion | None
     pending_graph: PendingGraph | None = None
+    session_pool: SessionPool | None = None
+    inventory_plan: InventoryPlan | None = None
 
     @classmethod
     def new(
@@ -238,6 +310,8 @@ class PlayerState:
         posterior: tuple[float, ...] = (),
         current_question: CurrentQuestion | None = None,
         pending_graph: PendingGraph | None = None,
+        session_pool: SessionPool | None = None,
+        inventory_plan: InventoryPlan | None = None,
     ) -> "PlayerState":
         return cls(
             schema_version=PLAYER_STATE_SCHEMA_VERSION,
@@ -245,12 +319,14 @@ class PlayerState:
             answered_items=(),
             current_question=current_question,
             pending_graph=pending_graph,
+            session_pool=session_pool,
+            inventory_plan=inventory_plan,
         )
 
 
 @dataclass(frozen=True, slots=True)
 class LegacyPlayerState:
-    """Readable pre-v1 state which must never be resumed or activated."""
+    """Readable pre-v2 state which must never be resumed or activated."""
 
     posterior: tuple[float, ...]
     answered_items: tuple[AnsweredItem, ...]
@@ -269,7 +345,7 @@ class AssessmentSession:
     started_at: datetime
     method: AssessmentMethod
     player_state: PersistedPlayerState
-    model: KstModel | None = None
+    model: KstModel | LegacyKstModel | None = None
     final_profile: FinalProfile | None = None
     goal: str | None = None
 
@@ -288,6 +364,8 @@ class YgOrder:
     volume: int
     status: YgStatus
     created_at: datetime | None = None
+    item_requests: tuple[InventoryRequest, ...] = ()
+    fulfillment_results: tuple[InventoryResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +384,7 @@ class ActivationCommand:
     graph_hash: str
     model: KstModel
     first_question: CurrentQuestion
+    session_pool: SessionPool
 
 
 @dataclass(frozen=True, slots=True)

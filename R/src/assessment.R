@@ -38,6 +38,37 @@ update_posterior <- function(posterior, matrix, beta, eta, question_index,
   normalize_probability_vector(updated)
 }
 
+select_candidate <- function(posterior, matrix, nodes, candidates) {
+  candidate_nodes <- vapply(candidates, `[[`, character(1), "node")
+  candidate_columns <- match(candidate_nodes, nodes)
+  distances <- abs(
+    as.numeric(crossprod(posterior, matrix[, candidate_columns, drop = FALSE])) -
+      0.5
+  )
+  minimum <- min(distances)
+  selected <- which(
+    abs(distances - minimum) <= .Machine$double.eps^0.5
+  )[[1L]]
+  candidates[[selected]]
+}
+
+update_posterior_for_candidate <- function(posterior, matrix, candidate,
+                                           response_correct) {
+  question_index <- match(candidate$node, colnames(matrix))
+  mastered <- matrix[, question_index] == 1L
+  correct_likelihood <- ifelse(
+    mastered,
+    1 - candidate$beta,
+    candidate$eta
+  )
+  likelihood <- if (response_correct) {
+    correct_likelihood
+  } else {
+    1 - correct_likelihood
+  }
+  normalize_probability_vector(posterior * likelihood)
+}
+
 stopping_decision <- function(node_count, posterior, response_count,
                               configuration) {
   confidence <- max(posterior)

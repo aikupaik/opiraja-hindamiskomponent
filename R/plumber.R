@@ -38,7 +38,10 @@ for (source_file in c(
 
 create_kst_router <- function(
     model_operation = create_model_response,
-    advance_operation = advance_assessment) {
+    advance_operation = advance_assessment,
+    model_operation_v2 = create_model_response_v2,
+    select_operation_v2 = select_assessment_candidate_v2,
+    advance_operation_v2 = advance_assessment_v2) {
   plumber::register_parser(
     "kst_raw_json",
     function() {
@@ -78,13 +81,32 @@ create_kst_router <- function(
     serializer = json_serializer,
     parsers = "kst_raw_json"
   )
-  router <- plumber::pr_set_api_spec(
+  router <- plumber::pr_post(
     router,
-    file.path(
-      service_root,
-      "contracts",
-      "internal-kst-v1.openapi.json"
-    )
+    "/internal/v2/kst/model",
+    function(req, res) {
+      handle_http_operation(req, res, model_operation_v2)
+    },
+    serializer = json_serializer,
+    parsers = "kst_raw_json"
+  )
+  router <- plumber::pr_post(
+    router,
+    "/internal/v2/kst/select",
+    function(req, res) {
+      handle_http_operation(req, res, select_operation_v2)
+    },
+    serializer = json_serializer,
+    parsers = "kst_raw_json"
+  )
+  router <- plumber::pr_post(
+    router,
+    "/internal/v2/kst/advance",
+    function(req, res) {
+      handle_http_operation(req, res, advance_operation_v2)
+    },
+    serializer = json_serializer,
+    parsers = "kst_raw_json"
   )
   plumber::pr_set_error(router, function(req, res, error) {
     write_json_response(

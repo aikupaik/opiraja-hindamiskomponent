@@ -9,8 +9,11 @@ shape_model_for_json <- function(model) {
   ))
   model$matrix <- unname(lapply(model$matrix, array_value))
   model$uniform_prior <- array_value(model$uniform_prior)
-  model$beta <- array_value(model$beta)
-  model$eta <- array_value(model$eta)
+  for (field in c("beta", "eta")) {
+    if (!is.null(model[[field]])) {
+      model[[field]] <- array_value(model[[field]])
+    }
+  }
   model
 }
 

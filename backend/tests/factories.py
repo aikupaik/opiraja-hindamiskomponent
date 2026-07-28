@@ -13,6 +13,8 @@ from app.domain.models import (
     AssessmentMethod,
     AssessmentSession,
     CurrentQuestion,
+    CandidateId,
+    DerivedLimits,
     FinalProfile,
     ItemId,
     KstConfiguration,
@@ -23,6 +25,10 @@ from app.domain.models import (
     PLAYER_STATE_SCHEMA_VERSION,
     PlayerState,
     QuestionOption,
+    SessionPool,
+    ItemCandidate,
+    InventoryPlan,
+    InventoryRequest,
     ReliabilityFloorConfiguration,
     SafetyCapConfiguration,
     SessionStatus,
@@ -80,12 +86,16 @@ def make_question(
             QuestionOption(OptionId("option-1"), "Correct"),
             QuestionOption(OptionId("option-2"), "Wrong"),
         ),
+        candidate_id=CandidateId(f"yp:{int(item_id)}"),
+        beta=0.05,
+        eta=0.25,
+        correct_option_id=OptionId("option-1"),
     )
 
 
 def make_model() -> KstModel:
     return KstModel(
-        schema_version=1,
+        schema_version=2,
         method=AssessmentMethod.KST,
         nodes=("A", "B"),
         knowledge_states=(
@@ -95,8 +105,6 @@ def make_model() -> KstModel:
         ),
         matrix=((0, 0), (1, 0), (1, 1)),
         uniform_prior=(1 / 3, 1 / 3, 1 / 3),
-        beta=(0.05, 0.06),
-        eta=(0.25, 0.24),
         configuration=KstConfiguration(
             schema_version=1,
             stop_confidence=0.8,
@@ -112,6 +120,7 @@ def make_model() -> KstModel:
             "kst-config-v1:sha256:"
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         ),
+        derived_limits=DerivedLimits(reliability_floor=7, safety_cap=8),
     )
 
 
@@ -136,6 +145,17 @@ def make_session(
             posterior=(0.2, 0.3, 0.5),
             answered_items=answered_items,
             current_question=question,
+            session_pool=SessionPool(
+                candidates=(
+                    ItemCandidate(
+                        candidate_id=CandidateId(f"yp:{int(question.item_id)}"),
+                        item_id=question.item_id,
+                        node=question.node,
+                        beta=question.beta,
+                        eta=question.eta,
+                    ),
+                )
+            ),
         ),
         model=make_model(),
         final_profile=final_profile,
@@ -146,8 +166,14 @@ def make_session(
 def make_preparing_session() -> AssessmentSession:
     return replace(
         make_session(status=SessionStatus.PREPARING),
-        model=None,
-        player_state=PlayerState.new(),
+        model=make_model(),
+        player_state=PlayerState.new(
+            posterior=make_model().uniform_prior,
+            inventory_plan=InventoryPlan(
+                required_per_node=4,
+                requests=(InventoryRequest(node="B", amount=4),),
+            ),
+        ),
     )
 
 
@@ -183,7 +209,7 @@ def make_transition(
     )
     return AnswerTransition(
         next_player_state=PlayerState(
-            schema_version=1,
+            schema_version=PLAYER_STATE_SCHEMA_VERSION,
             posterior=(0.1, 0.2, 0.7),
             answered_items=previous + (answered,),
             current_question=(
@@ -217,4 +243,15 @@ def make_activation() -> ActivationCommand:
         graph_hash=GRAPH_HASH,
         model=make_model(),
         first_question=make_question(),
+        session_pool=SessionPool(
+            candidates=(
+                ItemCandidate(
+                    candidate_id=CandidateId(f"yp:{int(ITEM_ID)}"),
+                    item_id=ITEM_ID,
+                    node="A",
+                    beta=0.05,
+                    eta=0.25,
+                ),
+            )
+        ),
     )
