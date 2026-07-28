@@ -16,7 +16,7 @@ Sys.setenv(RENV_PROJECT = service_root)
 source(file.path(service_root, "renv", "activate.R"), local = FALSE)
 
 host <- Sys.getenv("KST_HOST", unset = "127.0.0.1")
-port_text <- Sys.getenv("KST_PORT", unset = "8000")
+port_text <- Sys.getenv("KST_PORT", unset = "8001")
 port <- suppressWarnings(as.integer(port_text))
 if (is.na(port) || port < 1L || port > 65535L) {
   stop("KST_PORT must be an integer between 1 and 65535.")
