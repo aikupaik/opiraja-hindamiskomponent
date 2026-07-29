@@ -57,6 +57,7 @@ required values:
 | `SUPABASE_URL` | Supabase project URL. |
 | `SUPABASE_SERVICE_KEY` | Server-side service-role credential. Never expose it to a browser. |
 | `R_SERVICE_URL` | Base URL of the internal stateless R KST service. |
+| `ADMIN_ACCESS_KEY` | Optional server-only bearer key enabling the admin API. If absent, every admin endpoint returns `401`. |
 
 Optional settings and their defaults:
 
@@ -70,6 +71,13 @@ Optional settings and their defaults:
 | `R_POOL_TIMEOUT_SECONDS` | `1` | R connection-pool acquisition timeout. |
 | `READINESS_TIMEOUT_SECONDS` | `1` | Independent timeout for each readiness dependency. |
 | `SUPABASE_REQUEST_TIMEOUT_SECONDS` | `10` | Supabase/PostgREST request timeout. |
+| `ADMIN_SOURCE_MAX_BYTES` | `10000000` | Maximum uploaded or downloaded source size. |
+| `ADMIN_SOURCE_MAX_PDF_PAGES` | `100` | Maximum pages accepted from a PDF. |
+| `ADMIN_SOURCE_MAX_TEXT_CHARS` | `1000000` | Maximum extracted source-text length. |
+| `ADMIN_SOURCE_MAX_REDIRECTS` | `5` | Maximum remote-source redirects, with every target revalidated. |
+| `ADMIN_SOURCE_FETCH_TIMEOUT_SECONDS` | `10` | Timeout for public remote sources. |
+| `ADMIN_DIAGNOSTIC_MAX_EVENTS` | `500` | Per-experiment diagnostic ring-buffer size. |
+| `ADMIN_DIAGNOSTIC_TTL_SECONDS` | `3600` | Inactivity expiry for process-local experiments. |
 
 FastAPI exposes generated OpenAPI documentation at `/docs` and `/redoc` while
 the application is running.
@@ -245,6 +253,47 @@ ID that does not belong to the current question returns `409`.
 | `409` | Persisted state conflicts with the requested operation. |
 | `422` | Request or graph validation failed. |
 | `503` | Supabase or the R service is unavailable. |
+
+## Admin and experimentation API
+
+The optional admin surface is implemented under `app/admin/` with a separate
+repository protocol. It reuses the lifespan-managed Supabase client but does
+not add CRUD methods to `AssessmentRepository`.
+
+All routes below require:
+
+```http
+Authorization: Bearer <ADMIN_ACCESS_KEY>
+```
+
+The development key is compared in constant time. Missing, invalid, and
+disabled credentials return the normal error envelope with `401`; the key and
+authorization header are never logged.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/admin/session` | Validate access and return scopes and configured limits. |
+| `GET` | `/api/v1/admin/courses` | Aggregate course choices from source materials. |
+| `GET/POST` | `/api/v1/admin/source-materials` | List or ingest course source text. |
+| `GET` | `/api/v1/admin/source-materials/{id}` | Read complete extracted text. |
+| `GET/POST` | `/api/v1/admin/yg-rules` | List or store non-executing YG rules. |
+| `GET` | `/api/v1/admin/items` | Exact-course, paginated item-bank audit. |
+| `PUT` | `/api/v1/admin/items/{yp_id}` | Update one item or create a revised copy. |
+| `GET` | `/api/v1/admin/experiments/{id}/events` | Authenticated SSE diagnostics with replay. |
+
+Material ingestion accepts PDF, UTF-8 text, and Markdown files. Public URLs
+may also return readable HTML. Uploaded files take precedence over URLs while
+the URL remains provenance. Binaries are never stored and OCR is not
+performed. URL credentials, localhost, non-global addresses, and redirects
+to unsafe destinations are rejected.
+
+Simulation calls use the existing OR/player routes and add a valid admin
+bearer plus `X-Experiment-ID`. Only those authenticated, correlated calls
+capture request/response bodies, R exchanges, Supabase operation summaries,
+completion fields, and warnings. Standard production logs remain body-free.
+Diagnostic buffers are process-local, expire after inactivity, do not survive
+restarts, and are intended for the current single-process experimentation
+environment.
 
 ## Internal dependencies and persistence
 

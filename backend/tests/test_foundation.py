@@ -38,6 +38,14 @@ def test_settings_require_service_locations_and_credentials() -> None:
     assert settings.r_pool_timeout_seconds == 1
     assert settings.readiness_timeout_seconds == 1
     assert settings.supabase_request_timeout_seconds == 10
+    assert settings.admin_access_key is None
+    assert settings.admin_source_max_bytes == 10_000_000
+    assert settings.admin_source_max_pdf_pages == 100
+    assert settings.admin_source_max_text_chars == 1_000_000
+    assert settings.admin_source_max_redirects == 5
+    assert settings.admin_source_fetch_timeout_seconds == 10
+    assert settings.admin_diagnostic_max_events == 500
+    assert settings.admin_diagnostic_ttl_seconds == 3600
 
 
 def test_graph_normalization_hash_is_order_independent_and_utf8_stable() -> None:

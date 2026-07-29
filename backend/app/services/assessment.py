@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from app.admin.diagnostics import emit_diagnostic
 from app.domain.graphs import graph_hash, normalize_graph
 from app.domain.models import *
 from app.domain.repository import AssessmentRepository, RepositoryDataError
@@ -151,9 +152,7 @@ class AssessmentService:
             )
 
         pool = self._snapshot_pool(graph.nodes, built.model, items, plan)
-        first_question = await self._first_question(
-            built.model, built.posterior, pool
-        )
+        first_question = await self._first_question(built.model, built.posterior, pool)
         session = AssessmentSession(
             test_id=test_id,
             user_id=command.user_id,
@@ -199,7 +198,9 @@ class AssessmentService:
                 raise RepositoryDataError("preparing session has no graph")
             cached = await self._repository.get_cached_graph(session.graph_hash)
             if cached is None:
-                raise RepositoryDataError("preparing session references a missing graph")
+                raise RepositoryDataError(
+                    "preparing session references a missing graph"
+                )
 
             items = await self._repository.list_usable_items_for_nodes(
                 cached.graph.nodes
@@ -232,9 +233,7 @@ class AssessmentService:
                     )
                 return AssessmentView(status=SessionStatus.PREPARING)
 
-            pool = self._snapshot_pool(
-                cached.graph.nodes, session.model, items, plan
-            )
+            pool = self._snapshot_pool(cached.graph.nodes, session.model, items, plan)
             first_question = await self._first_question(
                 session.model, state.posterior, pool
             )
@@ -304,9 +303,7 @@ class AssessmentService:
             response_correct=response_correct,
         )
         if isinstance(advanced, AdvanceInProgress):
-            candidate = self._verify_selection(
-                advanced.next_candidate, remaining
-            )
+            candidate = self._verify_selection(advanced.next_candidate, remaining)
             next_question = await self._question_for_candidate(candidate)
             next_state = PlayerState(
                 schema_version=PLAYER_STATE_SCHEMA_VERSION,
@@ -329,15 +326,23 @@ class AssessmentService:
                 final_profile=advanced.profile,
             )
             if advanced.profile.stop_reason is StopReason.ITEM_INVENTORY_EXHAUSTED:
+                warning = {
+                    "test_id": str(test_id),
+                    "safety_cap": model.derived_limits.safety_cap,
+                    "response_count": len(next_state.answered_items),
+                    "original_pool_size": len(pool.candidates),
+                    "remaining_usable_count": len(remaining),
+                }
                 logger.warning(
                     "item_inventory_exhausted",
-                    extra={
-                        "test_id": str(test_id),
-                        "safety_cap": model.derived_limits.safety_cap,
-                        "response_count": len(next_state.answered_items),
-                        "original_pool_size": len(pool.candidates),
-                        "remaining_usable_count": len(remaining),
-                    },
+                    extra=warning,
+                )
+                emit_diagnostic(
+                    source="fastapi",
+                    level="warning",
+                    event_type="item_inventory_exhausted",
+                    test_id=str(test_id),
+                    payload=warning,
                 )
         committed = await self._repository.commit_answer(
             submission_id,
@@ -461,7 +466,9 @@ class AssessmentService:
         if len(item_ids) != len(set(item_ids)):
             raise RepositoryDataError("activation pool contains duplicate item IDs")
         if len(candidate_ids) != len(set(candidate_ids)):
-            raise RepositoryDataError("activation pool contains duplicate candidate IDs")
+            raise RepositoryDataError(
+                "activation pool contains duplicate candidate IDs"
+            )
         if any(
             not str(candidate.candidate_id).strip()
             or not math.isfinite(candidate.beta)
@@ -506,9 +513,7 @@ class AssessmentService:
             raise RepositoryDataError("pool metadata no longer matches the item bank")
 
     @staticmethod
-    def _validate_model_build(
-        graph: GraphDefinition, built: ModelBuildResult
-    ) -> None:
+    def _validate_model_build(graph: GraphDefinition, built: ModelBuildResult) -> None:
         if built.model.schema_version != KST_MODEL_SCHEMA_VERSION:
             raise RepositoryDataError("R returned an unsupported model version")
         if built.model.nodes != graph.nodes:

@@ -4,6 +4,9 @@ from typing import Annotated, cast
 
 from fastapi import Depends, Request
 
+from app.admin.diagnostics import DiagnosticHub
+from app.admin.ingestion import SourceIngestor
+from app.admin.repository import AdminRepository
 from app.config import Settings
 from app.domain.repository import AssessmentRepository
 from app.integrations.kst_engine import KstEngine
@@ -20,6 +23,18 @@ def get_repository(request: Request) -> AssessmentRepository:
 
 def get_kst_engine(request: Request) -> KstEngine:
     return cast(KstEngine, request.app.state.kst_engine)
+
+
+def get_admin_repository(request: Request) -> AdminRepository:
+    return cast(AdminRepository, request.app.state.admin_repository)
+
+
+def get_source_ingestor(request: Request) -> SourceIngestor:
+    return cast(SourceIngestor, request.app.state.source_ingestor)
+
+
+def get_diagnostic_hub(request: Request) -> DiagnosticHub:
+    return cast(DiagnosticHub, request.app.state.diagnostic_hub)
 
 
 def get_assessment_service(

@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     r_service_url: AnyHttpUrl = Field(
         validation_alias=AliasChoices("R_SERVICE_URL", "r_service_url")
     )
+    admin_access_key: SecretStr | None = Field(
+        default=None,
+        min_length=1,
+        validation_alias=AliasChoices("ADMIN_ACCESS_KEY", "admin_access_key"),
+    )
 
     max_graph_nodes: PositiveInt = Field(
         default=10,
@@ -73,5 +78,48 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "SUPABASE_REQUEST_TIMEOUT_SECONDS",
             "supabase_request_timeout_seconds",
+        ),
+    )
+    admin_source_max_bytes: PositiveInt = Field(
+        default=10_000_000,
+        validation_alias=AliasChoices(
+            "ADMIN_SOURCE_MAX_BYTES", "admin_source_max_bytes"
+        ),
+    )
+    admin_source_max_pdf_pages: PositiveInt = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "ADMIN_SOURCE_MAX_PDF_PAGES", "admin_source_max_pdf_pages"
+        ),
+    )
+    admin_source_max_text_chars: PositiveInt = Field(
+        default=1_000_000,
+        validation_alias=AliasChoices(
+            "ADMIN_SOURCE_MAX_TEXT_CHARS", "admin_source_max_text_chars"
+        ),
+    )
+    admin_source_max_redirects: Annotated[int, Field(ge=0, le=20)] = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "ADMIN_SOURCE_MAX_REDIRECTS", "admin_source_max_redirects"
+        ),
+    )
+    admin_source_fetch_timeout_seconds: PositiveFloat = Field(
+        default=10.0,
+        validation_alias=AliasChoices(
+            "ADMIN_SOURCE_FETCH_TIMEOUT_SECONDS",
+            "admin_source_fetch_timeout_seconds",
+        ),
+    )
+    admin_diagnostic_max_events: PositiveInt = Field(
+        default=500,
+        validation_alias=AliasChoices(
+            "ADMIN_DIAGNOSTIC_MAX_EVENTS", "admin_diagnostic_max_events"
+        ),
+    )
+    admin_diagnostic_ttl_seconds: PositiveInt = Field(
+        default=3600,
+        validation_alias=AliasChoices(
+            "ADMIN_DIAGNOSTIC_TTL_SECONDS", "admin_diagnostic_ttl_seconds"
         ),
     )

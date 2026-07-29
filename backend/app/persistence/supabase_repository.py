@@ -11,6 +11,7 @@ import httpx
 from postgrest import APIError, APIResponse
 from supabase import AsyncClient
 
+from app.admin.diagnostics import emit_diagnostic
 from app.domain.models import *
 from app.domain.repository import *
 from app.observability import record_supabase_execute
@@ -41,7 +42,8 @@ class SupabaseAssessmentRepository:
             self._apply_filters(
                 self._client.table(GRAPH_TABLE).select(GRAPH_COLUMNS),
                 graph_hash_filters(graph_hash),
-            ).limit(1)
+            ).limit(1),
+            operation="graafid_kst.get",
         )
         row = self._zero_or_one(response, GRAPH_TABLE)
         return None if row is None else decode_graph_entry(row)
@@ -54,7 +56,8 @@ class SupabaseAssessmentRepository:
                 encode_graph_entry(entry),
                 on_conflict=GRAPH_CONFLICT_COLUMN,
                 ignore_duplicates=True,
-            )
+            ),
+            operation="graafid_kst.insert_if_absent",
         )
         canonical = await self.get_cached_graph(entry.graph_hash)
         if canonical is None:
@@ -65,7 +68,8 @@ class SupabaseAssessmentRepository:
         response = await self._execute(
             self._client.table(SESSION_TABLE)
             .insert(encode_session(session))
-            .select(SESSION_COLUMNS)
+            .select(SESSION_COLUMNS),
+            operation="testisessioonid.insert",
         )
         return decode_session(self._exactly_one(response, SESSION_TABLE))
 
@@ -74,7 +78,8 @@ class SupabaseAssessmentRepository:
             self._apply_filters(
                 self._client.table(SESSION_TABLE).select(SESSION_COLUMNS),
                 session_id_filters(test_id),
-            ).limit(1)
+            ).limit(1),
+            operation="testisessioonid.get",
         )
         row = self._zero_or_one(response, SESSION_TABLE)
         return None if row is None else decode_session(row)
@@ -86,7 +91,8 @@ class SupabaseAssessmentRepository:
                 .update(activation_updates(command))
                 .select(SESSION_COLUMNS),
                 preparing_session_filters(command.test_id),
-            )
+            ),
+            operation="testisessioonid.activate",
         )
         row = self._zero_or_one(response, SESSION_TABLE)
         if row is not None:
@@ -105,7 +111,8 @@ class SupabaseAssessmentRepository:
                 .update(failed_session_updates())
                 .select(SESSION_COLUMNS),
                 preparing_session_filters(test_id),
-            )
+            ),
+            operation="testisessioonid.fail",
         )
         row = self._zero_or_one(response, SESSION_TABLE)
         if row is not None:
@@ -113,7 +120,9 @@ class SupabaseAssessmentRepository:
         session = await self._require_session(test_id)
         if session.status is SessionStatus.FAILED:
             return session
-        raise RepositoryDataError(f"cannot fail session in status {session.status.value}")
+        raise RepositoryDataError(
+            f"cannot fail session in status {session.status.value}"
+        )
 
     async def update_preparing_inventory_plan(
         self, test_id: TestId, state: PlayerState
@@ -124,7 +133,8 @@ class SupabaseAssessmentRepository:
                 .update(preparing_inventory_updates(state))
                 .select(SESSION_COLUMNS),
                 preparing_session_filters(test_id),
-            )
+            ),
+            operation="testisessioonid.update_inventory",
         )
         row = self._zero_or_one(response, SESSION_TABLE)
         if row is not None:
@@ -132,11 +142,14 @@ class SupabaseAssessmentRepository:
         session = await self._require_session(test_id)
         if session.status is not SessionStatus.PREPARING:
             return session
-        raise RepositoryUnavailable("preparing inventory plan update was not observable")
+        raise RepositoryUnavailable(
+            "preparing inventory plan update was not observable"
+        )
 
     async def is_ready(self) -> bool:
         await self._execute(
-            self._client.table(SESSION_TABLE).select(SESSION_ID_COLUMN).limit(1)
+            self._client.table(SESSION_TABLE).select(SESSION_ID_COLUMN).limit(1),
+            operation="testisessioonid.readiness",
         )
         return True
 
@@ -149,8 +162,8 @@ class SupabaseAssessmentRepository:
                 self._apply_filters(
                     self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
                     item_eligibility_filters(node),
-                )
-                .order(ITEM_ORDER_COLUMN)
+                ).order(ITEM_ORDER_COLUMN),
+                operation="ylesandepank.list_usable",
             )
             decoded_values: list[AssessmentItem] = []
             for row in self._rows(response, ITEM_TABLE):
@@ -183,7 +196,8 @@ class SupabaseAssessmentRepository:
                 self._apply_filters(
                     self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
                     filters,
-                ).limit(1)
+                ).limit(1),
+                operation="ylesandepank.load_pool_item",
             )
             row = self._zero_or_one(response, ITEM_TABLE)
             if row is not None:
@@ -200,7 +214,8 @@ class SupabaseAssessmentRepository:
             self._apply_filters(
                 self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
                 item_id_filters(item_id),
-            ).limit(1)
+            ).limit(1),
+            operation="ylesandepank.get",
         )
         row = self._zero_or_one(response, ITEM_TABLE)
         return None if row is None else decode_item(row)
@@ -212,7 +227,8 @@ class SupabaseAssessmentRepository:
                 yg_order_test_filters(test_id),
             )
             .order(YG_ORDER_ORDER_COLUMN, desc=True)
-            .limit(1)
+            .limit(1),
+            operation="yg_tellimused.latest",
         )
         row = self._zero_or_one(response, YG_ORDER_TABLE)
         return None if row is None else decode_yg_order(row)
@@ -227,7 +243,8 @@ class SupabaseAssessmentRepository:
                 YG_ORDER_STATUS_COLUMN, IN_FLIGHT_YG_STATUSES
             )
             response = await self._execute(
-                in_flight_query.order(YG_ORDER_ORDER_COLUMN, desc=True).limit(1)
+                in_flight_query.order(YG_ORDER_ORDER_COLUMN, desc=True).limit(1),
+                operation="yg_tellimused.in_flight",
             )
             row = self._zero_or_one(response, YG_ORDER_TABLE)
             if row is not None:
@@ -235,7 +252,8 @@ class SupabaseAssessmentRepository:
             inserted = await self._execute(
                 self._client.table(YG_ORDER_TABLE)
                 .insert(encode_yg_order(order))
-                .select(YG_ORDER_COLUMNS)
+                .select(YG_ORDER_COLUMNS),
+                operation="yg_tellimused.insert",
             )
             return decode_yg_order(self._exactly_one(inserted, YG_ORDER_TABLE))
 
@@ -258,10 +276,9 @@ class SupabaseAssessmentRepository:
                 .insert(encode_answer(answer))
                 .select(ANSWER_COLUMNS),
                 preserve_unique_violation=True,
+                operation="tulemustepank.insert",
             )
-            stored_answer = decode_answer(
-                self._exactly_one(response, ANSWER_TABLE)
-            )
+            stored_answer = decode_answer(self._exactly_one(response, ANSWER_TABLE))
         except APIError as error:
             if error.code != _UNIQUE_VIOLATION:
                 raise
@@ -283,10 +300,9 @@ class SupabaseAssessmentRepository:
                 self._client.table(SESSION_TABLE)
                 .update(answer_transition_updates(transition))
                 .select(SESSION_COLUMNS),
-                active_answer_session_filters(
-                    answer.test_id, expected_submission_id
-                ),
-            )
+                active_answer_session_filters(answer.test_id, expected_submission_id),
+            ),
+            operation="testisessioonid.commit_answer",
         )
         row = self._zero_or_one(response, SESSION_TABLE)
         if row is not None:
@@ -308,9 +324,7 @@ class SupabaseAssessmentRepository:
         )
         return AnswerCommitResult(
             outcome=(
-                AnswerCommitOutcome.REPLAYED
-                if accepted
-                else AnswerCommitOutcome.STALE
+                AnswerCommitOutcome.REPLAYED if accepted else AnswerCommitOutcome.STALE
             ),
             session=session,
             answer=stored_answer,
@@ -327,25 +341,23 @@ class SupabaseAssessmentRepository:
             response = await self._execute(
                 self._apply_filters(
                     self._client.table(ITEM_TABLE)
-                    .update(
-                        item_telemetry_updates(item.usage_count + 1, used_at)
-                    )
+                    .update(item_telemetry_updates(item.usage_count + 1, used_at))
                     .select(ITEM_COLUMNS),
                     filters,
-                )
+                ),
+                operation="ylesandepank.increment_telemetry",
             )
             if self._zero_or_one(response, ITEM_TABLE) is not None:
                 return
         raise RepositoryUnavailable("item telemetry update remained contended")
 
-    async def _require_answer(
-        self, submission_id: SubmissionId
-    ) -> AnswerRecord:
+    async def _require_answer(self, submission_id: SubmissionId) -> AnswerRecord:
         response = await self._execute(
             self._apply_filters(
                 self._client.table(ANSWER_TABLE).select(ANSWER_COLUMNS),
                 answer_id_filters(submission_id),
-            ).limit(1)
+            ).limit(1),
+            operation="tulemustepank.get",
         )
         row = self._zero_or_one(response, ANSWER_TABLE)
         if row is None:
@@ -363,10 +375,22 @@ class SupabaseAssessmentRepository:
         query: _ExecutableQuery,
         *,
         preserve_unique_violation: bool = False,
+        operation: str = "supabase.execute",
     ) -> APIResponse:
         started_at = perf_counter()
         try:
-            return await query.execute()
+            response = await query.execute()
+            emit_diagnostic(
+                source="supabase",
+                level="info",
+                event_type="supabase_operation",
+                payload={
+                    "operation": operation,
+                    "count": len(response.data),
+                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                },
+            )
+            return response
         except APIError as error:
             if preserve_unique_violation and error.code == _UNIQUE_VIOLATION:
                 raise

@@ -1,32 +1,51 @@
-# React + TypeScript + Vite
+# Assessment Lab admin dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The `admin` project is the operator-facing React/Vite application for source
+management, item-bank auditing, and manual assessment simulation.
 
-Currently, two official plugins are available:
+It uses plain React state, CSS, and hash navigation:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `#/materials` manages source materials and stored YG rules;
+- `#/items` audits and revises exact-course item inventory; and
+- `#/simulation` drives the existing OR/player API with scoped diagnostics.
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+First start FastAPI on port `8001`:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+cd backend
+source .venv/bin/activate
+uvicorn app.main:create_app --factory --reload --port 8001 --env-file ../.env
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Configure `ADMIN_ACCESS_KEY` only in the backend `.env`. Never create a Vite
+environment variable containing it. Start the dashboard:
+
+```sh
+cd admin
+npm install
+npm run dev
+```
+
+Vite proxies same-origin `/api` requests to `http://127.0.0.1:8001`, so broad
+CORS is not required. The operator enters the key on the unlock screen; after
+FastAPI validates `/api/v1/admin/session`, it is kept only in
+`sessionStorage`. Locking removes it.
+
+## Verification
+
+```sh
+npm test
+npm run lint
+npm run build
+```
+
+The simulation page opens authenticated SSE with `fetch`, creates a unique
+experiment ID, uses the production test/player routes, honors `Retry-After`,
+and lets the operator submit each answer manually. Cancel and page cleanup
+abort pending requests, polling, and event streams.
+
+Experiment diagnostics are bounded, process-local, and ephemeral. They do not
+survive a backend restart, expire after 60 minutes by default, and are
+intended for the current single-process experimentation environment.

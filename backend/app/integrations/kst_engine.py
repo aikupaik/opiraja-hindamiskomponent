@@ -7,6 +7,7 @@ from typing import Never, Protocol
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
+from app.admin.diagnostics import emit_diagnostic
 from app.domain.models import *
 from app.observability import record_r_request
 
@@ -176,8 +177,23 @@ class HttpxKstEngine:
         json: object | None = None,
     ) -> httpx.Response:
         started_at = perf_counter()
+        emit_diagnostic(
+            source="fastapi-to-r",
+            level="info",
+            event_type="r_request",
+            payload={"method": method, "path": path, "body": json},
+        )
         try:
             response = await self._client.request(method, path, json=json)
+            emit_diagnostic(
+                source="r-to-fastapi",
+                level="info" if response.status_code < 400 else "warning",
+                event_type="r_response",
+                payload={
+                    "status": response.status_code,
+                    "body": _response_payload(response),
+                },
+            )
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as error:
@@ -188,11 +204,26 @@ class HttpxKstEngine:
                     "dependency_status": error.response.status_code,
                 },
             )
+            emit_diagnostic(
+                source="fastapi",
+                level="warning",
+                event_type="r_request_failed",
+                payload={
+                    "diagnostic": type(error).__name__,
+                    "dependency_status": error.response.status_code,
+                },
+            )
             raise RUnavailable("R service unavailable") from error
         except (httpx.TimeoutException, httpx.NetworkError) as error:
             logger.warning(
                 "r_request_failed",
                 extra={"diagnostic": type(error).__name__},
+            )
+            emit_diagnostic(
+                source="fastapi",
+                level="warning",
+                event_type="r_request_failed",
+                payload={"diagnostic": type(error).__name__},
             )
             raise RUnavailable("R service unavailable") from error
         finally:
@@ -204,6 +235,12 @@ class HttpxKstEngine:
             "r_response_contract_failure",
             extra={"diagnostic": type(error).__name__},
         )
+        emit_diagnostic(
+            source="fastapi",
+            level="warning",
+            event_type="r_response_contract_failure",
+            payload={"diagnostic": type(error).__name__},
+        )
         raise RUnavailable("R service unavailable") from error
 
 
@@ -214,6 +251,13 @@ def _candidate_to_dto(candidate: ItemCandidate) -> CandidateDto:
         beta=candidate.beta,
         eta=candidate.eta,
     )
+
+
+def _response_payload(response: httpx.Response) -> object:
+    try:
+        return response.json()
+    except ValueError:
+        return {"unparsed_text": response.text[:2000]}
 
 
 def _model_to_dto(model: KstModel) -> KstModelDto:

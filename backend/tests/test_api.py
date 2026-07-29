@@ -349,7 +349,7 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
 
 
 @pytest.mark.asyncio
-async def test_default_lifespan_closes_both_owned_http_clients(
+async def test_default_lifespan_closes_all_owned_http_clients(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clients: list[_FakeManagedHttpClient] = []
@@ -372,7 +372,7 @@ async def test_default_lifespan_closes_both_owned_http_clients(
     app = FastAPI()
 
     async with build_lifespan(_settings())(app):
-        assert len(clients) == 2
+        assert len(clients) == 3
         assert not any(client.closed for client in clients)
         assert isinstance(app.state.assessment_service, AssessmentService)
 

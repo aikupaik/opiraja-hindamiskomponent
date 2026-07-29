@@ -1,5 +1,8 @@
 fastapi==0.139.2
+beautifulsoup4==4.14.3
 httpx==0.28.1
 pydantic-settings==2.14.2
+pypdf==6.6.0
+python-multipart==0.0.22
 supabase==2.31.0
 uvicorn==0.51.0
