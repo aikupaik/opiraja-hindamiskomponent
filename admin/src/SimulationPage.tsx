@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import {
   apiResponse,
   errorMessage,
+  isVisibleDiagnostic,
   jsonBody,
   streamDiagnostics,
   type CourseChoice,
@@ -55,6 +56,7 @@ export function SimulationPage({
   useEffect(() => () => controllerRef.current?.abort(), [])
 
   const enteredNodes = nodes.map((node) => node.trim()).filter(Boolean)
+  const visibleEvents = events.filter(isVisibleDiagnostic)
   const running = !['idle', 'completed', 'failed'].includes(runState)
 
   function updateNode(index: number, value: string) {
@@ -363,7 +365,9 @@ export function SimulationPage({
               <div className="dynamic-heading">
                 <div>
                   <h3>Prerequisite relations</h3>
-                  <p>Optional directed edges</p>
+                  <p>
+                    The parent prerequisite must be learned before the child.
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -373,8 +377,8 @@ export function SimulationPage({
                     setRelations([
                       ...relations,
                       {
-                        from: enteredNodes[0] ?? '',
-                        to: enteredNodes[1] ?? '',
+                        from: '',
+                        to: '',
                       },
                     ])
                   }
@@ -387,41 +391,49 @@ export function SimulationPage({
               ) : (
                 relations.map((relation, index) => (
                   <div className="relation-row" key={index}>
-                    <select
-                      value={relation.from}
-                      disabled={running}
-                      onChange={(event) =>
-                        setRelations(
-                          relations.map((current, relationIndex) =>
-                            relationIndex === index
-                              ? { ...current, from: event.target.value }
-                              : current,
-                          ),
-                        )
-                      }
-                    >
-                      {enteredNodes.map((node) => (
-                        <option key={node}>{node}</option>
-                      ))}
-                    </select>
+                    <label>
+                      <span>Prerequisite node (parent)</span>
+                      <select
+                        value={relation.from}
+                        disabled={running}
+                        onChange={(event) =>
+                          setRelations(
+                            relations.map((current, relationIndex) =>
+                              relationIndex === index
+                                ? { ...current, from: event.target.value }
+                                : current,
+                            ),
+                          )
+                        }
+                      >
+                        <option value="">Select prerequisite</option>
+                        {enteredNodes.map((node) => (
+                          <option key={node}>{node}</option>
+                        ))}
+                      </select>
+                    </label>
                     <span>precedes →</span>
-                    <select
-                      value={relation.to}
-                      disabled={running}
-                      onChange={(event) =>
-                        setRelations(
-                          relations.map((current, relationIndex) =>
-                            relationIndex === index
-                              ? { ...current, to: event.target.value }
-                              : current,
-                          ),
-                        )
-                      }
-                    >
-                      {enteredNodes.map((node) => (
-                        <option key={node}>{node}</option>
-                      ))}
-                    </select>
+                    <label>
+                      <span>Dependent node (child)</span>
+                      <select
+                        value={relation.to}
+                        disabled={running}
+                        onChange={(event) =>
+                          setRelations(
+                            relations.map((current, relationIndex) =>
+                              relationIndex === index
+                                ? { ...current, to: event.target.value }
+                                : current,
+                            ),
+                          )
+                        }
+                      >
+                        <option value="">Select dependent node</option>
+                        {enteredNodes.map((node) => (
+                          <option key={node}>{node}</option>
+                        ))}
+                      </select>
+                    </label>
                     <button
                       type="button"
                       className="icon-button"
@@ -525,15 +537,15 @@ export function SimulationPage({
               <span className="terminal-lights">● ● ●</span>
               <strong>Experiment terminal</strong>
             </div>
-            <span>{events.length} events</span>
+            <span>{visibleEvents.length} events</span>
           </div>
           <div className="terminal-body" ref={terminalRef}>
-            {events.length === 0 ? (
+            {visibleEvents.length === 0 ? (
               <p className="terminal-empty">
                 Diagnostics will appear here after an experiment begins.
               </p>
             ) : (
-              events.map((event) => (
+              visibleEvents.map((event) => (
                 <article key={event.sequence} className={`log-${event.level}`}>
                   <header>
                     <span>{String(event.sequence).padStart(3, '0')}</span>

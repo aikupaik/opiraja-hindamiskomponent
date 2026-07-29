@@ -123,6 +123,10 @@ export type DiagnosticEvent = {
   payload: unknown
 }
 
+export function isVisibleDiagnostic(event: DiagnosticEvent) {
+  return event.type !== 'supabase_operation' && event.source !== 'supabase'
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string

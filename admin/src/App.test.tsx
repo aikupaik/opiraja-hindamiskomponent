@@ -2,8 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { isVisibleDiagnostic } from './api'
 import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
+import { SimulationPage } from './SimulationPage'
 
 const session = {
   subject: 'development-admin',
@@ -163,4 +165,59 @@ it('opens item editing in safe copy mode with complete measurements', async () =
   expect(
     screen.getByText(/Usage telemetry resets to zero/),
   ).toBeInTheDocument()
+})
+
+it('adds an unselected relation with explicit prerequisite roles', async () => {
+  HTMLElement.prototype.scrollTo = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <SimulationPage
+      accessKey="key"
+      courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
+      maxGraphNodes={10}
+    />,
+  )
+
+  const firstNode = screen.getByPlaceholderText('Learning outcome / graph node')
+  await user.type(firstNode, 'Motion')
+  await user.click(screen.getByRole('button', { name: '+ Add node' }))
+  const nodeInputs = screen.getAllByPlaceholderText(
+    'Learning outcome / graph node',
+  )
+  await user.type(nodeInputs[1], 'Force')
+  await user.click(screen.getByRole('button', { name: '+ Add relation' }))
+
+  expect(screen.getByLabelText('Prerequisite node (parent)')).toHaveValue('')
+  expect(screen.getByLabelText('Dependent node (child)')).toHaveValue('')
+  expect(
+    screen.getByText(
+      'The parent prerequisite must be learned before the child.',
+    ),
+  ).toBeInTheDocument()
+})
+
+it('keeps Supabase diagnostics out of the visible terminal event set', () => {
+  const baseEvent = {
+    sequence: 1,
+    timestamp: '2026-01-01T00:00:00Z',
+    level: 'info',
+    request_id: null,
+    test_id: null,
+    payload: {},
+  }
+
+  expect(
+    isVisibleDiagnostic({
+      ...baseEvent,
+      source: 'supabase',
+      type: 'supabase_operation',
+    }),
+  ).toBe(false)
+  expect(
+    isVisibleDiagnostic({
+      ...baseEvent,
+      source: 'fastapi',
+      type: 'request_completed',
+    }),
+  ).toBe(true)
 })
