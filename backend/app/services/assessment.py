@@ -18,6 +18,9 @@ from .questions import QuestionOutput, RandomSource, build_question, to_question
 
 logger = logging.getLogger(__name__)
 
+MINIMUM_VALID_ITEMS_PER_NODE = 3
+MAX_GENERATED_ITEMS_PER_NODE_REQUEST = 3
+
 
 class AssessmentServiceError(RuntimeError):
     """Base class for stable service failures mapped by the API layer."""
@@ -114,7 +117,7 @@ class AssessmentService:
                 )
             )
         items = await self._repository.list_usable_items_for_nodes(graph.nodes)
-        plan = self._inventory_plan(graph.nodes, built.model, items)
+        plan = self._inventory_plan(graph.nodes, items)
         test_id = TestId(self._uuid_factory())
         if plan.requests:
             session = AssessmentSession(
@@ -201,7 +204,7 @@ class AssessmentService:
             items = await self._repository.list_usable_items_for_nodes(
                 cached.graph.nodes
             )
-            plan = self._inventory_plan(cached.graph.nodes, session.model, items)
+            plan = self._inventory_plan(cached.graph.nodes, items)
             if plan.requests:
                 if state.inventory_plan != plan:
                     state = PlayerState(
@@ -417,17 +420,24 @@ class AssessmentService:
     @staticmethod
     def _inventory_plan(
         nodes: tuple[str, ...],
-        model: KstModel,
         items: tuple[AssessmentItem, ...],
     ) -> InventoryPlan:
-        required = math.ceil(model.derived_limits.safety_cap / len(nodes))
         counts = Counter(item.node for item in items)
         requests = tuple(
-            InventoryRequest(node=node, amount=max(0, required - counts[node]))
+            InventoryRequest(
+                node=node,
+                amount=min(
+                    MAX_GENERATED_ITEMS_PER_NODE_REQUEST,
+                    MINIMUM_VALID_ITEMS_PER_NODE - counts[node],
+                ),
+            )
             for node in nodes
-            if counts[node] < required
+            if counts[node] < MINIMUM_VALID_ITEMS_PER_NODE
         )
-        return InventoryPlan(required_per_node=required, requests=requests)
+        return InventoryPlan(
+            required_per_node=MINIMUM_VALID_ITEMS_PER_NODE,
+            requests=requests,
+        )
 
     @staticmethod
     def _snapshot_pool(
@@ -466,8 +476,6 @@ class AssessmentService:
         counts = Counter(candidate.node for candidate in candidates)
         if any(counts[node] < plan.required_per_node for node in nodes):
             raise RepositoryDataError("activation pool does not meet per-node target")
-        if len(candidates) < model.derived_limits.safety_cap:
-            raise RepositoryDataError("activation pool is smaller than safety cap")
         return SessionPool(candidates=candidates)
 
     @staticmethod
@@ -518,6 +526,13 @@ class AssessmentService:
         cognitive_level: str | None,
         requests: tuple[InventoryRequest, ...],
     ) -> YgOrder:
+        if any(
+            request.amount > MAX_GENERATED_ITEMS_PER_NODE_REQUEST
+            for request in requests
+        ):
+            raise RepositoryDataError(
+                "YG item request exceeds the per-node generation limit"
+            )
         return YgOrder(
             order_id=None,
             test_id=test_id,

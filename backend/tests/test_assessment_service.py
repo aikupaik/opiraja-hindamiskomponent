@@ -62,23 +62,39 @@ async def test_exact_partially_stocked_deficits_are_ordered_per_node() -> None:
     order = next(iter(repository.yg_order_snapshot.values()))[0]
 
     assert result.status is SessionStatus.PREPARING
-    assert result.missing_nodes == ("A", "B")
+    assert result.missing_nodes == ("B",)
     assert order.item_requests == (
-        InventoryRequest(node="A", amount=1),
-        InventoryRequest(node="B", amount=3),
+        InventoryRequest(node="B", amount=2),
     )
     assert isinstance(session.player_state, PlayerState)
     assert session.player_state.inventory_plan == InventoryPlan(
-        required_per_node=4,
+        required_per_node=3,
         requests=order.item_requests,
     )
     assert isinstance(session.model, KstModel)
 
 
 @pytest.mark.asyncio
+async def test_empty_inventory_requests_at_most_three_items_per_node() -> None:
+    repository = InMemoryAssessmentRepository()
+    engine = FakeKstEngine(model_results=(_built(),))
+
+    result = await _service(repository, engine).create_assessment(_command())
+    order = next(iter(repository.yg_order_snapshot.values()))[0]
+
+    assert result.status is SessionStatus.PREPARING
+    assert order.item_requests == (
+        InventoryRequest(node="A", amount=3),
+        InventoryRequest(node="B", amount=3),
+    )
+    assert all(request.amount <= 3 for request in order.item_requests)
+    assert order.volume == 3
+
+
+@pytest.mark.asyncio
 async def test_activation_snapshots_all_items_in_stable_order() -> None:
     repository = InMemoryAssessmentRepository()
-    await repository.seed_items(*_items("B", 20, 4), *_items("A", 1, 4))
+    await repository.seed_items(*_items("B", 20, 3), *_items("A", 1, 3))
     engine = FakeKstEngine(model_results=(_built(),))
 
     result = await _service(repository, engine).create_assessment(_command())
@@ -87,11 +103,32 @@ async def test_activation_snapshots_all_items_in_stable_order() -> None:
     assert isinstance(session.player_state, PlayerState)
     pool = session.player_state.session_pool
     assert pool is not None
+    assert isinstance(session.model, KstModel)
+    assert tuple(candidate.item_id for candidate in pool.candidates) == (
+        ItemId(1), ItemId(2), ItemId(3),
+        ItemId(20), ItemId(21), ItemId(22),
+    )
+    assert len(pool.candidates) < session.model.derived_limits.safety_cap
+    assert [call.method for call in engine.calls] == ["build_model", "select"]
+
+
+@pytest.mark.asyncio
+async def test_activation_pool_includes_all_valid_items_above_generation_target() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_items(*_items("B", 20, 5), *_items("A", 1, 4))
+    engine = FakeKstEngine(model_results=(_built(),))
+
+    result = await _service(repository, engine).create_assessment(_command())
+    session = next(iter(repository.session_snapshot.values()))
+
+    assert result.status is SessionStatus.ACTIVE
+    assert isinstance(session.player_state, PlayerState)
+    pool = session.player_state.session_pool
+    assert pool is not None
     assert tuple(candidate.item_id for candidate in pool.candidates) == (
         ItemId(1), ItemId(2), ItemId(3), ItemId(4),
-        ItemId(20), ItemId(21), ItemId(22), ItemId(23),
+        ItemId(20), ItemId(21), ItemId(22), ItemId(23), ItemId(24),
     )
-    assert [call.method for call in engine.calls] == ["build_model", "select"]
 
 
 @pytest.mark.asyncio
@@ -115,12 +152,12 @@ async def test_partial_failed_generation_retries_only_remaining_deficit() -> Non
     assert view.status is SessionStatus.PREPARING
     assert len(orders) == 2
     assert orders[-1].item_requests == (
-        InventoryRequest(node="B", amount=2),
+        InventoryRequest(node="B", amount=1),
     )
     assert isinstance(session.player_state, PlayerState)
     assert session.player_state.inventory_plan == InventoryPlan(
-        required_per_node=4,
-        requests=(InventoryRequest(node="B", amount=2),),
+        required_per_node=3,
+        requests=(InventoryRequest(node="B", amount=1),),
     )
 
 
