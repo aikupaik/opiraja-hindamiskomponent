@@ -217,8 +217,32 @@ class SupabaseAdminRepository:
             )
             return response
         except APIError as error:
+            emit_diagnostic(
+                source="supabase",
+                level="warning",
+                event_type="supabase_operation",
+                payload={
+                    "operation": operation,
+                    "count": 0,
+                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "outcome": "failed",
+                    "diagnostic": type(error).__name__,
+                },
+            )
             raise RepositoryUnavailable("Supabase request failed") from error
         except (httpx.HTTPError, TimeoutError) as error:
+            emit_diagnostic(
+                source="supabase",
+                level="warning",
+                event_type="supabase_operation",
+                payload={
+                    "operation": operation,
+                    "count": 0,
+                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "outcome": "failed",
+                    "diagnostic": type(error).__name__,
+                },
+            )
             raise RepositoryUnavailable("Supabase request failed") from error
         finally:
             record_supabase_execute(started_at)

@@ -6,6 +6,7 @@ import { isVisibleDiagnostic } from './api'
 import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
 import { SimulationPage } from './SimulationPage'
+import { exampleReport } from './test/reportFixture'
 
 const session = {
   subject: 'development-admin',
@@ -220,4 +221,152 @@ it('keeps Supabase diagnostics out of the visible terminal event set', () => {
       type: 'request_completed',
     }),
   ).toBe(true)
+})
+
+it('preserves a cancelled experiment and automatically loads its partial report', async () => {
+  const experimentId = '30000000-0000-4000-8000-000000000003'
+  vi.stubGlobal('crypto', { randomUUID: () => experimentId })
+  let reportAttempts = 0
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path.endsWith('/report')) {
+      reportAttempts += 1
+      return reportAttempts === 1
+        ? response(
+            {
+              error: {
+                code: 'admin_not_found',
+                message: 'Admin row was not found.',
+              },
+            },
+            404,
+          )
+        : response(exampleReport)
+    }
+    if (path.includes('/events') || path === '/api/v1/tests') {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        )
+      })
+    }
+    return response({}, 404)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+
+  render(
+    <SimulationPage
+      accessKey="operator-key"
+      courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
+      maxGraphNodes={10}
+    />,
+  )
+  await user.type(
+    screen.getByPlaceholderText('Learning outcome / graph node'),
+    'Motion',
+  )
+  await user.click(screen.getByRole('button', { name: 'Run experiment' }))
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(
+    await screen.findByRole('heading', { name: 'Simulation report' }),
+  ).toBeInTheDocument()
+  expect(
+    await screen.findByRole('button', { name: 'Retry report' }),
+  ).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Retry report' }))
+  expect(await screen.findByText('partial')).toBeInTheDocument()
+  expect(screen.getByText(experimentId)).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Download HTML report' }),
+  ).toBeInTheDocument()
+  expect(
+    fetchMock.mock.calls.some(([input]) => String(input).endsWith('/report')),
+  ).toBe(true)
+})
+
+it('automatically loads a completed report after the final answer', async () => {
+  vi.stubGlobal('crypto', {
+    randomUUID: () => '30000000-0000-4000-8000-000000000003',
+  })
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path.includes('/events')) {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        )
+      })
+    }
+    if (path === '/api/v1/tests') {
+      return response({
+        test_id: '10000000-0000-4000-8000-000000000001',
+        status: 'active',
+        player_url: '/test/10000000-0000-4000-8000-000000000001',
+        missing_nodes: [],
+      })
+    }
+    if (path.endsWith('/start')) {
+      return response({
+        status: 'active',
+        question: {
+          submission_id: '20000000-0000-4000-8000-000000000001',
+          item_id: 41,
+          instruction: 'Choose one.',
+          prompt: 'Safe player-only question',
+          stimulus: null,
+          options: [{ id: 'option-1', text: 'Correct' }],
+        },
+      })
+    }
+    if (path.endsWith('/answers')) {
+      return response({
+        status: 'completed',
+        feedback: {
+          already_mastered: ['A'],
+          learn_next: [],
+          review: [],
+          summary: 'Done',
+          confidence_limited: false,
+        },
+      })
+    }
+    if (path.endsWith('/report')) {
+      return response({
+        ...exampleReport,
+        completion_state: 'completed',
+        run_status: 'completed',
+        data_quality_warnings: [],
+      })
+    }
+    return response({}, 404)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+
+  render(
+    <SimulationPage
+      accessKey="operator-key"
+      courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
+      maxGraphNodes={10}
+    />,
+  )
+  await user.type(
+    screen.getByPlaceholderText('Learning outcome / graph node'),
+    'Motion',
+  )
+  await user.click(screen.getByRole('button', { name: 'Run experiment' }))
+  await user.click(
+    await screen.findByRole('button', { name: /Correct/ }),
+  )
+
+  expect((await screen.findAllByText('completed')).length).toBeGreaterThan(0)
+  expect(
+    screen.getByRole('button', { name: 'Download JSON data' }),
+  ).toBeInTheDocument()
 })

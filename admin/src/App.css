@@ -811,6 +811,12 @@
   color: #8b402a;
 }
 
+.state-cancelled {
+  border-color: #c9c6bc;
+  background: #eeece6;
+  color: #67645c;
+}
+
 .dynamic-section {
   margin-top: 24px;
   padding-top: 20px;
@@ -999,6 +1005,140 @@
   margin: 14px 0 0;
   color: #8b5b2f;
   font-size: 0.72rem;
+}
+
+.report-panel {
+  overflow: hidden;
+}
+
+.report-badges {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.report-badge {
+  padding: 5px 8px;
+  border: 1px solid #b5caa8;
+  border-radius: 999px;
+  background: #e6f0df;
+  color: #416843;
+  font-size: 0.61rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.report-badge.partial,
+.report-badge.warning {
+  border-color: #dec39f;
+  background: #f6e8d3;
+  color: #7c572d;
+}
+
+.report-loading,
+.report-error {
+  padding: 30px 24px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.report-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #8b402a;
+}
+
+.report-error p {
+  margin: 0;
+}
+
+.report-content {
+  padding: 22px 24px 24px;
+}
+
+.report-interpretation {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-left: 3px solid #89a17b;
+  background: #edf1e9;
+  color: #536058;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-summary-grid > div {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafaf6;
+}
+
+.report-summary-grid span,
+.report-path > span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.59rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.report-summary-grid strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-path {
+  margin-top: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.report-path p {
+  margin: 6px 0 0;
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.report-warnings {
+  margin: 14px 0 0;
+  padding: 12px 12px 12px 30px;
+  border-radius: 8px;
+  background: #f7ead8;
+  color: #79532e;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.report-actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.report-retention {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.45;
 }
 
 .terminal {

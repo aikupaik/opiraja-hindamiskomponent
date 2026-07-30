@@ -185,6 +185,7 @@ class HttpxKstEngine:
         )
         try:
             response = await self._client.request(method, path, json=json)
+            duration_ms = round((perf_counter() - started_at) * 1000, 3)
             emit_diagnostic(
                 source="r-to-fastapi",
                 level="info" if response.status_code < 400 else "warning",
@@ -192,6 +193,7 @@ class HttpxKstEngine:
                 payload={
                     "status": response.status_code,
                     "body": _response_payload(response),
+                    "duration_ms": duration_ms,
                 },
             )
             response.raise_for_status()
@@ -211,6 +213,7 @@ class HttpxKstEngine:
                 payload={
                     "diagnostic": type(error).__name__,
                     "dependency_status": error.response.status_code,
+                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
                 },
             )
             raise RUnavailable("R service unavailable") from error
@@ -223,7 +226,10 @@ class HttpxKstEngine:
                 source="fastapi",
                 level="warning",
                 event_type="r_request_failed",
-                payload={"diagnostic": type(error).__name__},
+                payload={
+                    "diagnostic": type(error).__name__,
+                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                },
             )
             raise RUnavailable("R service unavailable") from error
         finally:

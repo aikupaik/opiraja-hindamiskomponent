@@ -45,6 +45,7 @@ from .models import (
     YgRule,
 )
 from .repository import AdminRepository
+from .reporting import ExperimentReport, build_experiment_report
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -220,6 +221,22 @@ async def stream_experiment_events(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get(
+    "/experiments/{experiment_id}/report",
+    response_model=ExperimentReport,
+)
+async def get_experiment_report(
+    experiment_id: UUID,
+    hub: Annotated[DiagnosticHub, Depends(get_diagnostic_hub)],
+    auth: Annotated[AuthContext, Depends(authorize_admin)],
+) -> ExperimentReport:
+    require_admin(auth, ADMIN_DIAGNOSTICS)
+    snapshot = hub.snapshot(str(experiment_id))
+    if snapshot is None or not snapshot.events:
+        raise AdminRowNotFound("experiment diagnostics were not found")
+    return build_experiment_report(str(experiment_id), snapshot)
 
 
 class AdminRowNotFound(RuntimeError):

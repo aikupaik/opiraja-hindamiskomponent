@@ -54,6 +54,15 @@ class DiagnosticEvent:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class DiagnosticSnapshot:
+    """Stable, non-persistent view of one experiment's retained events."""
+
+    events: tuple[DiagnosticEvent, ...]
+    truncated: bool
+    maximum_events: int
+
+
 @dataclass(slots=True)
 class _Experiment:
     events: deque[DiagnosticEvent]
@@ -178,6 +187,21 @@ class DiagnosticHub:
         experiment.last_activity = monotonic()
         return tuple(
             event for event in experiment.events if event.sequence > after_sequence
+        )
+
+    def snapshot(self, experiment_id: str) -> DiagnosticSnapshot | None:
+        """Return one stable ring-buffer snapshot without creating an experiment."""
+
+        self.expire()
+        experiment = self._experiments.get(experiment_id)
+        if experiment is None:
+            return None
+        experiment.last_activity = monotonic()
+        events = tuple(experiment.events)
+        return DiagnosticSnapshot(
+            events=events,
+            truncated=bool(events and events[0].sequence > 1),
+            maximum_events=self.max_events,
         )
 
     @staticmethod

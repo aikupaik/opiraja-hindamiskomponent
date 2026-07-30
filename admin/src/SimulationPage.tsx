@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  api,
   apiResponse,
   errorMessage,
   isVisibleDiagnostic,
@@ -11,9 +12,26 @@ import {
   type DiagnosticEvent,
   type PlayerView,
 } from './api'
+import {
+  downloadReportHtml,
+  downloadReportJson,
+  type ExperimentReport,
+} from './report'
 
 type Relation = { from: string; to: string }
-type RunState = 'idle' | 'creating' | 'preparing' | 'active' | 'completed' | 'failed'
+type RunState =
+  | 'idle'
+  | 'creating'
+  | 'preparing'
+  | 'active'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+type ReportState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; report: ExperimentReport }
+  | { status: 'failed'; message: string }
 
 type Props = {
   accessKey: string
@@ -37,6 +55,7 @@ export function SimulationPage({
   const [testId, setTestId] = useState<string | null>(null)
   const [view, setView] = useState<PlayerView | null>(null)
   const [events, setEvents] = useState<DiagnosticEvent[]>([])
+  const [reportState, setReportState] = useState<ReportState>({ status: 'idle' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const controllerRef = useRef<AbortController | null>(null)
@@ -55,9 +74,37 @@ export function SimulationPage({
 
   useEffect(() => () => controllerRef.current?.abort(), [])
 
+  useEffect(() => {
+    if (
+      !experimentId ||
+      !['completed', 'failed', 'cancelled'].includes(runState)
+    ) {
+      return
+    }
+    let current = true
+    setReportState({ status: 'loading' })
+    void api<ExperimentReport>(
+      `/api/v1/admin/experiments/${encodeURIComponent(experimentId)}/report`,
+      { key: accessKey },
+    )
+      .then((report) => {
+        if (current) setReportState({ status: 'loaded', report })
+      })
+      .catch((caught: unknown) => {
+        if (current) {
+          setReportState({ status: 'failed', message: errorMessage(caught) })
+        }
+      })
+    return () => {
+      current = false
+    }
+  }, [accessKey, experimentId, runState])
+
   const enteredNodes = nodes.map((node) => node.trim()).filter(Boolean)
   const visibleEvents = events.filter(isVisibleDiagnostic)
-  const running = !['idle', 'completed', 'failed'].includes(runState)
+  const running = !['idle', 'completed', 'failed', 'cancelled'].includes(
+    runState,
+  )
 
   function updateNode(index: number, value: string) {
     const next = nodes.map((node, nodeIndex) =>
@@ -121,6 +168,7 @@ export function SimulationPage({
     setTestId(null)
     setView(null)
     setEvents([])
+    setReportState({ status: 'idle' })
     setRunState('creating')
 
     void streamDiagnostics(
@@ -220,7 +268,10 @@ export function SimulationPage({
       setView(response.data)
       setRunState(response.data.status)
     } catch (caught) {
-      if (!controller.signal.aborted) setError(errorMessage(caught))
+      if (!controller.signal.aborted) {
+        setError(errorMessage(caught))
+        setRunState('failed')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -229,7 +280,7 @@ export function SimulationPage({
   function cancel() {
     controllerRef.current?.abort()
     controllerRef.current = null
-    if (running) setRunState('idle')
+    if (running) setRunState('cancelled')
   }
 
   function reset() {
@@ -238,6 +289,7 @@ export function SimulationPage({
     setTestId(null)
     setView(null)
     setEvents([])
+    setReportState({ status: 'idle' })
     setError('')
     setRunState('idle')
     setSubmitting(false)
@@ -485,7 +537,7 @@ export function SimulationPage({
                   </div>
                 </div>
               )}
-              {view?.status === 'active' && (
+              {view?.status === 'active' && runState === 'active' && (
                 <div className="question">
                   <p className="instruction">{view.question.instruction}</p>
                   {view.question.stimulus && (
@@ -529,6 +581,29 @@ export function SimulationPage({
               )}
             </section>
           )}
+
+          {experimentId &&
+            ['completed', 'failed', 'cancelled'].includes(runState) && (
+              <ReportPanel
+                state={reportState}
+                retry={() => {
+                  setReportState({ status: 'loading' })
+                  void api<ExperimentReport>(
+                    `/api/v1/admin/experiments/${encodeURIComponent(experimentId)}/report`,
+                    { key: accessKey },
+                  )
+                    .then((report) =>
+                      setReportState({ status: 'loaded', report }),
+                    )
+                    .catch((caught: unknown) =>
+                      setReportState({
+                        status: 'failed',
+                        message: errorMessage(caught),
+                      }),
+                    )
+                }}
+              />
+            )}
         </section>
 
         <aside className="terminal panel">
@@ -566,6 +641,141 @@ export function SimulationPage({
         </aside>
       </div>
     </main>
+  )
+}
+
+function ReportPanel({
+  state,
+  retry,
+}: {
+  state: ReportState
+  retry: () => void
+}) {
+  return (
+    <section className="panel report-panel" aria-labelledby="report-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Ephemeral export</p>
+          <h2 id="report-heading">Simulation report</h2>
+          <p>Research evidence and developer performance diagnostics.</p>
+        </div>
+        {state.status === 'loaded' && (
+          <div className="report-badges">
+            <span className={`report-badge ${state.report.completion_state}`}>
+              {state.report.completion_state}
+            </span>
+            <span
+              className={`report-badge ${
+                state.report.data_quality_warnings.length ? 'warning' : 'clean'
+              }`}
+            >
+              {state.report.data_quality_warnings.length
+                ? `${state.report.data_quality_warnings.length} warnings`
+                : 'data complete'}
+            </span>
+          </div>
+        )}
+      </div>
+      {state.status === 'loading' && (
+        <div className="report-loading">Compiling retained diagnostics…</div>
+      )}
+      {state.status === 'failed' && (
+        <div className="report-error">
+          <p>{state.message || 'The report could not be generated.'}</p>
+          <button type="button" className="quiet" onClick={retry}>
+            Retry report
+          </button>
+        </div>
+      )}
+      {state.status === 'loaded' && (
+        <ReportPreview report={state.report} />
+      )}
+    </section>
+  )
+}
+
+function ReportPreview({ report }: { report: ExperimentReport }) {
+  const summary = report.research.summary
+  const latency = report.developer.api_latency
+  return (
+    <div className="report-content">
+      <p className="report-interpretation">
+        {report.research.interpretation}
+      </p>
+      <div className="report-summary-grid">
+        <ReportMetric label="Run status" value={report.run_status} />
+        <ReportMetric
+          label="Responses"
+          value={String(summary.response_count)}
+        />
+        <ReportMetric
+          label="Accuracy"
+          value={
+            summary.overall_accuracy === null
+              ? '—'
+              : `${(summary.overall_accuracy * 100).toFixed(1)}%`
+          }
+        />
+        <ReportMetric
+          label="Stop reason"
+          value={summary.stopping_reason ?? 'Incomplete'}
+        />
+        <ReportMetric
+          label="API median"
+          value={
+            latency.median_ms === null
+              ? '—'
+              : `${latency.median_ms.toFixed(1)} ms`
+          }
+        />
+        <ReportMetric
+          label="Last stage"
+          value={report.developer.last_successful_stage}
+        />
+      </div>
+      {summary.node_path.length > 0 && (
+        <div className="report-path">
+          <span>Adaptive path</span>
+          <p>{summary.node_path.join(' → ')}</p>
+        </div>
+      )}
+      {report.data_quality_warnings.length > 0 && (
+        <ul className="report-warnings">
+          {report.data_quality_warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      )}
+      <div className="report-actions">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => downloadReportHtml(report)}
+        >
+          Download HTML report
+        </button>
+        <button
+          type="button"
+          className="quiet"
+          onClick={() => downloadReportJson(report)}
+        >
+          Download JSON data
+        </button>
+      </div>
+      <p className="report-retention">
+        Generated from process-local diagnostics. Download to retain this
+        report beyond the diagnostic TTL or a backend restart.
+      </p>
+    </div>
+  )
+}
+
+function ReportMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   )
 }
 
