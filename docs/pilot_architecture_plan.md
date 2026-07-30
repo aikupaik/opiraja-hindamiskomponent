@@ -218,5 +218,5 @@ These are deliberately outside the phase-one MVP implementation and acceptance s
 - The deployed Supabase INSERT webhook invokes the existing YG Edge Function and uses the documented order payload/status values.
 - The phase-one MVP runs in a controlled development environment with a permissive authorization dependency. The externally reachable pilot enables the mandatory pre-pilot authorization section above, while still having no student login, Supabase Auth, or RLS changes.
 - Only KST and multiple-choice questions are supported.
-- No admin UI, YG migration, OR UI integration, calibration/AN component, WebSockets, queues, Redis, background workers, load balancing, or multi-replica concurrency work is included.
+- No YG migration, OR UI integration, calibration/AN component, WebSockets, queues, Redis, background workers, load balancing, or multi-replica concurrency work is included.
 - Full identity management, student accounts, fine-grained administrative roles, general token revocation, production-scale denial-of-service protection, transaction redesign beyond submission idempotency, monitoring infrastructure, and multi-replica hardening remain later phases.

@@ -1,0 +1,12 @@
+.DS_Store
+.Rhistory
+.Rproj.user/
+.env
+.env.*
+Dockerfile*
+README.md
+library/
+manual/
+renv/library/
+renv/staging/
+tests/

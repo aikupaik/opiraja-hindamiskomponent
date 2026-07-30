@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.env.*
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+Dockerfile*
+README.md
+__pycache__/
+*.py[cod]
+reports/
+tests/

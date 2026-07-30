@@ -1,0 +1,139 @@
+name: opiraja-assessment
+
+services:
+  web:
+    image: opiraja-assessment-web:local
+    build:
+      context: ./admin
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    ports:
+      - "${HTTP_PORT:-80}:8080"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=/dev/null
+        - http://127.0.0.1:8080/nginx-health
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - edge
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    stop_grace_period: 10s
+
+  api:
+    image: opiraja-assessment-api:local
+    build:
+      context: ./backend
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    env_file:
+      - path: ./.env
+        required: true
+    environment:
+      R_SERVICE_URL: http://r-service:8000
+    expose:
+      - "8000"
+    depends_on:
+      r-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen(
+              "http://127.0.0.1:8000/health/ready",
+              timeout=3,
+          ).read()
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      edge:
+        gw_priority: 1
+      compute: {}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    stop_grace_period: 20s
+
+  r-service:
+    image: opiraja-assessment-r-service:local
+    build:
+      context: ./R
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - Rscript
+        - --vanilla
+        - -e
+        - >-
+          response <- paste(
+              readLines("http://127.0.0.1:8000/health", warn = FALSE),
+              collapse = ""
+          );
+          quit(status = if (grepl('"status":"ok"', response, fixed = TRUE)) 0 else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - compute
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    stop_grace_period: 20s
+
+networks:
+  edge:
+    driver: bridge
+  compute:
+    driver: bridge
+    internal: true

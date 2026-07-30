@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+Dockerfile*
+README.md
+dist/
+node_modules/
+npm-debug.log*
+coverage/
+src/**/*.test.ts
+src/**/*.test.tsx
+src/test/
