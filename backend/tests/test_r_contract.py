@@ -32,6 +32,7 @@ async def test_fastapi_readiness_with_real_r_service() -> None:
             "SUPABASE_URL": "https://contract.invalid",
             "SUPABASE_SERVICE_KEY": "contract-placeholder",
             "R_SERVICE_URL": contract_url,
+            "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
         }
     )
     repository = InMemoryAssessmentRepository()

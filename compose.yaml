@@ -60,6 +60,7 @@ services:
     environment:
       R_SERVICE_URL: http://r-service:8000
       FORWARDED_ALLOW_IPS: 172.30.0.0/24
+      ALLOWED_HOSTS: '["193.40.157.124", "127.0.0.1"]'
     expose:
       - "8000"
     depends_on:

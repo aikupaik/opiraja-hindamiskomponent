@@ -503,6 +503,7 @@ def _settings() -> Settings:
             "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SERVICE_KEY": "service-secret",
             "R_SERVICE_URL": "http://r-service:8000",
+            "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
             "ADMIN_ACCESS_KEY": "operator-secret",
         }
     )

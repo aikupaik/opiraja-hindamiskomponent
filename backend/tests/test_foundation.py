@@ -27,9 +27,11 @@ def test_settings_require_service_locations_and_credentials() -> None:
             "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SERVICE_KEY": "secret",
             "R_SERVICE_URL": "http://r-service:8000",
+            "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1"],
         }
     )
 
+    assert settings.allowed_hosts == ["193.40.157.124", "127.0.0.1"]
     assert settings.max_graph_nodes == 10
     assert settings.r_max_connections == 4
     assert settings.r_connect_timeout_seconds == 2
@@ -46,6 +48,25 @@ def test_settings_require_service_locations_and_credentials() -> None:
     assert settings.admin_source_fetch_timeout_seconds == 10
     assert settings.admin_diagnostic_max_events == 500
     assert settings.admin_diagnostic_ttl_seconds == 3600
+
+
+@pytest.mark.parametrize(
+    "allowed_hosts",
+    [[], [""], ["*"], ["*.example.com"]],
+    ids=["empty", "blank", "wildcard", "wildcard subdomain"],
+)
+def test_settings_require_explicit_non_empty_allowed_hosts(
+    allowed_hosts: list[str],
+) -> None:
+    values = {
+        "SUPABASE_URL": "https://example.supabase.co",
+        "SUPABASE_SERVICE_KEY": "secret",
+        "R_SERVICE_URL": "http://r-service:8000",
+        "ALLOWED_HOSTS": allowed_hosts,
+    }
+
+    with pytest.raises(ValidationError):
+        Settings.model_validate(values)
 
 
 def test_graph_normalization_hash_is_order_independent_and_utf8_stable() -> None:

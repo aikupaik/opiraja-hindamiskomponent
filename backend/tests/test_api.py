@@ -4,14 +4,17 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from supabase import AsyncClient as SupabaseAsyncClient
 from supabase import AsyncClientOptions
+from uvicorn._types import ASGI3Application
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.auth import AuthContext, authorize_player
 from app.api.dependencies import get_kst_engine, get_repository
@@ -40,6 +43,7 @@ def _settings() -> Settings:
             "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SERVICE_KEY": "super-secret-service-key",
             "R_SERVICE_URL": "http://r-service:8000",
+            "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
             "READINESS_TIMEOUT_SECONDS": 0.05,
         }
     )
@@ -70,6 +74,16 @@ def _app(
     return create_app(settings, lifespan=lifespan)
 
 
+async def _request_context(request: Request) -> JSONResponse:
+    client = request.client
+    return JSONResponse(
+        {
+            "scheme": request.url.scheme,
+            "client": None if client is None else client.host,
+        }
+    )
+
+
 @asynccontextmanager
 async def _client(app: FastAPI) -> AsyncGenerator[httpx.AsyncClient]:
     async with app.router.lifespan_context(app):
@@ -98,6 +112,79 @@ async def test_liveness_is_dependency_free_and_readiness_is_bounded() -> None:
     assert ready.json() == {
         "status": "unavailable",
         "dependencies": {"supabase": "ready", "r": "unavailable"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_trusted_hosts_allow_phase_hosts_and_reject_arbitrary_host() -> None:
+    app = _app(InMemoryAssessmentRepository(), FakeKstEngine())
+
+    async with _client(app) as client:
+        for host in ("193.40.157.124", "127.0.0.1"):
+            response = await client.get(
+                "/health/live",
+                headers={"Host": host},
+            )
+            assert response.status_code == 200
+
+        rejected = await client.get(
+            "/health/live",
+            headers={"Host": "unapproved.example"},
+        )
+
+    assert rejected.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_proxy_headers_preserve_https_and_original_client_only_from_trusted_proxy() -> None:
+    app = _app(InMemoryAssessmentRepository(), FakeKstEngine())
+    app.add_api_route("/__test/request-context", _request_context)
+    proxy_app = ProxyHeadersMiddleware(
+        cast(ASGI3Application, app), trusted_hosts="172.30.0.0/24"
+    )
+
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(
+                app=cast(Any, proxy_app),
+                client=("172.30.0.10", 8080),
+            ),
+            base_url="http://193.40.157.124",
+        ) as client:
+            through_proxies = await client.get(
+                "/__test/request-context",
+                headers={
+                    "Host": "193.40.157.124",
+                    "X-Forwarded-Proto": "https",
+                    "X-Forwarded-For": "198.51.100.24, 172.30.0.5",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(
+                app=cast(Any, proxy_app),
+                client=("198.51.100.25", 8080),
+            ),
+            base_url="http://193.40.157.124",
+        ) as client:
+            from_untrusted_peer = await client.get(
+                "/__test/request-context",
+                headers={
+                    "Host": "193.40.157.124",
+                    "X-Forwarded-Proto": "https",
+                    "X-Forwarded-For": "203.0.113.90",
+                },
+            )
+
+    assert through_proxies.status_code == 200
+    assert through_proxies.json() == {
+        "scheme": "https",
+        "client": "198.51.100.24",
+    }
+    assert from_untrusted_peer.status_code == 200
+    assert from_untrusted_peer.json() == {
+        "scheme": "http",
+        "client": "198.51.100.25",
     }
 
 

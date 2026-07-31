@@ -57,6 +57,7 @@ required values:
 | `SUPABASE_URL` | Supabase project URL. |
 | `SUPABASE_SERVICE_KEY` | Server-side service-role credential. Never expose it to a browser. |
 | `R_SERVICE_URL` | Base URL of the internal stateless R KST service. |
+| `ALLOWED_HOSTS` | JSON list of exact API hosts, including the VM public IPv4 and `127.0.0.1` for direct health checks. Wildcards are not allowed. |
 | `ADMIN_ACCESS_KEY` | Optional server-only bearer key enabling the admin API. If absent, every admin endpoint returns `401`. |
 
 Optional settings and their defaults:

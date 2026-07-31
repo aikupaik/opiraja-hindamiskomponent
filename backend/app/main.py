@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 from starlette.types import Lifespan
@@ -139,6 +140,10 @@ def create_app(
         title="Assessment Orchestrator",
         version="1.0.0",
         lifespan=lifespan or build_lifespan(resolved_settings),
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=resolved_settings.allowed_hosts,
     )
     app.state.settings = resolved_settings
     app.include_router(health_router)

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr
+from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PositiveFloat = Annotated[float, Field(gt=0)]
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     )
     r_service_url: AnyHttpUrl = Field(
         validation_alias=AliasChoices("R_SERVICE_URL", "r_service_url")
+    )
+    allowed_hosts: list[str] = Field(
+        min_length=1,
+        validation_alias=AliasChoices("ALLOWED_HOSTS", "allowed_hosts"),
     )
     admin_access_key: SecretStr | None = Field(
         default=None,
@@ -123,3 +127,13 @@ class Settings(BaseSettings):
             "ADMIN_DIAGNOSTIC_TTL_SECONDS", "admin_diagnostic_ttl_seconds"
         ),
     )
+
+    @field_validator("allowed_hosts")
+    @classmethod
+    def validate_allowed_hosts(cls, hosts: list[str]) -> list[str]:
+        normalized_hosts = [host.strip() for host in hosts]
+        if any(not host for host in normalized_hosts):
+            raise ValueError("ALLOWED_HOSTS must not contain empty hosts")
+        if any("*" in host for host in normalized_hosts):
+            raise ValueError("ALLOWED_HOSTS must contain exact hosts only")
+        return normalized_hosts
