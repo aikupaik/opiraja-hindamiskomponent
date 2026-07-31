@@ -12,3 +12,14 @@ Hindamiskomponent on loodud kui õpiraja laiendusmoodul, mis töötab taustal. H
  * Mõõtmiskvaliteedi määratlemine
 
 Hindamiskomponent luuakse autonoomselt töötavana. Kasutajad saavad hindamist täpsustada esitades hindamiskomponendile kontkesti andvaid materjale ja reegleid ülesannete koostamiseks. Hindamistulemust määratlevad põhiprotsessid on komponendis deterministlikud. 
+
+## Hindamiskomponendi teenuse käivitamine virtuaalmasinas
+Virtuaalmasinasse on kloonitud giti repositoorium `opiraja-hindamiskomponent`.
+
+Arendusfaasis on Andrease arendatud hindamiskomponendi loogika "pilot" harus.
+```
+docker compose config --quiet
+docker compose build --pull
+docker compose up -d
+docker compose ps
+```

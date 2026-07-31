@@ -17,6 +17,7 @@ import {
   downloadReportJson,
   type ExperimentReport,
 } from './report'
+import { createUuid } from './uuid'
 
 type Relation = { from: string; to: string }
 type RunState =
@@ -163,7 +164,7 @@ export function SimulationPage({
     controllerRef.current?.abort()
     const controller = new AbortController()
     controllerRef.current = controller
-    const nextExperimentId = crypto.randomUUID()
+    const nextExperimentId = createUuid()
     setExperimentId(nextExperimentId)
     setTestId(null)
     setView(null)

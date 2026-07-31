@@ -7,6 +7,7 @@ import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
 import { SimulationPage } from './SimulationPage'
 import { exampleReport } from './test/reportFixture'
+import { createUuid } from './uuid'
 
 const session = {
   subject: 'development-admin',
@@ -221,6 +222,22 @@ it('keeps Supabase diagnostics out of the visible terminal event set', () => {
       type: 'request_completed',
     }),
   ).toBe(true)
+})
+
+it('creates a UUID v4 when randomUUID is unavailable on HTTP origins', () => {
+  vi.stubGlobal('crypto', {
+    getRandomValues: (bytes: Uint8Array) => {
+      bytes.set([
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+      ])
+      return bytes
+    },
+  })
+
+  expect(createUuid()).toBe(
+    '00010203-0405-4607-8809-0a0b0c0d0e0f',
+  )
 })
 
 it('preserves a cancelled experiment and automatically loads its partial report', async () => {
