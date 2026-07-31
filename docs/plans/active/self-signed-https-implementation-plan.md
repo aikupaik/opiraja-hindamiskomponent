@@ -77,6 +77,50 @@ sudo nginx -T
   Nginx in the Compose application for host TLS termination; the existing
   container Nginx remains the inner web proxy.
 
+### Task 1 audit findings (2026-07-31)
+
+- The guest interface is `ens3` with `192.168.42.72/24`; no public/Floating IP
+  is visible inside the guest. The public IPv4, OpenStack Neutron port and
+  security groups, VPN CIDR, and approved source CIDRs still need to be
+  recorded from the OpenStack/control-plane side.
+- The route table contains the VM subnet plus Docker routes. Existing Docker
+  subnets are `172.17.0.0/16` (default bridge), `172.18.0.0/16` (internal
+  `compute`), and `172.19.0.0/16` (non-internal `edge`). A replacement edge
+  subnet must be selected only after checking it against the unavailable
+  OpenStack and VPN routes; no subnet was selected or committed by this audit.
+- All three Compose services are running and healthy. The API and R service
+  expose port 8000 only to their Docker networks. The web service currently
+  publishes `0.0.0.0:80` and `[::]:80` from container port 8080, because
+  `compose.yaml` still uses `${HTTP_PORT:-80}:8080`; this must be changed to
+  the planned loopback-only `127.0.0.1:8080:8080` publication before host
+  Nginx owns the public ports.
+- The current local application responds successfully at `/` and
+  `/health/ready`. `/nginx-health` returns 403 through the host-published
+  path, although the container healthcheck reports healthy; verify the direct
+  loopback endpoint after the publication change.
+- Host Nginx is installed and its current configuration passes `nginx -t`,
+  but the service is enabled and inactive. The stock default site is the only
+  configuration shown by `nginx -T`; it has no TLS listener and retains
+  `TLSv1`/`TLSv1.1` in the global `ssl_protocols` setting. The active port-80
+  listener is the Compose web container, not host Nginx. No host port 443
+  listener exists. No privileged backup of the current `/etc/nginx` site was
+  created during this read-only audit; create one through the normal operational
+  backup process before changing the host configuration.
+- UFW is inactive. The visible nftables rules are Docker-managed rules with a
+  default-drop IPv4 forwarding chain, but no explicit host ingress policy for
+  the approved CIDRs is present in this audit. IPv4 port 80 and SSH are
+  listening on all addresses; IPv6 port 80 and SSH are also listening, so the
+  IPv6 policy must be addressed before exposure.
+- System time is synchronized with NTP active. Disk space is healthy (`137G`
+  available, 29% used).
+- `docker compose config` succeeds and was inspected without copying its
+  rendered output into this plan. Because it renders values from `.env`, its
+  output contains deployment secrets and must not be committed or pasted into
+  operator documentation.
+
+The audit was read-only. No firewall, Nginx, certificate, Compose, or service
+state was changed.
+
 ## Task 2: Restrict Network Access Before Enabling TLS
 
 In the OpenStack security group attached to the exact VM port:
