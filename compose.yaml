@@ -16,7 +16,7 @@ services:
     tmpfs:
       - /tmp:size=64m,mode=1777
     ports:
-      - "${HTTP_PORT:-80}:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       api:
         condition: service_started
@@ -59,6 +59,7 @@ services:
         required: true
     environment:
       R_SERVICE_URL: http://r-service:8000
+      FORWARDED_ALLOW_IPS: 172.30.0.0/24
     expose:
       - "8000"
     depends_on:
@@ -134,6 +135,9 @@ services:
 networks:
   edge:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
   compute:
     driver: bridge
     internal: true

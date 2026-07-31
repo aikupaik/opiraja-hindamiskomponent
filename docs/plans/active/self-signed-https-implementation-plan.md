@@ -246,6 +246,9 @@ not make the repository writable by the Nginx user.
 
 ## Task 5: Change `compose.yaml`
 
+Change and deployment history for this task is recorded in
+[`docs/task-5-compose-change-log.md`](../../task-5-compose-change-log.md).
+
 Update the `web` publication:
 
 ```yaml
@@ -289,6 +292,9 @@ dependency conditions, and log rotation.
 
 ## Task 6: Update the Container Nginx Configuration
 
+Change and deployment history for this task is recorded in
+[`docs/task-6-container-nginx-change-log.md`](../../task-6-container-nginx-change-log.md).
+
 In `admin/nginx.conf`, keep proxying to `http://api_backend`, but stop
 overwriting the public scheme with the inner Nginx `$scheme` (`http`).
 
@@ -310,6 +316,9 @@ and certificate files do not belong in `admin/nginx.conf` because this is the
 inner HTTP proxy.
 
 ## Task 7: Review the Dockerfiles
+
+Change and deployment history for this task is recorded in
+[`docs/task-7-dockerfile-change-log.md`](../../task-7-dockerfile-change-log.md).
 
 ### `admin/Dockerfile`
 
