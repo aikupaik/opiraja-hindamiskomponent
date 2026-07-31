@@ -38,7 +38,7 @@ described in its
 - `<VM_PUBLIC_IPV4>`: the stable IPv4 address users will enter in the browser.
 - `<VPN_CIDR>` and each approved administrator/test-client CIDR.
 - `<EDGE_SUBNET>`: an unused private subnet for the Compose `edge` network.
-- The exact OpenStack Neutron port and security groups attached to the VM.
+- The exact OpenStack security groups attached to the VM.
 - The deployment user, repository path on the VM, current release commit, and
   current rollback commit.
 - Whether an existing host Nginx configuration owns ports 80/443.
@@ -79,10 +79,12 @@ sudo nginx -T
 
 ### Task 1 audit findings (2026-07-31)
 
-- The guest interface is `ens3` with `192.168.42.72/24`; no public/Floating IP
-  is visible inside the guest. The public IPv4, OpenStack Neutron port and
-  security groups, VPN CIDR, and approved source CIDRs still need to be
-  recorded from the OpenStack/control-plane side.
+- The guest interface is `ens3` with `192.168.42.72/24`; Floating IP address is `193.40.157.124`. 
+  Related security groups: SSH-TALTECH (custom), WEB-TALTECH (custom), DEFAULT, PING, SSH.
+  
+  VPN CIDRs for SSH and WEB-TALTECH access:
+  - 172.20.0.0/16
+  - 193.40.0.0/16
 - The route table contains the VM subnet plus Docker routes. Existing Docker
   subnets are `172.17.0.0/16` (default bridge), `172.18.0.0/16` (internal
   `compute`), and `172.19.0.0/16` (non-internal `edge`). A replacement edge
