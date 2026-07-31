@@ -54,20 +54,21 @@ container, or service state was changed during these checks.
 These require testing from the relevant external clients or operational
 environment and should be completed before declaring the phase fully accepted.
 
-## Follow-up observations
+## Follow-up observations from the initial check
 
-- HTTPS responses currently contain duplicate CSP and related security headers,
-  because both the host and container Nginx layers add them. The values are
-  consistent, so this did not block the checks, but header ownership should be
-  consolidated later.
-- The global host Nginx configuration still lists TLS 1.0 and TLS 1.1, while
-  the active application server blocks explicitly restrict TLS to 1.2 and
-  1.3. The active endpoint is correct; the global setting is a future
-  configuration-drift hazard if another TLS server is added.
+- The initial HTTPS check found duplicate CSP and related security headers,
+  because both the host and container Nginx layers added them. Action 1 below
+  consolidates ownership at the public host layer while retaining the inner
+  container headers for direct diagnostics.
+- The initial global host Nginx configuration listed TLS 1.0 and TLS 1.1,
+  while the active application server already restricted the endpoint to TLS
+  1.2 and 1.3. Action 2 below now aligns the global baseline as well.
 
 ## Required follow-up actions
 
 ### 1. Consolidate duplicate security headers
+
+Status: completed on 2026-07-31.
 
 This is a deployment-proxy configuration cleanup, not an application-code
 change. The public HTTPS response currently receives the same CSP,
@@ -90,6 +91,8 @@ rebuild, or container recreation.
 
 ### 2. Remove obsolete TLS versions from the global host Nginx baseline
 
+Status: completed on 2026-07-31.
+
 This is an actual-VM Nginx configuration hardening change. The active Opiraja
 server already rejects TLS 1.0 and TLS 1.1, so this is not blocking the current
 endpoint, but the package-wide setting should not permit obsolete protocols for
@@ -109,6 +112,8 @@ the global package configuration is not owned by the application repository.
 
 ### 3. Complete external acceptance checks
 
+Status: outstanding; this remains the final manual/external validation gate.
+
 These observations do not currently identify a required code or configuration
 change. They identify checks that remain outstanding:
 
@@ -123,3 +128,156 @@ change. They identify checks that remain outstanding:
 Apply further code, deployment, firewall, or VM changes only if one of these
 tests fails. The current evidence does not justify changing application code,
 Compose networking, certificate material, or UFW rules.
+
+## Follow-up execution record
+
+### Action 1: security-header consolidation
+
+Updated the version-controlled [`deploy/nginx/opiraja.conf`](../../../deploy/nginx/opiraja.conf)
+with `proxy_hide_header` directives for `Content-Security-Policy`,
+`Referrer-Policy`, `X-Content-Type-Options`, and `X-Frame-Options`. The
+container configuration in `admin/nginx.conf` was intentionally left
+unchanged, so direct loopback/container diagnostics retain their existing
+headers.
+
+Before installing the site, the previous VM copy was backed up under
+`/var/backups/nginx/opiraja-task9-20260731/opiraja.conf.pre-header-cleanup`
+by the privileged deployment process. The revised site was installed at
+`/etc/nginx/sites-available/opiraja.conf`, passed `sudo nginx -t`, and was
+gracefully reloaded.
+
+The post-reload local HTTPS check returned exactly one effective copy of each
+canonical header on the SPA response:
+
+- `Content-Security-Policy`
+- `Referrer-Policy: no-referrer`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+
+### Action 2: global TLS baseline hardening
+
+The live `/etc/nginx/nginx.conf` setting was changed from
+`TLSv1 TLSv1.1 TLSv1.2 TLSv1.3` to `TLSv1.2 TLSv1.3`. The previous global file
+was backed up under
+`/var/backups/nginx/opiraja-task9-20260731/nginx.conf.pre-tls-baseline`.
+The complete configuration passed `sudo nginx -t` and Nginx was gracefully
+reloaded.
+
+Post-reload local protocol checks confirmed TLS 1.2 and TLS 1.3 negotiation.
+TLS 1.0 and TLS 1.1 failed with `no protocols available`. The self-signed
+certificate verification warning in the successful checks is expected for
+this phase. The global baseline remains VM/package configuration rather than
+a repository-owned file; this log is the repository record of the operational
+change.
+
+## Action 3: detailed external acceptance procedure
+
+Action 3 is a validation gate, not an instruction to change the application.
+It should be completed after actions 1 and 2, with the results recorded in
+this log or the deployment change record. Do not record bearer tokens,
+cookies, uploaded content, request bodies, query values containing secrets, or
+private-key material.
+
+### Preparation and ownership
+
+An operator must provide or identify the following before testing:
+
+1. An approved client on a network whose source CIDR is explicitly allowed by
+   both the OpenStack security group and Ubuntu firewall. A browser is useful
+   for the certificate-warning and SPA checks; a shell on the same client is
+   useful for repeatable HTTP/TLS checks.
+2. A genuinely non-approved source network for the denial test. The VM itself
+   and a loopback request are not valid substitutes for an independent
+   source. If no such source is available, the denial result must remain
+   unverified rather than being inferred from local tests.
+3. Access to the OpenStack project or its approved operational CLI, plus the
+   exact VM port identity, so the security-group rules can be inspected rather
+   than inferred from the guest. This may require a cloud administrator.
+4. A non-production test account or otherwise approved test credential for a
+   normal API call, a valid upload, and a complete admin-experiment SSE run.
+   The credential should be entered only on the expected HTTPS endpoint after
+   the certificate fingerprint has been checked.
+
+An agent can prepare commands, scripts, test payloads, and an evidence table;
+inspect repository configuration; run checks from an already-authorized
+client when that client is actually available; interpret failures; and update
+the log with sanitized results. An agent cannot create the independent
+network vantage, approve a browser certificate warning on behalf of an
+operator, obtain missing OpenStack permissions, or safely invent the API
+credentials and test data required for authenticated application flows.
+
+### 1. Verify the cloud and host ingress policy
+
+From the OpenStack control plane, inspect the security groups attached to the
+exact VM port and record the rule identifiers or an equivalent sanitized
+export. Confirm that TCP 80 and 443 allow only the approved VPN and test
+CIDRs, TCP 22 retains its existing administration restrictions, and ports
+8080, 8000, Docker API ports, and unrelated services have no unintended
+ingress. Confirm that neither `0.0.0.0/0` nor `::/0` was added for this phase.
+
+On the VM, an operator or agent with the required access should record the
+effective UFW/nftables policy and listeners after the external tests. The
+expected result is host Nginx on IPv4 80/443, loopback-only web publication
+on 127.0.0.1:8080, and no host listener on 8000. IPv6 80/443 must remain
+closed unless it is deliberately included in every policy and certificate
+decision; this plan does not include it.
+
+### 2. Test from an approved client
+
+Use the public IPv4 address, not a loopback address or an internal container
+name.
+
+- Request an HTTP URL containing both a non-root path and query string. Confirm
+  a `308` redirect to the identical path and query under
+  `https://193.40.157.124`.
+- Use `openssl s_client -connect 193.40.157.124:443 -showcerts` or an
+  equivalent client to capture the served certificate. Confirm the SAN is
+  `IP:193.40.157.124` and compare the SHA-256 fingerprint out-of-band with
+  the recorded value:
+  `73:EA:4F:30:DB:F4:23:41:4A:FA:85:52:E6:B8:5F:48:36:C9:F4:DD:48:A1:81:6C:D9:F6:C3:2A:76:20:CB:21`.
+  The browser should show the expected self-signed/untrusted warning and no
+  name-mismatch warning. Certificate acceptance is an operator decision.
+- Open the SPA and check browser developer tools for mixed-content, CORS, or
+  failed asset errors. Confirm the response has one copy of each canonical
+  security header and no HSTS header.
+- Make a normal authenticated API request and confirm any externally visible
+  generated URL or redirect uses the public HTTPS origin.
+- Upload a representative valid file below the configured body/source limits;
+  then submit a deliberately oversized test file and confirm a controlled
+  `413` without exposing stack traces or internal service details.
+- Run one complete admin-experiment simulation and observe the SSE stream
+  incrementally until its normal completion. Record that it does not stop
+  early because of buffering or the upstream read timeout.
+- Send deliberately forged `X-Forwarded-For`, `X-Forwarded-Proto`,
+  `X-Real-IP`, and `X-Request-ID` request headers. Use the application's
+  observable behavior and sanitized server logs to confirm the public edge
+  replaces these values with the actual client IP, `https`, and a host-created
+  request ID. Do not use real credentials in diagnostic header values.
+- Inspect the relevant host, container, API, and application logs for request
+  IDs, status, and latency/upstream timing. Confirm that authorization values,
+  cookies, forwarded secrets, request bodies, uploaded content, and sensitive
+  query values are not logged. If a logging format includes a full request
+  line, treat query-string exposure as a finding rather than assuming it is
+  safe.
+
+### 3. Test from a non-approved source
+
+From the independent source, attempt both HTTP and HTTPS to the public IP.
+The expected result is denial at the cloud or host-firewall boundary (often a
+timeout or connection refusal; an application response is not success). Also
+test direct ports 8080 and 8000 if the source can reach them. Do not weaken a
+rule temporarily just to make this test easier. Record the source network,
+timestamp, destination, and observed result without recording unrelated
+client identifiers.
+
+### 4. Decide whether remediation is needed
+
+If all checks pass, record the approved and denied source CIDRs, security
+group evidence, certificate comparison, protocol results, application-flow
+results, and sanitized log review; then mark the HTTPS phase accepted subject
+to the planned certificate-expiry reminder. If a check fails, classify it
+first as OpenStack ingress, Ubuntu firewall, host Nginx, container proxy,
+application, certificate, or observability behavior. Preserve the evidence and
+apply only the smallest reviewed change in the corresponding layer. Do not
+change Compose networking, certificate material, firewall rules, or application
+code merely because an external check is still outstanding.
