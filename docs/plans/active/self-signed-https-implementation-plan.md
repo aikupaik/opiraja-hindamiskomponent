@@ -125,6 +125,9 @@ state was changed.
 
 ## Task 2: Restrict Network Access Before Enabling TLS
 
+Command and change history for this task is recorded in
+[`docs/task-2-network-change-log.md`](../../task-2-network-change-log.md).
+
 In the OpenStack security group attached to the exact VM port:
 
 - Allow TCP 443 only from `<VPN_CIDR>` and approved test/administrator CIDRs.
@@ -142,6 +145,9 @@ Keep IPv6 closed unless it is deliberately included in every layer. This plan
 uses an IPv4 certificate SAN and therefore does not authorize IPv6 exposure.
 
 ## Task 3: Generate and Protect the Self-Signed Certificate on the VM
+
+Command and verification history for this task is recorded in
+[`docs/task-3-certificate-change-log.md`](../../task-3-certificate-change-log.md).
 
 Create the certificate on the VM so the private key never needs to be copied:
 
@@ -183,6 +189,9 @@ sudo openssl pkey -in /etc/nginx/tls/opiraja/self-signed.key -check -noout
   `nginx -t`, graceful reload, and fingerprint verification.
 
 ## Task 4: Add the Host-Nginx Deployment Configuration to the Project
+
+Command and deployment history for this task is recorded in
+[`docs/task-4-host-nginx-change-log.md`](../../task-4-host-nginx-change-log.md).
 
 Add `deploy/nginx/opiraja.conf` as a version-controlled template/runbook input.
 It should contain these server roles:
