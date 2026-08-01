@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from io import BytesIO
+import logging
 import math
 from time import monotonic
 from typing import cast
@@ -17,7 +18,12 @@ from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from app.admin.diagnostics import DiagnosticHub
-from app.admin.ingestion import SourceIngestor, SourceInvalid
+from app.admin.ingestion import (
+    SourceIngestor,
+    SourceInvalid,
+    SourceRemoteFailure,
+    SourceTooLarge,
+)
 from app.admin.mapping import (
     decode_course_rows,
     encode_editable,
@@ -251,6 +257,158 @@ async def test_text_html_private_address_and_textless_pdf_ingestion() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "resolved_address",
+    [
+        "127.0.0.1",
+        "10.0.0.7",
+        "169.254.1.1",
+        "169.254.169.254",
+        "::1",
+        "fc00::7",
+        "fe80::7",
+    ],
+    ids=[
+        "ipv4-loopback",
+        "ipv4-private",
+        "ipv4-link-local",
+        "cloud-metadata",
+        "ipv6-loopback",
+        "ipv6-private",
+        "ipv6-link-local",
+    ],
+)
+async def test_remote_url_rejects_non_global_ipv4_and_ipv6_destinations(
+    resolved_address: str,
+) -> None:
+    settings = _settings()
+
+    def unexpected_request(request: httpx.Request) -> httpx.Response:
+        pytest.fail(f"blocked URL was fetched: {request.url}")
+
+    async def resolver(_host: str, _port: int) -> tuple[str, ...]:
+        return (resolved_address,)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(unexpected_request)
+    ) as http:
+        ingestor = SourceIngestor(http, settings, resolver=resolver)
+        with pytest.raises(SourceInvalid, match="non-global"):
+            await ingestor.from_url("https://public.example/source")
+
+
+@pytest.mark.asyncio
+async def test_remote_url_rejects_credentials_and_non_standard_ports() -> None:
+    settings = _settings()
+
+    async def public_resolver(_host: str, _port: int) -> tuple[str, ...]:
+        return ("93.184.216.34",)
+
+    def unexpected_request(request: httpx.Request) -> httpx.Response:
+        pytest.fail(f"invalid URL was fetched: {request.url}")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(unexpected_request)
+    ) as http:
+        ingestor = SourceIngestor(http, settings, resolver=public_resolver)
+        with pytest.raises(SourceInvalid, match="credentials"):
+            await ingestor.from_url("https://user:password@example.com/source")
+        with pytest.raises(SourceInvalid, match="port 80 or 443"):
+            await ingestor.from_url("https://example.com:8443/source")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("redirect_host", ["private.example", "metadata.example"])
+async def test_public_redirect_to_private_or_metadata_destination_is_rejected(
+    redirect_host: str,
+) -> None:
+    settings = _settings()
+    addresses = {
+        "public.example": ("93.184.216.34",),
+        "private.example": ("192.168.1.10",),
+        "metadata.example": ("169.254.169.254",),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "public.example"
+        return httpx.Response(
+            302,
+            headers={"Location": f"https://{redirect_host}/source"},
+        )
+
+    async def resolver(host: str, _port: int) -> tuple[str, ...]:
+        return addresses[host]
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        ingestor = SourceIngestor(http, settings, resolver=resolver)
+        with pytest.raises(SourceInvalid, match="non-global"):
+            await ingestor.from_url("https://public.example/source")
+
+
+@pytest.mark.asyncio
+async def test_remote_url_enforces_redirect_size_and_timeout_limits() -> None:
+    base_settings = _settings()
+
+    async def public_resolver(_host: str, _port: int) -> tuple[str, ...]:
+        return ("93.184.216.34",)
+
+    redirect_count = 0
+
+    def redirect_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal redirect_count
+        redirect_count += 1
+        return httpx.Response(
+            302,
+            headers={"Location": f"https://example.com/redirect-{redirect_count}"},
+        )
+
+    redirect_settings = base_settings.model_copy(
+        update={"admin_source_max_redirects": 2}
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(redirect_handler)
+    ) as http:
+        ingestor = SourceIngestor(
+            http, redirect_settings, resolver=public_resolver
+        )
+        with pytest.raises(SourceRemoteFailure, match="redirect limit"):
+            await ingestor.from_url("https://example.com/source")
+    assert redirect_count == 3
+
+    def oversized_handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/plain"},
+            content=b"too-large",
+        )
+
+    oversized_settings = base_settings.model_copy(
+        update={"admin_source_max_bytes": 4}
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(oversized_handler)
+    ) as http:
+        ingestor = SourceIngestor(
+            http, oversized_settings, resolver=public_resolver
+        )
+        with pytest.raises(SourceTooLarge, match="exceeds the byte limit"):
+            await ingestor.from_url("https://example.com/source")
+
+    def timeout_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out", request=request)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(timeout_handler)
+    ) as http:
+        ingestor = SourceIngestor(
+            http, base_settings, resolver=public_resolver
+        )
+        with pytest.raises(SourceRemoteFailure, match="timed out") as error:
+            await ingestor.from_url("https://example.com/source")
+        assert error.value.timed_out is True
+
+
+@pytest.mark.asyncio
 async def test_upload_takes_precedence_over_url_and_returns_saved_preview() -> None:
     repository = _FakeAdminRepository()
     ingestor = _FakeIngestor()
@@ -281,6 +439,62 @@ async def test_upload_takes_precedence_over_url_and_returns_saved_preview() -> N
 
 
 @pytest.mark.asyncio
+async def test_request_logs_exclude_sensitive_headers_query_and_upload_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    repository = _FakeAdminRepository()
+    ingestor = _FakeIngestor()
+    app = _app(_settings())
+    app.dependency_overrides[get_admin_repository] = lambda: cast(
+        AdminRepository, repository
+    )
+    app.dependency_overrides[get_source_ingestor] = lambda: cast(
+        SourceIngestor, ingestor
+    )
+    caplog.set_level(logging.INFO, logger="app.requests")
+
+    async with _client(app) as client:
+        saved = await client.post(
+            "/api/v1/admin/source-materials?redirect_token=query-secret",
+            headers={
+                "Authorization": "Bearer operator-secret",
+                "Cookie": "session=browser-cookie-secret",
+            },
+            data={
+                "course": "FÜS101",
+                "title": "uploaded-content-secret",
+            },
+            files={
+                "file": (
+                    "notes.txt",
+                    b"uploaded-content-secret",
+                    "text/plain",
+                )
+            },
+        )
+
+    assert saved.status_code == 201
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.requests"
+        and '"event":"request_completed"' in record.getMessage()
+    ]
+    assert len(messages) == 1
+    message = messages[0]
+    for forbidden in (
+        "operator-secret",
+        "service-secret",
+        "browser-cookie-secret",
+        "uploaded-content-secret",
+        "query-secret",
+        "redirect_token",
+    ):
+        assert forbidden not in message
+    assert '"path":"/api/v1/admin/source-materials"' in message
+
+
+@pytest.mark.asyncio
 async def test_diagnostics_are_bounded_replayed_redacted_and_cleanup_subscribers() -> (
     None
 ):
@@ -300,6 +514,8 @@ async def test_diagnostics_are_bounded_replayed_redacted_and_cleanup_subscribers
             payload={
                 "sequence_value": value,
                 "authorization": "Bearer operator-secret",
+                "cookie": "session=browser-cookie-secret",
+                "set-cookie": "session=browser-cookie-secret",
                 "message": "service-secret must not leak",
             },
         )
@@ -308,6 +524,7 @@ async def test_diagnostics_are_bounded_replayed_redacted_and_cleanup_subscribers
     first = await anext(stream)
     assert '"sequence":2' in first
     assert "operator-secret" not in first
+    assert "browser-cookie-secret" not in first
     assert "service-secret" not in first
     assert hub.subscriber_count("experiment") == 1
     await stream.aclose()

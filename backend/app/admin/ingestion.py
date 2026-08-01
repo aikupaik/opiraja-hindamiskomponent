@@ -132,9 +132,13 @@ class SourceIngestor:
         if host == "localhost" or host.endswith(".localhost"):
             raise SourceInvalid("local source URLs are not allowed")
         try:
-            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            port = parsed.port
         except ValueError as error:
             raise SourceInvalid("source URL contains an invalid port") from error
+        if port is None:
+            port = 443 if parsed.scheme == "https" else 80
+        if port not in {80, 443}:
+            raise SourceInvalid("source URL must use port 80 or 443")
         try:
             addresses = await self._resolver(host, port)
         except (OSError, UnicodeError) as error:
