@@ -281,3 +281,89 @@ application, certificate, or observability behavior. Preserve the evidence and
 apply only the smallest reviewed change in the corresponding layer. Do not
 change Compose networking, certificate material, firewall rules, or application
 code merely because an external check is still outstanding.
+
+### Action 3 execution evidence
+
+#### Step 1 — VM host ingress policy
+
+Checked on 2026-08-03 12:37:32+03:00 with read-only `ufw`, `nftables`, and
+TCP-listener inspection. No VM configuration or service state was changed.
+
+- UFW is active with `deny (incoming)`, `allow (outgoing)`, and `deny
+  (routed)` defaults. Its only IPv4 inbound allow rules are TCP 22, 80, and
+  443 from `172.20.0.0/16` and `193.40.0.0/16`.
+- The effective nftables input policy is `drop`; its UFW user-input chain
+  contains the same six source/port rules. The IPv6 input policy is also
+  `drop`, and it has no IPv6 user allow rules for HTTP or HTTPS.
+- Host Nginx is listening on `0.0.0.0:80` and `0.0.0.0:443`. No listener is
+  bound to `[::]:80` or `[::]:443`.
+- Docker's web publication is bound only to `127.0.0.1:8080`; nftables also
+  drops TCP 8080 packets addressed to `127.0.0.1` when they do not arrive on
+  loopback. There is no host TCP listener on port 8000 and no Docker API TCP
+  listener.
+- Other observed host TCP listeners are the approved SSH service on 22 and
+  local system DNS on loopback port 53. Neither is an unintended public web
+  publication.
+
+Result: **passed** for the VM portion of Step 1. This does not replace the
+separate OpenStack security-group evidence already inspected by the operator,
+nor the approved/non-approved external-client tests in Steps 2 and 3.
+
+#### Step 2 — approved external client (partial)
+
+Tested from an approved VPN client on 2026-08-03. No credentials, cookies,
+request bodies, uploaded content, or sensitive query values were recorded.
+
+- HTTP `GET /acceptance-check?source=vpn` returned `308` and redirected to
+  the identical path and query on `https://193.40.157.124`.
+- The served TLS certificate had the expected IP SAN and the recorded
+  SHA-256 fingerprint.
+- HTTPS `GET /` returned `200` and exactly one copy of each canonical
+  browser-security header: CSP, `Referrer-Policy`,
+  `X-Content-Type-Options`, and `X-Frame-Options`. HSTS was absent as
+  required for the self-signed phase.
+- Finding — the public HTTPS response did **not** include `X-Request-ID`.
+  Read-only VM inspection confirmed that the installed
+  `/etc/nginx/sites-enabled/opiraja.conf` is behind the repository template:
+  it lacks the public `add_header X-Request-ID $request_id always` directive
+  and the related upstream-header hiding/rate-limit configuration. The
+  repository template contains those directives. Classify this as **host
+  Nginx deployment drift**; do not mark forwarded-header/request-ID
+  acceptance passed until the reviewed site configuration is installed,
+  tested, reloaded, and retested.
+- Browser developer tools reported CSP blocks for inline scripts attributed to
+  `utils.js` and `node.js`, while the SPA document and its same-origin assets
+  loaded successfully. The version-controlled SPA entry document contains no
+  inline script, so the source of these messages is not yet established. A
+  clean browser profile/private window with extensions disabled must be used
+  to determine whether they are browser/extension injection or an application
+  finding.
+
+Result: **partially passed; remediation required before Step 2 acceptance**.
+The authenticated API, upload-boundary, SSE, forwarded-metadata/log, and
+clean-browser checks remain outstanding.
+
+#### Step 3 — non-approved external source
+
+Tested on 2026-08-03 12:55:51+03:00 from a home ISP with the VPN disconnected.
+The source was independently confirmed unable to reach the VPN/SSH access
+path. No client IP address or other identifying client detail was recorded.
+
+| Destination TCP port | Result |
+| --- | --- |
+| 80 | Connection timeout after approximately five seconds (`curl` exit 28) |
+| 443 | Connection timeout after approximately five seconds (`curl` exit 28) |
+| 8080 | Connection timeout after approximately five seconds (`curl` exit 28) |
+| 8000 | Connection timeout after approximately five seconds (`curl` exit 28) |
+
+Result: **passed**. The absence of an HTTP/application response on all four
+ports is the expected ingress-boundary denial. No cloud or host firewall rule
+was weakened for this test.
+
+### Action 3 current status
+
+Step 1 (VM and operator-reported OpenStack review) and Step 3 pass. Step 2 is
+not accepted: the installed host Nginx configuration is behind the reviewed
+repository template, and its required authenticated API, upload, SSE,
+forwarded-metadata/log, and clean-browser checks remain outstanding. Do not
+lock Phase 1 until that finding is remediated and Step 2 is completed.
