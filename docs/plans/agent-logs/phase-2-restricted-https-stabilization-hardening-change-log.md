@@ -238,3 +238,34 @@ before it is concluded.
 Enforcement remains explicitly blocked: do not disable `limit_req_dry_run` or
 `limit_conn_dry_run`, and do not claim Phase 2 acceptance, until the deferred
 tests and sanitized one-day limiter-log review are recorded.
+
+### Controlled dry-run request-rate probes
+
+From the approved VPN client on 2026-08-03:
+
+- A sequential 35-request harmless `/api/` probe at approximately
+  13:46–13:47 EEST returned 35 `404` responses. Sanitized host evidence
+  recorded all 35 as `limit_req_status=PASSED`; this did not exceed the 10/s
+  general API rate and is a baseline result, not an excess-limit result.
+- An eight-request authenticated admin-session probe at approximately
+  13:49–13:50 EEST returned eight `200` responses. Sanitized host evidence
+  recorded six `PASSED` and two `REJECTED_DRY_RUN` limiter statuses, with two
+  matching session-limit warning events and no other error events. This
+  confirms the strict session limiter observes excess traffic without rejecting
+  it in dry-run mode.
+
+Result: **admin-session dry-run excess probe passed**. Repeat the harmless
+general `/api/` probe concurrently to produce and record general API
+`REJECTED_DRY_RUN` evidence. The SSE connection-limit probe and normal-workflow
+observation remain outstanding.
+
+The concurrent harmless general-API probe was repeated at approximately
+13:55 EEST with 60 requests. The client received 60 `404` responses; sanitized
+host evidence recorded 21 `PASSED` and 39 `REJECTED_DRY_RUN` statuses, with 39
+matching general-API limiter warnings and no other error events. This confirms
+the general API rate limiter observes excess traffic without rejecting it in
+dry-run mode.
+
+Result: **general API dry-run excess probe passed**. The SSE connection-limit
+probe, normal authenticated workflow/upload/SSE observation, and one-day
+sanitized log review remain outstanding before enforcement.
