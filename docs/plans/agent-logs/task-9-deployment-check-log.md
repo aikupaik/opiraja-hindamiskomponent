@@ -367,3 +367,24 @@ not accepted: the installed host Nginx configuration is behind the reviewed
 repository template, and its required authenticated API, upload, SSE,
 forwarded-metadata/log, and clean-browser checks remain outstanding. Do not
 lock Phase 1 until that finding is remediated and Step 2 is completed.
+
+### Step 2 revalidation after Phase 2 dry-run Nginx deployment
+
+From the approved VPN client during 2026-08-03 13:31–13:33 EEST, the operator
+confirmed that the public HTTPS/header check, forged-forwarded-header check,
+and clean-browser-profile SPA check passed. In particular, the response used
+one host-generated `X-Request-ID` rather than the supplied forged value, and
+the clean browser reported no application mixed-content, CORS, asset-load, or
+CSP errors.
+
+Sanitized host evidence for the same window recorded six requests, all `200`,
+with a generated request ID on every response. The active host configuration
+sets the forwarding fields from `$remote_addr`/`https` and hides upstream
+`X-Request-ID`, consistent with the observed result. One Nginx warning
+recorded normal-response proxy buffering to a temporary file; it did not cause
+a failed response and is not the SSE location, where buffering remains
+disabled. Retain it for the planned dry-run monitoring review.
+
+Result: the Nginx deployment-drift, forged-metadata/request-ID, and
+clean-browser findings are resolved. The authenticated API, upload-boundary,
+SSE, and log-sanitization portions of Step 2 remain outstanding.

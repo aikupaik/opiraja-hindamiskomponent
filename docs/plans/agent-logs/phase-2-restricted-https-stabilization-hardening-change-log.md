@@ -163,3 +163,78 @@ Result: `.env` permission and Docker-access decision are complete. Credential
 rotation is operator-reported, but API recreation remains a required
 verification before proceeding to authenticated checks or the Phase 2
 deployment.
+
+The operator subsequently confirmed that the recreated API is healthy. The
+secret/access gate is therefore complete, subject to the later authenticated
+acceptance checks using the rotated credential.
+
+## VM deployment and operations — Step 3 patching and Step 4 dry-run install
+
+### Maintenance execution record
+
+Performed during the operator-confirmed maintenance window with OpenStack
+console recovery access available.
+
+- Backed up the active site to the root-only directory
+  `/var/backups/nginx/opiraja-phase-2-20260803/`; the backup and pre-change
+  active-site SHA-256 checksums match.
+- Refreshed APT metadata and reviewed the pending set. Only Docker Engine,
+  Docker CLI, and Docker rootless extras were pending, from Docker's already
+  configured Ubuntu repository. Upgraded each from 29.6.2 to 29.7.1; no
+  Ubuntu, Nginx, OpenSSL, kernel, or Compose-plugin update was pending.
+- The package manager reported that no reboot was required. Docker's refresh
+  briefly restarted containers; all recovered healthy.
+- Rebuilt the reviewed R, API, and web images with `docker compose build
+  --pull`. The web build and its inner Nginx syntax test passed. Recreated
+  Compose services with `docker compose up -d --remove-orphans`; R, API, and
+  web all became healthy.
+- Post-patch checks at `2026-08-03T10:28:56Z` passed: Compose configuration
+  was structurally valid; UFW and listener restrictions were unchanged;
+  loopback web health and API readiness both returned 200; TLS 1.2 and 1.3
+  negotiated successfully; `/var/run/reboot-required` remained absent.
+
+### Phase 2 Nginx dry-run deployment
+
+At `2026-08-03T10:30:41Z`, installed the reviewed host site with
+`limit_req_dry_run on` and `limit_conn_dry_run on`, checksum
+`87f2df8288ccd24b74f7d439f4631d0e2bfb11562c743372cd0d3d05df13d2c1`.
+`nginx -t` passed and Nginx was gracefully reloaded.
+
+Post-reload VM checks passed: Nginx is active; all three Compose services are
+healthy; only host IPv4 80/443 and loopback 8080 are published; loopback web
+health and API readiness return 200; and the HTTPS SPA response contains one
+copy of each canonical security header plus one host-generated
+`X-Request-ID`. HSTS remains absent.
+
+Result: **dry-run deployment passed its VM checks**. The next required work is
+approved-client external revalidation and controlled dry-run API/session/SSE
+probes, followed by at least one normal operating day of sanitized limiter-log
+observation. Do not disable dry-run before those results are recorded.
+
+### Approved-client revalidation
+
+During 2026-08-03 13:31–13:33 EEST, the approved VPN client confirmed the
+public HTTPS/header and forged-forwarded-header checks pass, including exactly
+one host-generated `X-Request-ID`, and confirmed the SPA is clean in a browser
+profile with extensions disabled. Sanitized host evidence for the same window
+contains six `200` responses, all with a generated request ID.
+
+One host-Nginx warning recorded buffering of a normal proxied response to a
+temporary file. It caused no failed response and does not apply to the exact
+SSE location, which retains disabled buffering. Include it in the required
+normal-operation log observation; it is not a dry-run limiter event.
+
+Result: **approved-client smoke revalidation passed**. Authenticated normal
+workflow, upload, SSE, and controlled dry-run limiter probes remain required.
+
+### Dry-run observation deferral
+
+On 2026-08-03, the operator deferred the credentialed normal-workflow,
+upload-boundary, complete-SSE, and controlled API/session/SSE limiter probes
+to a later testing session. The one-normal-operating-day dry-run observation
+begins with the installed dry-run configuration and must include those results
+before it is concluded.
+
+Enforcement remains explicitly blocked: do not disable `limit_req_dry_run` or
+`limit_conn_dry_run`, and do not claim Phase 2 acceptance, until the deferred
+tests and sanitized one-day limiter-log review are recorded.
