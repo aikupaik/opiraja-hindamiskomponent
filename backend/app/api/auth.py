@@ -15,15 +15,18 @@ ADMIN_READ = "admin:read"
 ADMIN_WRITE = "admin:write"
 ADMIN_DIAGNOSTICS = "admin:diagnostics"
 ADMIN_SIMULATION = "admin:simulation"
+TESTS_CREATE = "tests:create"
+TESTS_READ = "tests:read"
+TESTS_PLAY = "tests:play"
 ADMIN_SCOPES = frozenset(
     {
         ADMIN_READ,
         ADMIN_WRITE,
         ADMIN_DIAGNOSTICS,
         ADMIN_SIMULATION,
-        "tests:create",
-        "tests:read",
-        "tests:play",
+        TESTS_CREATE,
+        TESTS_READ,
+        TESTS_PLAY,
     }
 )
 _bearer = HTTPBearer(auto_error=False)
@@ -89,7 +92,7 @@ async def authorize_or(
     return AuthContext(
         actor_type="or",
         subject="phase-one-or",
-        scopes=frozenset({"tests:create", "tests:read"}),
+        scopes=frozenset({TESTS_CREATE, TESTS_READ}),
     )
 
 
@@ -106,7 +109,7 @@ async def authorize_player(
     return AuthContext(
         actor_type="player",
         subject="phase-one-player",
-        scopes=frozenset({"tests:play"}),
+        scopes=frozenset({TESTS_PLAY}),
         authorized_test_id=test_id,
     )
 
@@ -118,7 +121,7 @@ def require_or(context: AuthContext, scope: str) -> None:
 
 def require_player(context: AuthContext, test_id: UUID) -> None:
     if (
-        "tests:play" not in context.scopes
+        TESTS_PLAY not in context.scopes
         or (context.actor_type == "player" and context.authorized_test_id != test_id)
         or context.actor_type not in {"player", "admin"}
     ):

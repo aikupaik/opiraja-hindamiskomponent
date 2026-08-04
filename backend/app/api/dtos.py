@@ -19,6 +19,25 @@ class PublicModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ErrorDetail(PublicModel):
+    code: str
+    message: str
+
+
+class ErrorResponse(PublicModel):
+    error: ErrorDetail
+
+
+class RequestValidationDetail(BaseModel):
+    loc: tuple[str | int, ...]
+    msg: str
+    type: str
+
+
+class RequestValidationResponse(BaseModel):
+    detail: tuple[RequestValidationDetail, ...]
+
+
 class RelationRequest(PublicModel):
     prerequisite: str = Field(alias="from")
     dependent: str = Field(alias="to")
@@ -88,13 +107,15 @@ class CreateTestResponse(PublicModel):
     missing_nodes: tuple[str, ...]
 
     @classmethod
-    def from_domain(cls, result: CreateAssessmentResult) -> "CreateTestResponse":
+    def from_domain(
+        cls, result: CreateAssessmentResult, *, player_url: str
+    ) -> "CreateTestResponse":
         if result.status.value not in ("active", "preparing"):
             raise ValueError("new assessment has an invalid public status")
         return cls(
             test_id=result.test_id,
             status=result.status.value,
-            player_url=result.player_url,
+            player_url=player_url,
             missing_nodes=result.missing_nodes,
         )
 
@@ -152,21 +173,17 @@ class PlayerCompletedResponse(PublicModel):
     feedback: FeedbackResponse
 
 
-PlayerViewResponse = (
-    PlayerPreparingResponse | PlayerActiveResponse | PlayerCompletedResponse
-)
+PlayerReadyResponse = PlayerActiveResponse | PlayerCompletedResponse
 
 
-def to_player_view_response(view: AssessmentView) -> PlayerViewResponse:
-    if view.status.value == "preparing":
-        return PlayerPreparingResponse()
+def to_player_ready_response(view: AssessmentView) -> PlayerReadyResponse:
     if view.status.value == "active" and view.question is not None:
         return PlayerActiveResponse(question=view.question)
     if view.status.value == "completed" and view.feedback is not None:
         return PlayerCompletedResponse(
             feedback=FeedbackResponse.from_domain(view.feedback)
         )
-    raise ValueError("assessment has an invalid player status")
+    raise ValueError("assessment does not have a ready player view")
 
 
 class HealthResponse(PublicModel):

@@ -51,7 +51,6 @@ class CreateAssessmentCommand:
 class CreateAssessmentResult:
     test_id: UUID
     status: SessionStatus
-    player_url: str
     missing_nodes: tuple[str, ...]
 
 
@@ -590,7 +589,6 @@ class AssessmentService:
         return CreateAssessmentResult(
             test_id=value,
             status=status,
-            player_url=f"/test/{value}",
             missing_nodes=missing_nodes,
         )
 

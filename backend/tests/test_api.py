@@ -16,7 +16,7 @@ from supabase import AsyncClientOptions
 from uvicorn._types import ASGI3Application
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.api.auth import AuthContext, authorize_player
+from app.api.auth import TESTS_PLAY, AuthContext, authorize_player
 from app.api.dependencies import get_kst_engine, get_repository
 from app.config import Settings
 from app.domain.models import AdvanceCompleted, ItemId, ModelBuildResult
@@ -243,6 +243,92 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
             },
         )
         assert invalid.status_code == 422
+        assert "detail" in invalid.json()
+
+        invalid_graph = await client.post(
+            "/api/v1/tests",
+            json={
+                "user_id": "or-user",
+                "learning_path_id": "path-1",
+                "nodes": ["A", "A"],
+                "relations": [],
+            },
+        )
+        assert invalid_graph.status_code == 422
+        assert invalid_graph.json() == {
+            "error": {
+                "code": "invalid_graph",
+                "message": "Graph is invalid.",
+            }
+        }
+
+
+def test_public_assessment_openapi_matches_response_contract() -> None:
+    schema = _app(InMemoryAssessmentRepository(), FakeKstEngine()).openapi()
+    paths = cast(dict[str, Any], schema["paths"])
+    operations = {
+        "create": paths["/api/v1/tests"]["post"],
+        "status": paths["/api/v1/tests/{test_id}"]["get"],
+        "start": paths["/api/v1/player/tests/{test_id}/start"]["post"],
+        "answer": paths["/api/v1/player/tests/{test_id}/answers"]["post"],
+    }
+
+    assert set(operations["create"]["responses"]) == {
+        "201",
+        "403",
+        "422",
+        "500",
+        "503",
+    }
+    assert set(operations["status"]["responses"]) == {
+        "200",
+        "403",
+        "404",
+        "409",
+        "422",
+        "500",
+        "503",
+    }
+    assert set(operations["start"]["responses"]) == {
+        "200",
+        "202",
+        "403",
+        "404",
+        "409",
+        "422",
+        "500",
+        "503",
+    }
+    assert set(operations["answer"]["responses"]) == {
+        "200",
+        "403",
+        "404",
+        "409",
+        "422",
+        "500",
+        "503",
+    }
+    for operation in operations.values():
+        assert operation["security"] == [{"HTTPBearer": []}, {}]
+
+    start_success = operations["start"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["anyOf"]
+    assert {item["$ref"] for item in start_success} == {
+        "#/components/schemas/PlayerActiveResponse",
+        "#/components/schemas/PlayerCompletedResponse",
+    }
+    assert operations["start"]["responses"]["202"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/PlayerPreparingResponse"}
+
+    create_validation = operations["create"]["responses"]["422"]["content"][
+        "application/json"
+    ]["schema"]["anyOf"]
+    assert {item["$ref"] for item in create_validation} == {
+        "#/components/schemas/RequestValidationResponse",
+        "#/components/schemas/ErrorResponse",
+    }
 
 
 @pytest.mark.asyncio
@@ -315,7 +401,7 @@ async def test_authorization_override_and_stable_error_mapping_are_independent()
         return AuthContext(
             actor_type="player",
             subject="wrong-player",
-            scopes=frozenset({"tests:play"}),
+            scopes=frozenset({TESTS_PLAY}),
             authorized_test_id=UUID("30000000-0000-4000-8000-000000000003"),
         )
 

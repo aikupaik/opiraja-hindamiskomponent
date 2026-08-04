@@ -90,6 +90,11 @@ Create and commit an `renv.lock`; the container must restore it rather than rely
 
 ### Public API
 
+The authoritative pre-JWT behavioral contract for the OR and player routes is
+[`docs/contracts/public-assessment-api.md`](contracts/public-assessment-api.md).
+FastAPI's generated OpenAPI schema is its machine-readable representation, and
+contract tests enforce state-dependent behavior that OpenAPI cannot express.
+
 The phase-one MVP keeps these routes callable without credentials through the permissive authorization dependency. Their separation and required pre-pilot permissions are defined now so authorization can later be enabled without changing assessment services or persistence.
 
 - `POST /api/v1/tests`
@@ -104,7 +109,7 @@ The phase-one MVP keeps these routes callable without credentials through the pe
   - Returns `preparing`, `active`, `completed`, or `failed`; completed responses include mapped feedback.
 
 - `POST /api/v1/player/tests/{test_id}/start`
-  - Player-facing; pre-pilot permission: `test:play` for the same `test_id`.
+  - Player-facing; pre-pilot permission: `tests:play` for the same `test_id`.
   - Idempotent player command.
   - While YG is pending, returns `202` with `Retry-After: 3`.
   - When coverage becomes complete, builds and stores the R model, activates the session, selects and persists the first question, and returns it.
@@ -112,7 +117,7 @@ The phase-one MVP keeps these routes callable without credentials through the pe
   - YG status `viga` marks the session failed.
 
 - `POST /api/v1/player/tests/{test_id}/answers`
-  - Player-facing; pre-pilot permission: `test:play` for the same `test_id`.
+  - Player-facing; pre-pilot permission: `tests:play` for the same `test_id`.
   - Input: `submission_id` and opaque `option_id`.
   - Resolves the selected text server-side, scores it, calls R `/advance`, commits the result/session state, and returns either the next question or final feedback.
   - Replaying an accepted `submission_id` returns the current session view without inserting another result.
@@ -172,7 +177,7 @@ This section is deliberately outside the phase-one MVP implementation and accept
 ### Player token
 
 - FastAPI issues a player JWT when a test is created or when authorized OR calls the player-token endpoint.
-- Require issuer `assessment-api`, audience `assessment-player`, subject, expiration, scope `test:play`, and a `test_id` claim. Do not include the learner's name, answer data, or other unnecessary personal information.
+- Require issuer `assessment-api`, audience `assessment-player`, subject, expiration, scope `tests:play`, and a `test_id` claim. Do not include the learner's name, answer data, or other unnecessary personal information.
 - On every player request, validate the token and require its `test_id` claim to equal the path `{test_id}` before assessment processing. A token for one test cannot start, read, or answer another test.
 - Make the player-token lifetime a single configurable setting long enough for the scheduled pilot and expected YG preparation delay. There is no refresh-token flow, student login, or per-token revocation list in this pilot; completed and failed session states still prevent further assessment progress.
 - Put the token in the URL fragment, for example `/test/{test_id}#token=...`, rather than a query parameter. React reads the fragment and sends the token in the `Authorization` header; fragments are not sent in HTTP requests or normal reverse-proxy access logs. Keep the token in memory or session storage, not persistent local storage.

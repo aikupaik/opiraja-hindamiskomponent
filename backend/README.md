@@ -85,6 +85,11 @@ the application is running.
 
 ## Public API
 
+The authoritative behavioral contract for the OR and player endpoints is
+[`docs/contracts/public-assessment-api.md`](../docs/contracts/public-assessment-api.md).
+FastAPI's generated OpenAPI schema is the machine-readable view of that
+contract. This section is an operational summary.
+
 All request DTOs reject unknown fields. Except for FastAPI's standard request
 validation response, application errors use:
 
@@ -239,8 +244,8 @@ Submits one answer:
 The response is the next `active` question or the `completed` feedback view.
 The submission UUID identifies the exact persisted question. Retrying an
 accepted submission returns the current persisted view without advancing R or
-incrementing item usage again. A stale UUID, a conflicting retry, or an option
-ID that does not belong to the current question returns `409`.
+incrementing item usage again. A stale UUID, a conflicting concurrent commit,
+or an option ID that does not belong to the current question returns `409`.
 
 ### Status codes
 

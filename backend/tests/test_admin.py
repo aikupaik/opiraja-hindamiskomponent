@@ -689,6 +689,5 @@ class _CreatingService:
         return CreateAssessmentResult(
             test_id=test_id,
             status=SessionStatus.ACTIVE,
-            player_url=f"/test/{test_id}",
             missing_nodes=(),
         )
