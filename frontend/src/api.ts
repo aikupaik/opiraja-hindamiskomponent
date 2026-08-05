@@ -1,4 +1,9 @@
 import {
+  ApiError,
+  createApiClient,
+} from '@opiraja/frontend-api'
+import {
+  expirePlayerCredential,
   permissiveCredentialSource,
   type CredentialSource,
 } from './credential'
@@ -51,6 +56,7 @@ export interface SubmissionPayload {
 export type PlayerApiErrorKind =
   | 'aborted'
   | 'network'
+  | 'unauthorized'
   | 'forbidden'
   | 'not_found'
   | 'conflict'
@@ -95,55 +101,36 @@ export interface PlayerApi {
 interface PlayerApiOptions {
   credentialSource?: CredentialSource
   fetcher?: typeof fetch
+  onAuthenticatedUnauthorized?: () => void
 }
 
 export function createPlayerApi(options: PlayerApiOptions = {}): PlayerApi {
   const credentialSource =
     options.credentialSource ?? permissiveCredentialSource
-  const fetcher = options.fetcher ?? fetch
+  const client = createApiClient({
+    credentialSource,
+    ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+    onAuthenticatedUnauthorized:
+      options.onAuthenticatedUnauthorized ?? expirePlayerCredential,
+  })
 
   async function request(
     path: string,
     signal: AbortSignal,
     payload?: SubmissionPayload,
   ): Promise<StartResult> {
-    const headers = new Headers({ Accept: 'application/json' })
-    const credential = credentialSource.getCredential()
-    if (credential) {
-      headers.set('Authorization', `Bearer ${credential}`)
-    }
-    if (payload) {
-      headers.set('Content-Type', 'application/json')
-    }
-
-    let response: Response
+    let response
     try {
-      response = await fetcher(path, {
+      response = await client.json<unknown>(path, {
         method: 'POST',
-        headers,
         signal,
-        ...(payload ? { body: JSON.stringify(payload) } : {}),
+        ...(payload ? { json: payload } : {}),
       })
     } catch (error) {
-      if (signal.aborted || isAbortError(error)) {
-        throw new PlayerApiError('aborted', { cause: error })
-      }
-      throw new PlayerApiError('network', { cause: error })
+      throw playerError(error)
     }
 
-    const requestId = response.headers.get('X-Request-ID')
-    let decoded: unknown
-    try {
-      decoded = await decodeJson(response, requestId)
-    } catch (error) {
-      if (!response.ok) {
-        throw decodeHttpError(response.status, requestId, null)
-      }
-      throw error
-    }
-    if (!response.ok) {
-      throw decodeHttpError(response.status, requestId, decoded)
-    }
+    const { data: decoded, requestId } = response
     if (response.status === 202) {
       if (!isPreparing(decoded)) {
         throw malformed(response.status, requestId)
@@ -182,33 +169,23 @@ export function createPlayerApi(options: PlayerApiOptions = {}): PlayerApi {
   }
 }
 
-async function decodeJson(
-  response: Response,
-  requestId: string | null,
-): Promise<unknown> {
-  const text = await response.text()
-  if (!text) {
-    throw malformed(response.status, requestId)
+function playerError(error: unknown): PlayerApiError {
+  if (!(error instanceof ApiError)) {
+    return new PlayerApiError('network', { cause: error })
   }
-  try {
-    return JSON.parse(text) as unknown
-  } catch (error) {
-    throw new PlayerApiError('malformed', {
-      status: response.status,
-      requestId,
+  if (error.kind !== 'http') {
+    return new PlayerApiError(error.kind, {
+      status: error.status ?? undefined,
+      requestId: error.requestId,
+      code: error.code,
       cause: error,
     })
   }
-}
-
-function decodeHttpError(
-  status: number,
-  requestId: string | null,
-  body: unknown,
-): PlayerApiError {
-  const code = applicationErrorCode(body)
+  const status = error.status
   const kind: PlayerApiErrorKind =
-    status === 403
+    status === 401
+      ? 'unauthorized'
+      : status === 403
       ? 'forbidden'
       : status === 404
         ? 'not_found'
@@ -219,15 +196,12 @@ function decodeHttpError(
             : status === 503
               ? 'unavailable'
               : 'http'
-  return new PlayerApiError(kind, { status, requestId, code })
-}
-
-function applicationErrorCode(value: unknown): string | null {
-  if (!isRecord(value) || !isRecord(value.error)) return null
-  return typeof value.error.code === 'string' &&
-    typeof value.error.message === 'string'
-    ? value.error.code
-    : null
+  return new PlayerApiError(kind, {
+    status: status ?? undefined,
+    requestId: error.requestId,
+    code: error.code,
+    cause: error,
+  })
 }
 
 function isPreparing(value: unknown): value is { status: 'preparing' } {
@@ -297,10 +271,6 @@ function isUuid(value: unknown): value is string {
       value,
     )
   )
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function malformed(status: number, requestId: string | null): PlayerApiError {

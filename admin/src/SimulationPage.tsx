@@ -4,7 +4,6 @@ import {
   apiResponse,
   errorMessage,
   isVisibleDiagnostic,
-  jsonBody,
   streamDiagnostics,
   type CourseChoice,
   type CreateTestPayload,
@@ -35,13 +34,11 @@ type ReportState =
   | { status: 'failed'; message: string }
 
 type Props = {
-  accessKey: string
   courses: CourseChoice[]
   maxGraphNodes: number
 }
 
 export function SimulationPage({
-  accessKey,
   courses,
   maxGraphNodes,
 }: Props) {
@@ -76,7 +73,7 @@ export function SimulationPage({
     setReportState({ status: 'loading' })
     void api<ExperimentReport>(
       `/api/v1/admin/experiments/${encodeURIComponent(experimentId)}/report`,
-      { key: accessKey },
+      {},
     )
       .then((report) => {
         if (current) setReportState({ status: 'loaded', report })
@@ -89,7 +86,7 @@ export function SimulationPage({
     return () => {
       current = false
     }
-  }, [accessKey, experimentId, runState])
+  }, [experimentId, runState])
 
   const visibleEvents = events.filter(isVisibleDiagnostic)
   const running = !['idle', 'completed', 'failed', 'cancelled'].includes(
@@ -110,7 +107,6 @@ export function SimulationPage({
     setRunState('creating')
 
     void streamDiagnostics(
-      accessKey,
       nextExperimentId,
       (diagnostic) =>
         setEvents((current) => [...current.slice(-499), diagnostic]),
@@ -121,11 +117,10 @@ export function SimulationPage({
 
     try {
       const created = await apiResponse<CreateTestResult>('/api/v1/tests', {
-        key: accessKey,
         experimentId: nextExperimentId,
         method: 'POST',
         signal: controller.signal,
-        body: jsonBody(payload),
+        json: payload,
       })
       setTestId(created.data.test_id)
       await pollStart(created.data.test_id, nextExperimentId, controller)
@@ -146,7 +141,6 @@ export function SimulationPage({
       const response = await apiResponse<PlayerView>(
         `/api/v1/player/tests/${currentTestId}/start`,
         {
-          key: accessKey,
           experimentId: currentExperimentId,
           method: 'POST',
           signal: controller.signal,
@@ -184,14 +178,13 @@ export function SimulationPage({
       const response = await apiResponse<PlayerView>(
         `/api/v1/player/tests/${testId}/answers`,
         {
-          key: accessKey,
           experimentId,
           method: 'POST',
           signal: controller.signal,
-          body: jsonBody({
+          json: {
             submission_id: view.question.submission_id,
             option_id: optionId,
-          }),
+          },
         },
       )
       setView(response.data)
@@ -338,7 +331,6 @@ export function SimulationPage({
                   setReportState({ status: 'loading' })
                   void api<ExperimentReport>(
                     `/api/v1/admin/experiments/${encodeURIComponent(experimentId)}/report`,
-                    { key: accessKey },
                   )
                     .then((report) =>
                       setReportState({ status: 'loaded', report }),

@@ -79,6 +79,11 @@ bootstrap boundary.
 
 ### Priority 3: Unify frontend API behavior
 
+**Status: complete (2026-08-05).** The admin and player now use a shared
+transport/error contract, centralized credential attachment, distinct login
+validation and authenticated-`401` paths, generic user-facing API errors with
+diagnostic request IDs, and independently verified container builds.
+
 1. Align the admin and player clients on one error-envelope decoder, request-ID
    handling, JSON/content-type behavior, abort handling, and typed response
    conventions. Share code only where it reduces duplication without coupling

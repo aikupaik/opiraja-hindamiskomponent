@@ -87,7 +87,43 @@ describe('admin shell', () => {
     await user.click(screen.getByRole('button', { name: 'Enter console' }))
 
     expect(
-      await screen.findByText('Valid admin credentials are required.'),
+      await screen.findByText('The credentials were not accepted.'),
+    ).toBeInTheDocument()
+    expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
+  })
+
+  it('locks an authenticated session on 401 without treating login as expired', async () => {
+    sessionStorage.setItem('assessment-admin-access-key', 'operator-key')
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => response(session))
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: { code: 'admin_unauthorized', message: 'Hidden detail' },
+            }),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Request-ID': 'expired-request',
+              },
+            },
+          ),
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(
+      await screen.findByText(
+        'Your session expired. Enter your credentials again.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Unlock Assessment Lab' }),
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
   })
@@ -121,7 +157,6 @@ it('validates rule JSON before sending a write', async () => {
 
   render(
     <MaterialsPage
-      accessKey="key"
       courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
       refreshCourses={() => Promise.resolve()}
     />,
@@ -176,7 +211,7 @@ it('opens item editing in safe copy mode with complete measurements', async () =
     ),
   )
   const user = userEvent.setup()
-  render(<ItemsPage accessKey="key" courses={[]} />)
+  render(<ItemsPage courses={[]} />)
 
   await user.type(screen.getByLabelText('Exact course code'), 'FÜS101')
   await user.click(screen.getByRole('button', { name: 'Search item bank' }))
@@ -195,7 +230,6 @@ it('adds an unselected relation with explicit prerequisite roles', async () => {
   const user = userEvent.setup()
   render(
     <SimulationPage
-      accessKey="key"
       courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
       maxGraphNodes={10}
     />,
@@ -297,7 +331,6 @@ it('preserves a cancelled experiment and automatically loads its partial report'
 
   render(
     <SimulationPage
-      accessKey="operator-key"
       courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
       maxGraphNodes={10}
     />,
@@ -389,7 +422,6 @@ it('automatically loads a completed report after the final answer', async () => 
 
   render(
     <SimulationPage
-      accessKey="operator-key"
       courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
       maxGraphNodes={10}
     />,

@@ -3,20 +3,17 @@ import type { FormEvent } from 'react'
 import {
   api,
   errorMessage,
-  jsonBody,
   type CourseChoice,
   type SourceMaterial,
   type YgRule,
 } from './api'
 
 type Props = {
-  accessKey: string
   courses: CourseChoice[]
   refreshCourses: () => Promise<void>
 }
 
 export function MaterialsPage({
-  accessKey,
   courses,
   refreshCourses,
 }: Props) {
@@ -59,11 +56,11 @@ export function MaterialsPage({
     Promise.all([
       api<SourceMaterial[]>(
         `/api/v1/admin/source-materials?course=${encodeURIComponent(selectedCourse)}`,
-        { key: accessKey, signal: controller.signal },
+        { signal: controller.signal },
       ),
       api<YgRule[]>(
         `/api/v1/admin/yg-rules?course=${encodeURIComponent(selectedCourse)}`,
-        { key: accessKey, signal: controller.signal },
+        { signal: controller.signal },
       ),
     ])
       .then(([nextMaterials, nextRules]) => {
@@ -73,17 +70,17 @@ export function MaterialsPage({
       .catch((caught: unknown) => setError(errorMessage(caught)))
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [accessKey, selectedCourse])
+  }, [selectedCourse])
 
   async function refreshLists(course: string) {
     const [nextMaterials, nextRules] = await Promise.all([
       api<SourceMaterial[]>(
         `/api/v1/admin/source-materials?course=${encodeURIComponent(course)}`,
-        { key: accessKey },
+        {},
       ),
       api<YgRule[]>(
         `/api/v1/admin/yg-rules?course=${encodeURIComponent(course)}`,
-        { key: accessKey },
+        {},
       ),
     ])
     setMaterials(nextMaterials)
@@ -109,7 +106,6 @@ export function MaterialsPage({
     setSavingMaterial(true)
     try {
       const saved = await api<SourceMaterial>('/api/v1/admin/source-materials', {
-        key: accessKey,
         method: 'POST',
         body: form,
       })
@@ -144,13 +140,12 @@ export function MaterialsPage({
     setSavingRule(true)
     try {
       await api<YgRule>('/api/v1/admin/yg-rules', {
-        key: accessKey,
         method: 'POST',
-        body: jsonBody({
+        json: {
           course: ruleCourse.trim(),
           description: ruleDescription.trim(),
           example,
-        }),
+        },
       })
       setRuleDescription('')
       setRuleExample('{}')
@@ -175,7 +170,7 @@ export function MaterialsPage({
     try {
       const complete = await api<SourceMaterial>(
         `/api/v1/admin/source-materials/${material.id}`,
-        { key: accessKey },
+        {},
       )
       setExpanded((current) => ({ ...current, [material.id]: complete }))
     } catch (caught) {

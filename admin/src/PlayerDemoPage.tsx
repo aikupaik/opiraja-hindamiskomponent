@@ -3,7 +3,6 @@ import {
   api,
   apiResponse,
   errorMessage,
-  jsonBody,
   type CourseChoice,
   type CreateTestPayload,
   type CreateTestResult,
@@ -22,14 +21,13 @@ type DemoState =
   | 'poll_error'
 
 type Props = {
-  accessKey: string
   courses: CourseChoice[]
   maxGraphNodes: number
 }
 
 const POLL_INTERVAL_MS = 3000
 
-export function PlayerDemoPage({ accessKey, courses, maxGraphNodes }: Props) {
+export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
   const [state, setState] = useState<DemoState>('idle')
   const [created, setCreated] = useState<CreateTestResult | null>(null)
   const [status, setStatus] = useState<TestStatus | null>(null)
@@ -65,10 +63,9 @@ export function PlayerDemoPage({ accessKey, courses, maxGraphNodes }: Props) {
     setCopyMessage('')
     try {
       const response = await apiResponse<CreateTestResult>('/api/v1/tests', {
-        key: accessKey,
         method: 'POST',
         signal: controller.signal,
-        body: jsonBody(payload),
+        json: payload,
       })
       if (controller.signal.aborted) return
       setCreated(response.data)
@@ -93,7 +90,7 @@ export function PlayerDemoPage({ accessKey, courses, maxGraphNodes }: Props) {
       try {
         const next = await api<TestStatus>(
           `/api/v1/tests/${encodeURIComponent(testId)}`,
-          { key: accessKey, signal: controller.signal },
+          { signal: controller.signal },
         )
         if (controller.signal.aborted) return
         setStatus(next)

@@ -1,3 +1,14 @@
+import {
+  ApiError,
+  createApiClient,
+  type ApiRequestOptions,
+  type ApiResponse,
+} from '@opiraja/frontend-api'
+import {
+  adminCredentialSource,
+  expireAdminCredential,
+} from './credential'
+
 export type AdminSession = {
   subject: string
   capabilities: string[]
@@ -146,84 +157,71 @@ export function isVisibleDiagnostic(event: DiagnosticEvent) {
   return event.type !== 'supabase_operation' && event.source !== 'supabase'
 }
 
-export class ApiError extends Error {
-  readonly status: number
-  readonly code: string
-
-  constructor(status: number, code: string, message: string) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.code = code
-  }
-}
-
-type RequestOptions = Omit<RequestInit, 'headers'> & {
-  key: string
+type RequestOptions = ApiRequestOptions & {
   experimentId?: string
-  headers?: HeadersInit
 }
 
-export type ApiResponse<T> = {
-  data: T
-  status: number
-  headers: Headers
-  requestId: string | null
-}
+export { ApiError }
+export type { ApiResponse }
+
+const client = createApiClient({
+  credentialSource: adminCredentialSource,
+  onAuthenticatedUnauthorized: expireAdminCredential,
+})
 
 export async function apiResponse<T>(
   path: string,
-  options: RequestOptions,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
+  const { experimentId, ...requestOptions } = options
   const headers = new Headers(options.headers)
-  headers.set('Authorization', `Bearer ${options.key}`)
-  if (options.experimentId) {
-    headers.set('X-Experiment-ID', options.experimentId)
+  if (experimentId) {
+    headers.set('X-Experiment-ID', experimentId)
   }
-  if (options.body && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json')
-  }
-  const response = await fetch(path, { ...options, headers })
-  const body: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    const envelope =
-      body && typeof body === 'object' && 'error' in body
-        ? (body as { error?: { code?: string; message?: string } }).error
-        : undefined
-    throw new ApiError(
-      response.status,
-      envelope?.code ?? 'request_failed',
-      envelope?.message ?? `Request failed (${response.status}).`,
-    )
-  }
-  return {
-    data: body as T,
-    status: response.status,
-    headers: response.headers,
-    requestId: response.headers.get('X-Request-ID'),
-  }
+  return client.json<T>(path, { ...requestOptions, headers })
 }
 
 export async function api<T>(
   path: string,
-  options: RequestOptions,
+  options: RequestOptions = {},
 ): Promise<T> {
   return (await apiResponse<T>(path, options)).data
 }
 
-export function jsonBody(value: unknown): string {
-  return JSON.stringify(value)
+export async function validateAdminCredential<T>(
+  path: string,
+  credential: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  return (
+    await client.json<T>(path, {
+      authentication: { mode: 'credential-validation', credential },
+      signal,
+    })
+  ).data
 }
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return ''
-  }
-  return error instanceof Error ? error.message : 'Unexpected request failure.'
+  if (error instanceof ApiError && error.kind === 'aborted') return ''
+  const reference =
+    error instanceof ApiError && error.requestId
+      ? ` Reference: ${error.requestId}.`
+      : ''
+  return error instanceof ApiError && error.kind === 'network'
+    ? `The service could not be reached.${reference}`
+    : `The request could not be completed.${reference}`
+}
+
+export function loginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.kind === 'aborted') return ''
+  const reference =
+    error instanceof ApiError && error.requestId
+      ? ` Reference: ${error.requestId}.`
+      : ''
+  return `The credentials were not accepted.${reference}`
 }
 
 export async function streamDiagnostics(
-  key: string,
   experimentId: string,
   onEvent: (event: DiagnosticEvent) => void,
   signal: AbortSignal,
@@ -231,21 +229,21 @@ export async function streamDiagnostics(
 ): Promise<void> {
   let lastSequence = afterSequence
   while (!signal.aborted) {
-    const response = await fetch(
+    const response = await client.request(
       `/api/v1/admin/experiments/${encodeURIComponent(experimentId)}/events?after=${lastSequence}`,
       {
-        headers: {
-          Authorization: `Bearer ${key}`,
-          Accept: 'text/event-stream',
-        },
+        headers: { Accept: 'text/event-stream' },
         signal,
       },
     )
-    if (!response.ok || !response.body) {
+    if (!response.body) {
       throw new ApiError(
-        response.status,
-        'diagnostic_stream_failed',
-        'Diagnostic stream could not be opened.',
+        'malformed',
+        {
+          status: response.status,
+          requestId: response.headers.get('X-Request-ID'),
+          code: 'diagnostic_stream_failed',
+        },
       )
     }
     const reader = response.body.getReader()

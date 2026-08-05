@@ -3,28 +3,46 @@ import type { FormEvent } from 'react'
 import {
   api,
   errorMessage,
+  loginErrorMessage,
+  validateAdminCredential,
   type AdminSession,
   type CourseChoice,
 } from './api'
+import {
+  ADMIN_CREDENTIAL_STORAGE_KEY,
+  adminCredentialSource,
+  clearAdminCredential,
+  storeAdminCredential,
+  subscribeToAdminCredentialExpiry,
+} from './credential'
 import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
 import { PlayerDemoPage } from './PlayerDemoPage'
 import { SimulationPage } from './SimulationPage'
 import './App.css'
 
-const STORAGE_KEY = 'assessment-admin-access-key'
 type Page = 'materials' | 'items' | 'simulation' | 'player-demo'
 
 function App() {
-  const [accessKey, setAccessKey] = useState(
-    () => sessionStorage.getItem(STORAGE_KEY) ?? '',
-  )
   const [session, setSession] = useState<AdminSession | null>(null)
-  const [unlocking, setUnlocking] = useState(Boolean(accessKey))
+  const [unlocking, setUnlocking] = useState(
+    () => adminCredentialSource.getCredential() !== null,
+  )
   const [unlockError, setUnlockError] = useState('')
   const [page, setPage] = useState<Page>(readPage)
   const [courses, setCourses] = useState<CourseChoice[]>([])
   const [courseError, setCourseError] = useState('')
+
+  useEffect(
+    () =>
+      subscribeToAdminCredentialExpiry(() => {
+        setSession(null)
+        setCourses([])
+        setUnlocking(false)
+        setUnlockError('Your session expired. Enter your credentials again.')
+      }),
+    [],
+  )
 
   useEffect(() => {
     const onHashChange = () => setPage(readPage())
@@ -34,27 +52,26 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY)
+    const stored = sessionStorage.getItem(ADMIN_CREDENTIAL_STORAGE_KEY)
     if (!stored) {
       setUnlocking(false)
       return
     }
     const controller = new AbortController()
     setUnlocking(true)
-    api<AdminSession>('/api/v1/admin/session', {
-      key: stored,
-      signal: controller.signal,
-    })
+    validateAdminCredential<AdminSession>(
+      '/api/v1/admin/session',
+      stored,
+      controller.signal,
+    )
       .then((validated) => {
-        setAccessKey(stored)
         setSession(validated)
         setUnlockError('')
       })
       .catch((caught: unknown) => {
-        sessionStorage.removeItem(STORAGE_KEY)
-        setAccessKey('')
+        clearAdminCredential()
         setSession(null)
-        setUnlockError(errorMessage(caught))
+        setUnlockError(loginErrorMessage(caught))
       })
       .finally(() => setUnlocking(false))
     return () => controller.abort()
@@ -68,27 +85,26 @@ function App() {
     const controller = new AbortController()
     setCourseError('')
     api<CourseChoice[]>('/api/v1/admin/courses', {
-      key: accessKey,
       signal: controller.signal,
     })
       .then(setCourses)
       .catch((caught: unknown) => setCourseError(errorMessage(caught)))
     return () => controller.abort()
-  }, [accessKey, session])
+  }, [session])
 
   async function unlock(key: string) {
     setUnlocking(true)
     setUnlockError('')
     try {
-      const validated = await api<AdminSession>('/api/v1/admin/session', {
+      const validated = await validateAdminCredential<AdminSession>(
+        '/api/v1/admin/session',
         key,
-      })
-      sessionStorage.setItem(STORAGE_KEY, key)
-      setAccessKey(key)
+      )
+      storeAdminCredential(key)
       setSession(validated)
     } catch (caught) {
-      sessionStorage.removeItem(STORAGE_KEY)
-      setUnlockError(errorMessage(caught))
+      clearAdminCredential()
+      setUnlockError(loginErrorMessage(caught))
       setSession(null)
     } finally {
       setUnlocking(false)
@@ -96,17 +112,14 @@ function App() {
   }
 
   function lock() {
-    sessionStorage.removeItem(STORAGE_KEY)
-    setAccessKey('')
+    clearAdminCredential()
     setSession(null)
     setCourses([])
     setUnlockError('')
   }
 
   async function refreshCourses() {
-    const next = await api<CourseChoice[]>('/api/v1/admin/courses', {
-      key: accessKey,
-    })
+    const next = await api<CourseChoice[]>('/api/v1/admin/courses')
     setCourses(next)
   }
 
@@ -157,24 +170,21 @@ function App() {
       {courseError && <div className="global-error">{courseError}</div>}
       {page === 'materials' && (
         <MaterialsPage
-          accessKey={accessKey}
           courses={courses}
           refreshCourses={refreshCourses}
         />
       )}
       {page === 'items' && (
-        <ItemsPage accessKey={accessKey} courses={courses} />
+        <ItemsPage courses={courses} />
       )}
       {page === 'simulation' && (
         <SimulationPage
-          accessKey={accessKey}
           courses={courses}
           maxGraphNodes={session.max_graph_nodes}
         />
       )}
       {page === 'player-demo' && (
         <PlayerDemoPage
-          accessKey={accessKey}
           courses={courses}
           maxGraphNodes={session.max_graph_nodes}
         />

@@ -1,17 +1,18 @@
 FROM node:24.13.1-alpine3.23 AS build
 
-WORKDIR /build
+WORKDIR /build/frontend
 
-COPY package.json package-lock.json ./
+COPY shared/frontend-api /build/shared/frontend-api
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend/ ./
 RUN npm run build
 
 FROM nginx:1.28.3-alpine3.23
 
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY --from=build --chown=nginx:nginx /build/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/nginx.conf
+COPY --from=build --chown=nginx:nginx /build/frontend/dist /usr/share/nginx/html
 
 RUN nginx -t -c /etc/nginx/nginx.conf
 

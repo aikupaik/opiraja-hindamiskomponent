@@ -208,4 +208,28 @@ describe('player API client', () => {
       kind: 'aborted',
     })
   })
+
+  it('notifies the expired-link path only for an authenticated 401', async () => {
+    const unauthorized = vi.fn()
+    const api = createPlayerApi({
+      credentialSource: { getCredential: () => 'player-token' },
+      onAuthenticatedUnauthorized: unauthorized,
+      fetcher: vi.fn().mockResolvedValue(
+        jsonResponse(
+          { error: { code: 'invalid_token', message: 'Hidden detail' } },
+          401,
+          { 'X-Request-ID': 'expired-player' },
+        ),
+      ),
+    })
+
+    await expect(
+      api.start(testId, new AbortController().signal),
+    ).rejects.toMatchObject({
+      kind: 'unauthorized',
+      requestId: 'expired-player',
+      code: 'invalid_token',
+    })
+    expect(unauthorized).toHaveBeenCalledTimes(1)
+  })
 })

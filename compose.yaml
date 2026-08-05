@@ -4,7 +4,8 @@ services:
   web:
     image: opiraja-assessment-web:local
     build:
-      context: ./admin
+      context: .
+      dockerfile: admin/Dockerfile
     restart: unless-stopped
     init: true
     read_only: true
@@ -45,7 +46,8 @@ services:
   player:
     image: opiraja-assessment-player:local
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     init: true
     read_only: true

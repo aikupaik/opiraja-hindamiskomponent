@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import {
   api,
   errorMessage,
-  jsonBody,
   type AdminItem,
   type CourseChoice,
   type EditableItem,
@@ -16,11 +15,10 @@ const PAGE_SIZE = 20
 const statuses: ItemStatus[] = ['draft', 'usable', 'review', 'archived']
 
 type Props = {
-  accessKey: string
   courses: CourseChoice[]
 }
 
-export function ItemsPage({ accessKey, courses }: Props) {
+export function ItemsPage({ courses }: Props) {
   const [courseInput, setCourseInput] = useState('')
   const [searchedCourse, setSearchedCourse] = useState('')
   const [page, setPage] = useState<ItemPage | null>(null)
@@ -41,13 +39,13 @@ export function ItemsPage({ accessKey, courses }: Props) {
     setError('')
     api<ItemPage>(
       `/api/v1/admin/items?course=${encodeURIComponent(searchedCourse)}&limit=${PAGE_SIZE}&offset=${offset}`,
-      { key: accessKey, signal: controller.signal },
+      { signal: controller.signal },
     )
       .then(setPage)
       .catch((caught: unknown) => setError(errorMessage(caught)))
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [accessKey, offset, searchedCourse])
+  }, [offset, searchedCourse])
 
   function search(event: FormEvent) {
     event.preventDefault()
@@ -65,7 +63,7 @@ export function ItemsPage({ accessKey, courses }: Props) {
     if (!searchedCourse) return
     const next = await api<ItemPage>(
       `/api/v1/admin/items?course=${encodeURIComponent(searchedCourse)}&limit=${PAGE_SIZE}&offset=${offset}`,
-      { key: accessKey },
+      {},
     )
     setPage(next)
   }
@@ -121,9 +119,8 @@ export function ItemsPage({ accessKey, courses }: Props) {
       const saved = await api<AdminItem>(
         `/api/v1/admin/items/${editing.yp_id}`,
         {
-          key: accessKey,
           method: 'PUT',
-          body: jsonBody({ ...draft, mode }),
+          json: { ...draft, mode },
         },
       )
       setNewItemId(mode === 'create_copy' ? saved.yp_id : null)

@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@opiraja/frontend-api": "file:../shared/frontend-api",
     "oxlint-tsgolint": "^7.0.2001",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

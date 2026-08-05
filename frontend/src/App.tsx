@@ -7,6 +7,7 @@ import {
   type PlayerQuestion,
   type SubmissionPayload,
 } from './api'
+import { subscribeToPlayerCredentialExpiry } from './credential'
 import { parseTestPath } from './path'
 import './App.css'
 
@@ -69,6 +70,18 @@ function TestPlayer({
     kind: 'preparing',
     requestKey: 0,
   })
+
+  useEffect(
+    () =>
+      subscribeToPlayerCredentialExpiry(() => {
+        setState({
+          kind: 'failed',
+          message: 'Testi link on aegunud.',
+          requestId: null,
+        })
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (state.kind !== 'preparing') return
@@ -292,7 +305,7 @@ function QuestionView({
 function Feedback({ feedback }: { feedback: PlayerFeedback }) {
   return (
     <div className="feedback">
-      <p className="eyebrow">Test on lõpetatud</p>
+      <p className="eyebrow">Test on lõpetatud, võid selle akna sulgeda.</p>
       <h1>Sinu tagasiside</h1>
       {feedback.summary !== null && <p className="summary">{feedback.summary}</p>}
       {feedback.confidence_limited && (
@@ -377,6 +390,9 @@ function FailurePanel({
 
 function startFailure(error: unknown): Extract<PlayerState, { kind: 'failed' }> {
   const apiError = asApiError(error)
+  if (apiError?.kind === 'unauthorized') {
+    return failed('Testi link on aegunud.', apiError)
+  }
   if (apiError?.kind === 'forbidden') {
     return failed('Seda testi ei saa avada.', apiError)
   }
@@ -401,6 +417,9 @@ function submissionFailure(
   state: Extract<PlayerState, { kind: 'submitting' }>,
 ): Extract<PlayerState, { kind: 'failed' }> {
   const apiError = asApiError(error)
+  if (apiError?.kind === 'unauthorized') {
+    return failed('Testi link on aegunud.', apiError)
+  }
   if (apiError?.kind === 'conflict') {
     return failed('Testi olek on muutunud.', apiError, {
       kind: 'reload_start',

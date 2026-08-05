@@ -63,7 +63,7 @@ describe('player demo', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <PlayerDemoPage accessKey="operator-key" courses={course} maxGraphNodes={10} />,
+      <PlayerDemoPage courses={course} maxGraphNodes={10} />,
     )
     submitDefinition()
 
@@ -116,7 +116,7 @@ describe('player demo', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const rendered = render(
-      <PlayerDemoPage accessKey="operator-key" courses={course} maxGraphNodes={10} />,
+      <PlayerDemoPage courses={course} maxGraphNodes={10} />,
     )
     submitDefinition()
     await act(async () => Promise.resolve())
