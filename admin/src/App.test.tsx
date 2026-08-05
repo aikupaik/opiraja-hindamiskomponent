@@ -91,6 +91,27 @@ describe('admin shell', () => {
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
   })
+
+  it('routes authenticated operators to the Player demo tab', async () => {
+    sessionStorage.setItem('assessment-admin-access-key', 'operator-key')
+    window.location.hash = '#/player-demo'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn()
+        .mockImplementationOnce(() => response(session))
+        .mockImplementationOnce(() => response([])),
+    )
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { name: 'Test player demo' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Player demo' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
 })
 
 it('validates rule JSON before sending a write', async () => {

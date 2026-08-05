@@ -112,6 +112,25 @@ export type CreateTestResult = {
   missing_nodes: string[]
 }
 
+export type TestRelation = { from: string; to: string }
+
+export type CreateTestPayload = {
+  user_id: string
+  learning_path_id: string
+  course: string
+  goal: 'real_test' | 'trial_run'
+  method: 'kst'
+  cognitive_level: 'mõistab'
+  nodes: string[]
+  relations: TestRelation[]
+}
+
+export type TestStatus =
+  | { status: 'preparing' }
+  | { status: 'active' }
+  | { status: 'completed'; feedback: Feedback }
+  | { status: 'failed' }
+
 export type DiagnosticEvent = {
   sequence: number
   timestamp: string

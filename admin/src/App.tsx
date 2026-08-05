@@ -8,11 +8,12 @@ import {
 } from './api'
 import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
+import { PlayerDemoPage } from './PlayerDemoPage'
 import { SimulationPage } from './SimulationPage'
 import './App.css'
 
 const STORAGE_KEY = 'assessment-admin-access-key'
-type Page = 'materials' | 'items' | 'simulation'
+type Page = 'materials' | 'items' | 'simulation' | 'player-demo'
 
 function App() {
   const [accessKey, setAccessKey] = useState(
@@ -139,6 +140,9 @@ function App() {
           <NavLink page="simulation" current={page}>
             Simulation
           </NavLink>
+          <NavLink page="player-demo" current={page}>
+            Player demo
+          </NavLink>
         </nav>
         <div className="operator">
           <span>
@@ -163,6 +167,13 @@ function App() {
       )}
       {page === 'simulation' && (
         <SimulationPage
+          accessKey={accessKey}
+          courses={courses}
+          maxGraphNodes={session.max_graph_nodes}
+        />
+      )}
+      {page === 'player-demo' && (
+        <PlayerDemoPage
           accessKey={accessKey}
           courses={courses}
           maxGraphNodes={session.max_graph_nodes}
@@ -247,7 +258,9 @@ function NavLink({
 
 function readPage(): Page {
   const value = window.location.hash.replace(/^#\/?/, '')
-  return value === 'items' || value === 'simulation' ? value : 'materials'
+  return value === 'items' || value === 'simulation' || value === 'player-demo'
+    ? value
+    : 'materials'
 }
 
 export default App

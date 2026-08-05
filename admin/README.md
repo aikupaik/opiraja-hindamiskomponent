@@ -6,8 +6,11 @@ management, item-bank auditing, and manual assessment simulation.
 It uses plain React state, CSS, and hash navigation:
 
 - `#/materials` manages source materials and stored YG rules;
-- `#/items` audits and revises exact-course item inventory; and
-- `#/simulation` drives the existing OR/player API with scoped diagnostics.
+- `#/items` audits and revises exact-course item inventory;
+- `#/simulation` drives the existing OR/player API with scoped diagnostics; and
+- `#/player-demo` creates an assessment as an OR client, exposes the returned
+  player link, and monitors the read-only OR status endpoint while the learner
+  completes the test in another browser tab.
 
 ## Local development
 
@@ -49,3 +52,12 @@ abort pending requests, polling, and event streams.
 Experiment diagnostics are bounded, process-local, and ephemeral. They do not
 survive a backend restart, expire after 60 minutes by default, and are
 intended for the current single-process experimentation environment.
+
+The Player demo page deliberately does not call player endpoints or open an
+experiment diagnostic stream. It creates through `POST /api/v1/tests`, opens
+the returned same-origin player URL only after an operator action, and polls
+`GET /api/v1/tests/{test_id}` every three seconds until completion or failure.
+Monitoring is page-local and stops on navigation or reload; the created test
+and player link remain valid. During the current permissive phase the admin key
+authorizes the OR calls, while the unlisted player URL itself is not yet secured
+by the future player-token contract.

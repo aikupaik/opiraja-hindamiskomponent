@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
 import {
   api,
   apiResponse,
@@ -8,10 +7,12 @@ import {
   jsonBody,
   streamDiagnostics,
   type CourseChoice,
+  type CreateTestPayload,
   type CreateTestResult,
   type DiagnosticEvent,
   type PlayerView,
 } from './api'
+import { TestDefinitionForm } from './TestDefinitionForm'
 import {
   downloadReportHtml,
   downloadReportJson,
@@ -19,7 +20,6 @@ import {
 } from './report'
 import { createUuid } from './uuid'
 
-type Relation = { from: string; to: string }
 type RunState =
   | 'idle'
   | 'creating'
@@ -45,12 +45,6 @@ export function SimulationPage({
   courses,
   maxGraphNodes,
 }: Props) {
-  const [userId, setUserId] = useState('admin-simulation-user')
-  const [learningPathId, setLearningPathId] = useState('manual-experiment')
-  const [course, setCourse] = useState(courses[0]?.value ?? '')
-  const [goal, setGoal] = useState<'real_test' | 'trial_run'>('trial_run')
-  const [nodes, setNodes] = useState<string[]>([''])
-  const [relations, setRelations] = useState<Relation[]>([])
   const [runState, setRunState] = useState<RunState>('idle')
   const [experimentId, setExperimentId] = useState<string | null>(null)
   const [testId, setTestId] = useState<string | null>(null)
@@ -61,10 +55,6 @@ export function SimulationPage({
   const [submitting, setSubmitting] = useState(false)
   const controllerRef = useRef<AbortController | null>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!course && courses[0]) setCourse(courses[0].value)
-  }, [course, courses])
 
   useEffect(() => {
     terminalRef.current?.scrollTo({
@@ -101,66 +91,13 @@ export function SimulationPage({
     }
   }, [accessKey, experimentId, runState])
 
-  const enteredNodes = nodes.map((node) => node.trim()).filter(Boolean)
   const visibleEvents = events.filter(isVisibleDiagnostic)
   const running = !['idle', 'completed', 'failed', 'cancelled'].includes(
     runState,
   )
 
-  function updateNode(index: number, value: string) {
-    const next = nodes.map((node, nodeIndex) =>
-      nodeIndex === index ? value : node,
-    )
-    setNodes(next)
-    const valid = new Set(next.map((node) => node.trim()).filter(Boolean))
-    setRelations((current) =>
-      current.filter(
-        (relation) => valid.has(relation.from) && valid.has(relation.to),
-      ),
-    )
-  }
-
-  function removeNode(index: number) {
-    if (nodes.length === 1) return
-    const removed = nodes[index]?.trim()
-    setNodes(nodes.filter((_, nodeIndex) => nodeIndex !== index))
-    setRelations((current) =>
-      current.filter(
-        (relation) => relation.from !== removed && relation.to !== removed,
-      ),
-    )
-  }
-
-  async function runExperiment(event: FormEvent) {
-    event.preventDefault()
+  async function runExperiment(payload: CreateTestPayload) {
     setError('')
-    const normalizedNodes = nodes.map((node) => node.trim()).filter(Boolean)
-    if (!userId.trim() || !learningPathId.trim() || !course) {
-      setError('User, learning path, and course are required.')
-      return
-    }
-    if (
-      normalizedNodes.length === 0 ||
-      normalizedNodes.length > maxGraphNodes ||
-      new Set(normalizedNodes).size !== normalizedNodes.length
-    ) {
-      setError(
-        `Enter 1–${maxGraphNodes} unique, nonblank graph nodes.`,
-      )
-      return
-    }
-    if (
-      relations.some(
-        (relation) =>
-          !normalizedNodes.includes(relation.from) ||
-          !normalizedNodes.includes(relation.to) ||
-          relation.from === relation.to,
-      )
-    ) {
-      setError('Every relation needs two different entered nodes.')
-      return
-    }
-
     controllerRef.current?.abort()
     const controller = new AbortController()
     controllerRef.current = controller
@@ -188,16 +125,7 @@ export function SimulationPage({
         experimentId: nextExperimentId,
         method: 'POST',
         signal: controller.signal,
-        body: jsonBody({
-          user_id: userId.trim(),
-          learning_path_id: learningPathId.trim(),
-          course,
-          goal,
-          method: 'kst',
-          cognitive_level: 'mõistab',
-          nodes: normalizedNodes,
-          relations,
-        }),
+        body: jsonBody(payload),
       })
       setTestId(created.data.test_id)
       await pollStart(created.data.test_id, nextExperimentId, controller)
@@ -318,205 +246,24 @@ export function SimulationPage({
 
       <div className="simulation-layout">
         <section className="simulation-main">
-          <form className="panel simulation-form" onSubmit={runExperiment}>
-            <div className="section-heading">
-              <div>
-                <h2>Test definition</h2>
-                <p>Method kst · cognitive level mõistab</p>
-              </div>
-              <span className={`run-state state-${runState}`}>{runState}</span>
-            </div>
-            <div className="field-row">
-              <label>
-                <span>User ID</span>
-                <input
-                  value={userId}
-                  onChange={(event) => setUserId(event.target.value)}
-                  disabled={running}
-                />
-              </label>
-              <label>
-                <span>Learning path ID</span>
-                <input
-                  value={learningPathId}
-                  onChange={(event) => setLearningPathId(event.target.value)}
-                  disabled={running}
-                />
-              </label>
-            </div>
-            <div className="field-row">
-              <label>
-                <span>Course</span>
-                <select
-                  value={course}
-                  onChange={(event) => setCourse(event.target.value)}
-                  disabled={running}
-                >
-                  <option value="">Select course</option>
-                  {courses.map((choice) => (
-                    <option key={choice.value} value={choice.value}>
-                      {choice.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Goal</span>
-                <select
-                  value={goal}
-                  onChange={(event) =>
-                    setGoal(event.target.value as 'real_test' | 'trial_run')
-                  }
-                  disabled={running}
-                >
-                  <option value="real_test">Real test</option>
-                  <option value="trial_run">Trial run</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="dynamic-section">
-              <div className="dynamic-heading">
-                <div>
-                  <h3>Graph nodes</h3>
-                  <p>
-                    {enteredNodes.length}/{maxGraphNodes} entered
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="quiet small"
-                  disabled={running || nodes.length >= maxGraphNodes}
-                  onClick={() => setNodes([...nodes, ''])}
-                >
-                  + Add node
-                </button>
-              </div>
-              {nodes.map((node, index) => (
-                <div className="dynamic-row" key={index}>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <input
-                    value={node}
-                    onChange={(event) => updateNode(index, event.target.value)}
-                    placeholder="Learning outcome / graph node"
-                    disabled={running}
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => removeNode(index)}
-                    disabled={running || nodes.length === 1}
-                    aria-label={`Remove node ${index + 1}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="dynamic-section">
-              <div className="dynamic-heading">
-                <div>
-                  <h3>Prerequisite relations</h3>
-                  <p>
-                    The parent prerequisite must be learned before the child.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="quiet small"
-                  disabled={running || enteredNodes.length < 2}
-                  onClick={() =>
-                    setRelations([
-                      ...relations,
-                      {
-                        from: '',
-                        to: '',
-                      },
-                    ])
-                  }
-                >
-                  + Add relation
-                </button>
-              </div>
-              {relations.length === 0 ? (
-                <div className="inline-empty">No relations defined.</div>
-              ) : (
-                relations.map((relation, index) => (
-                  <div className="relation-row" key={index}>
-                    <label>
-                      <span>Prerequisite node (parent)</span>
-                      <select
-                        value={relation.from}
-                        disabled={running}
-                        onChange={(event) =>
-                          setRelations(
-                            relations.map((current, relationIndex) =>
-                              relationIndex === index
-                                ? { ...current, from: event.target.value }
-                                : current,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="">Select prerequisite</option>
-                        {enteredNodes.map((node) => (
-                          <option key={node}>{node}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <span>precedes →</span>
-                    <label>
-                      <span>Dependent node (child)</span>
-                      <select
-                        value={relation.to}
-                        disabled={running}
-                        onChange={(event) =>
-                          setRelations(
-                            relations.map((current, relationIndex) =>
-                              relationIndex === index
-                                ? { ...current, to: event.target.value }
-                                : current,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="">Select dependent node</option>
-                        {enteredNodes.map((node) => (
-                          <option key={node}>{node}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      disabled={running}
-                      onClick={() =>
-                        setRelations(
-                          relations.filter(
-                            (_, relationIndex) => relationIndex !== index,
-                          ),
-                        )
-                      }
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="simulation-actions">
-              <button className="primary" disabled={running}>
-                {runState === 'idle' ? 'Run experiment' : 'Run again'}
-              </button>
+          <TestDefinitionForm
+            courses={courses}
+            maxGraphNodes={maxGraphNodes}
+            disabled={running}
+            submitLabel={runState === 'idle' ? 'Run experiment' : 'Run again'}
+            status={<span className={`run-state state-${runState}`}>{runState}</span>}
+            onSubmit={runExperiment}
+            actions={
+              <>
               <button type="button" className="quiet" onClick={cancel} disabled={!running}>
                 Cancel
               </button>
               <button type="button" className="quiet" onClick={reset}>
                 Reset
               </button>
-            </div>
-          </form>
+              </>
+            }
+          />
 
           {(runState !== 'idle' || view) && (
             <section className="panel player-card">

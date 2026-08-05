@@ -817,6 +817,13 @@
   color: #67645c;
 }
 
+.state-paused,
+.state-poll_error {
+  border-color: #c9c6bc;
+  background: #eeece6;
+  color: #67645c;
+}
+
 .dynamic-section {
   margin-top: 24px;
   padding-top: 20px;
@@ -877,6 +884,76 @@
   display: flex;
   gap: 9px;
   margin-top: 22px;
+}
+
+.player-demo-page > .simulation-form {
+  margin-bottom: 18px;
+}
+
+.player-launch-card {
+  overflow: hidden;
+}
+
+.player-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+}
+
+.player-link-row > a:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.76rem;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.copy-status {
+  margin: -12px 24px 18px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.player-launch-card > .notice {
+  margin: 0 24px 24px;
+}
+
+.player-demo-feedback {
+  border-top: 1px solid var(--line);
+}
+
+.player-demo-feedback section {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.player-demo-feedback h4,
+.player-demo-feedback section p,
+.player-demo-feedback ul {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.player-demo-feedback h4 {
+  color: var(--muted);
+  font-size: 0.67rem;
+}
+
+.player-demo-feedback ul {
+  padding-left: 18px;
 }
 
 .player-card {
@@ -1430,6 +1507,15 @@
   .field-row,
   .editor-grid,
   .mode-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .player-link-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .player-demo-feedback section {
     grid-template-columns: 1fr;
   }
 
