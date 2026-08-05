@@ -159,46 +159,106 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 
 This section is deliberately outside the phase-one MVP implementation and acceptance scope, but it is mandatory before exposing the application for a student pilot. It adds bearer authorization without adding student accounts, login screens, Supabase Auth, RLS changes, or authorization between FastAPI and the internal R service.
 
+The exact implementation contract is frozen in
+[`docs/plans/active/jwt-authorization-plan.md`](plans/active/jwt-authorization-plan.md).
+This section summarizes that contract and must not be used to introduce a
+different token profile, endpoint shape, or operational policy.
+
 ### Authorization model
 
-- Replace the permissive phase-one authorization dependency with a JWT-validating implementation while preserving the same `AuthContext` contract and route handlers. FastAPI router/security dependencies enforce route-level scopes. [FastAPI security dependency documentation](https://fastapi.tiangolo.com/reference/dependencies/#fastapisecurity)
-- Treat OR and player credentials as separate token profiles with separate audiences and signing configuration. An OR credential must never authorize a player route, and a player credential must never authorize an OR route.
+- Replace the permissive phase-one authorization dependencies with centralized
+  PyJWT validation while preserving `AuthContext`, route handlers, and the
+  explicit admin-simulation exceptions. Pin `HS256`, require each profile's
+  exact claims and types, and use 30 seconds of leeway.
+- Treat OR, player, and admin credentials as distinct profiles with audiences
+  `assessment-api`, `assessment-player`, and `assessment-admin`. A credential
+  from one profile never inherits another profile's grants.
 - Treat `test_id` and `submission_id` as identifiers, not credentials. `submission_id` remains an idempotency token only.
-- Return `401` for missing, expired, or invalid credentials and `403` for a valid credential that lacks the required scope or is bound to a different test.
+- Return the frozen generic `401 invalid_token` envelope and Bearer challenge
+  for missing, expired, or invalid bearer credentials. Return the existing
+  `403 forbidden` envelope for a valid credential that has the wrong profile,
+  lacks the required scope, or is bound to a different test.
 
 ### OR service token
 
 - The external õpirada/OR service sends `Authorization: Bearer <token>`.
-- Require a trusted OR issuer, audience `assessment-api`, a service subject, expiration, and the relevant scopes: `tests:create`, `tests:read`, and `tests:launch`.
+- OR signs with a distinct shared `OR_JWT_SECRET`. Require
+  `iss=<OR_JWT_ISSUER>`, string audience `assessment-api`, a nonblank service
+  subject, canonical scopes, integer `iat`/`exp`, and a maximum five-minute
+  lifetime.
 - `POST /api/v1/tests` requires `tests:create`; `GET /api/v1/tests/{test_id}` requires `tests:read`.
-- Add `POST /api/v1/tests/{test_id}/player-token`, requiring `tests:launch`, so OR can obtain a fresh test-bound player link when the original token has expired. This endpoint creates no new assessment session and does not change test state.
-- Prefer asymmetric signing when OR can provide a stable public verification key: OR retains its private key and FastAPI receives only the public key. If OR cannot issue JWTs for the first pilot, a configured high-entropy bearer-key validator may implement the same `AuthContext` temporarily without changing routes or services.
+- `POST /api/v1/tests/{test_id}/player-token` requires `tests:launch` and has no
+  admin-simulation exception. Any trusted OR subject with that grant may issue
+  a fresh link for a preparing, active, or completed test. Unknown tests return
+  `404`; failed or unsupported states return `409`. Issuance creates no session
+  and does not change assessment state.
 
 ### Player token
 
-- FastAPI issues a player JWT when a test is created or when authorized OR calls the player-token endpoint.
-- Require issuer `assessment-api`, audience `assessment-player`, subject, expiration, scope `tests:play`, and a `test_id` claim. Do not include the learner's name, answer data, or other unnecessary personal information.
+- FastAPI signs player JWTs with its distinct `API_JWT_SECRET` when a test is
+  created or authorized OR calls the player-token endpoint. Each issuance is
+  fresh and the default lifetime is eight hours.
+- Require issuer `assessment-api`, audience `assessment-player`, subject
+  `player:<test_id>`, exact scope `tests:play`, integer `iat`/`exp`, UUID `jti`,
+  and UUID `test_id`. Do not include learner identity, answers, or other
+  unnecessary personal information.
 - On every player request, validate the token and require its `test_id` claim to equal the path `{test_id}` before assessment processing. A token for one test cannot start, read, or answer another test.
-- Make the player-token lifetime a single configurable setting long enough for the scheduled pilot and expected YG preparation delay. There is no refresh-token flow, student login, or per-token revocation list in this pilot; completed and failed session states still prevent further assessment progress.
-- Put the token in the URL fragment, for example `/test/{test_id}#token=...`, rather than a query parameter. React reads the fragment and sends the token in the `Authorization` header; fragments are not sent in HTTP requests or normal reverse-proxy access logs. Keep the token in memory or session storage, not persistent local storage.
+- Return an absolute link built from validated `PLAYER_APP_URL` as
+  `<origin>/test/{test_id}#token=<jwt>`. The setting is an HTTPS origin with no
+  user info, non-root path, query, or fragment; HTTP is allowed only for exact
+  loopback development hosts.
+- React moves the fragment token into test-specific `sessionStorage`, removes
+  the fragment with `history.replaceState`, and sends the token through the
+  centralized credential source. It clears the token on authenticated `401`.
+  There is no student login, refresh token, persistent local storage, or
+  per-token revocation list.
+
+### Admin token
+
+- `POST /api/v1/admin/login` is the only route that accepts
+  `ADMIN_ACCESS_KEY`. It returns an eight-hour API-signed admin JWT and the
+  existing session details, uses the same generic `401` for invalid and
+  disabled configuration, and marks every response `Cache-Control: no-store`.
+- Admin JWTs use issuer `assessment-api`, audience `assessment-admin`, subject
+  `development-admin`, UUID `jti`, integer `iat`/`exp`, and exactly the four
+  existing `admin:*` grants. The browser stores only this JWT in
+  `sessionStorage`; manual lock or authenticated `401` clears it.
 
 ### Token validation and transport
 
-- Pin one JWT library when this phase is implemented. Configure a fixed allowed algorithm rather than trusting the token header, and require and validate `iss`, `aud`, `exp`, and `sub`; validate scopes and player `test_id` separately. Allow only a small configured clock-skew leeway. [PyJWT usage documentation](https://pyjwt.readthedocs.io/en/stable/usage.html)
-- Keep OR verification keys, player signing keys, expected issuers/audiences, and token lifetimes in backend environment settings. Never send signing material to React or commit it to the repository.
+- Require distinct secrets of at least 32 characters and reject equal OR/API
+  secrets. Keep signing material, the expected OR issuer, and token lifetimes
+  in backend settings; never send signing material to React or commit it.
+- Successful admin login exposes a JWT only as `access_token`. Successful test
+  creation and player-token issuance expose a JWT only inside `player_url`.
+  Mark those responses `Cache-Control: no-store`; redact tokens and
+  token-bearing fragments from every other response, error, diagnostic,
+  report, telemetry event, and log.
 - Require HTTPS at Nginx for the externally reachable pilot. Keep the browser and API same-origin, do not enable broad CORS, and set `Referrer-Policy: no-referrer` so player links are not disclosed to external resources.
 
 ### Basic abuse controls
 
 - Authorization prevents unauthorized assessment work but is not denial-of-service protection. Configure Nginx request-body limits and bounded request/header timeouts before external exposure.
-- Apply a strict endpoint-specific rate limit to test creation and player-token issuance. Give start/answer/polling endpoints a more generous limit because many students may share one school IP address; validate the limits with the opt-in concurrency smoke test rather than choosing production-scale values speculatively.
+- Apply per-IP Nginx limits of `5r/m` with burst 5 to admin login, `2r/s`
+  with shared burst 10 to test creation and player-token issuance, and `50r/s`
+  with burst 100 to player start/answer traffic. Validate shared-school-IP
+  behavior with the 100-student smoke test.
+- Preserve bounded request/header and proxy timeouts. Observe request and SSE
+  connection limits in dry-run, review threshold and normal-workflow results,
+  then remove both dry-run directives and repeat the probes to verify enforced
+  `429` responses.
 - Keep only Nginx public, keep R unreachable from the public network, and use the VM provider's firewall or upstream protection for traffic floods that cannot be handled inside the application.
 
 ### Pre-pilot acceptance
 
-- Tests cover missing, malformed, expired, wrong-issuer, wrong-audience, wrong-scope, and wrong-`test_id` tokens; valid OR and player flows; fresh player-link issuance; redacted logs; and unauthenticated health endpoints.
+- Tests cover algorithm confusion, missing and mistyped claims, lifetime/leeway
+  boundaries, wrong issuer/audience/scope/profile/test ID, valid OR/player/admin
+  flows, login and link DTOs/cache policy, fresh eligible link issuance,
+  fragment/session lifecycle, rotation, redaction, and anonymous health routes.
 - An end-to-end test confirms that an authorized OR can create and poll a test, its issued player token can operate only that test, and requests without valid credentials cannot create tests or advance sessions.
-- The pilot is not opened to external users until HTTPS, authorization enforcement, secret injection, log redaction, and the basic Nginx abuse controls are verified in the deployed environment.
+- The pilot is not opened to external users until HTTPS, authorization
+  enforcement, secret injection, log redaction, exact endpoint limits, and the
+  reviewed transition from dry-run to enforcement are verified in deployment.
 
 ## Recommendations for the 100-Student Pilot
 

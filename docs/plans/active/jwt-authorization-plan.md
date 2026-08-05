@@ -137,8 +137,14 @@ admin token profile.
 
 ### Priority 5: Freeze the JWT contracts and revise this plan
 
-After the player and contract work above is complete, update the remainder of
-this plan with decisions grounded in the implemented flow:
+**Status: complete (2026-08-05).** The target claim profiles, login and
+player-token DTOs, link rules, browser credential lifecycle, cache and
+redaction boundary, rotation policy, and edge-control acceptance checks are
+frozen below. JWT implementation may now use this plan without choosing among
+competing contracts.
+
+The completed contract pass made the following decisions grounded in the
+implemented flow:
 
 1. Define exact OR, player, and admin JWT claim profiles, including issuer,
    audience, subject, scope syntax, claim types, allowed algorithms, clock
@@ -167,88 +173,279 @@ this plan with decisions grounded in the implemented flow:
 8. Replace every provisional or contradictory statement in this plan and its
    test plan before assigning JWT implementation to a coding agent.
 
-**JWT entry gate:** the sample player works end to end; public contracts and
-scope names are authoritative; frontend credential handling has one boundary;
-admin simulation behavior is explicit; JWT/admin-login/player-token contracts
-are exact; diagnostic redaction and cache policy are specified; and deployed
-abuse-control work has defined acceptance checks.
+**JWT entry gate:** satisfied. The sample player works end to end; public
+contracts and scope names are authoritative; frontend credential handling has
+one boundary; admin simulation behavior is explicit; JWT, admin-login, and
+player-token contracts are exact; diagnostic redaction and cache policy are
+specified; and deployed abuse-control work has defined acceptance checks.
 
 ## Summary
 
-Replace permissive OR/player access and static-key admin authorization with JWT
-validation while preserving `AuthContext` and assessment-service interfaces. Keep
-`ADMIN_ACCESS_KEY` only for admin login; all subsequent admin, OR, and player
-requests use bearer JWTs.
+Replace permissive OR/player access and static-key admin authorization with
+JWT validation while preserving `AuthContext` and assessment-service
+interfaces. Keep `ADMIN_ACCESS_KEY` only for admin login; all subsequent
+admin, OR, and player requests use bearer JWTs. The already implemented player
+and shared frontend transport gain credentials only at their existing
+bootstrap and credential-source boundaries.
 
-## Key changes
+## Frozen JWT contract
 
-- Add PyJWT and a small centralized token service in the backend. It permits
-  only `HS256`, requires `iss`, `aud`, `exp`, `sub`, and `scope`, uses 30
-  seconds of clock leeway, and returns generic `401` responses with
-  `WWW-Authenticate: Bearer` for missing, malformed, expired, or invalid
-  tokens.
-- Add required, distinct high-entropy settings: `OR_JWT_SECRET`,
-  `API_JWT_SECRET`, `OR_JWT_ISSUER`, and HTTPS-only `PLAYER_APP_URL`; reject
-  secrets shorter than 32 characters or equal OR/API secrets. Add configurable
-  8-hour player and admin token lifetimes.
-- Define the external OR contract: OR signs an HS256 JWT with
-  `iss=<OR_JWT_ISSUER>`, `aud=assessment-api`, non-empty service `sub`,
-  expiry, and space-delimited scopes. Supported scopes are `tests:create`,
-  `tests:read`, and `tests:launch`.
-- Enforce OR scopes on create/read routes and add
-  `POST /api/v1/tests/{test_id}/player-token`, requiring `tests:launch`. It
-  does not alter assessment state and returns a new player link.
-- Issue player JWTs from the API using `API_JWT_SECRET`,
-  `iss=assessment-api`, `aud=assessment-player`, `sub=player:<test_id>`,
-  `scope=tests:play`, expiry, and `test_id`. Player routes require that
-  token's `test_id` to equal the path ID; a valid but cross-test token returns
-  `403`.
-- Change create-test and player-token responses to return an absolute
-  configured link: `https://player-host/test/{test_id}#token=<player-jwt>`.
-  The future test-player frontend must read the fragment, keep the token only
-  in memory or session storage, remove it from the address bar, and send it as
-  a bearer token. No player-frontend implementation is included now.
-- Add `POST /api/v1/admin/login`: it verifies `ADMIN_ACCESS_KEY` in constant
-  time and returns an 8-hour API-signed admin JWT plus the existing session
-  details. All admin routes, including `GET /api/v1/admin/session`, then
-  require an `assessment-admin` JWT; the static key no longer authorizes them
-  directly.
-- Update the admin React app to store only the admin JWT in `sessionStorage`,
-  never the access key. On login it exchanges the entered key for a JWT; on any
-  authenticated `401`, it clears the token and returns to the unlock screen.
-  Admin JWTs contain only `admin:*` scopes. `admin:simulation` is the explicit
-  route-level exception for the existing privileged simulation workflow; it
-  does not make an admin token an OR or player token.
-- Reuse centralized JWT validation for diagnostic correlation, allowing it only
-  for a valid admin token with `admin:simulation`. Remove JWT fragments/tokens
-  from diagnostic payloads and reports; request logs remain header-free.
-- Update `.env.example`, backend documentation, and an OR integration guide
-  with exact claims, required environment variables, secret-generation
-  guidance, endpoint examples, and the no-fallback cutover procedure.
+### Common validation rules
+
+- Use PyJWT with the allowed algorithm supplied as the fixed list
+  `["HS256"]`.
+  Never derive the allowed algorithm from the JOSE header. Require the
+  profile's claims through PyJWT decode options and supply the expected issuer,
+  audience, and 30-second leeway explicitly.
+- Each accepted payload contains only the claims listed for its profile.
+  `iss`, `aud`, `sub`, and `scope` are strings. `iat` and `exp` are integer
+  NumericDate values; booleans and floats are invalid. API-issued `jti` values
+  and player `test_id` values are canonical hyphenated UUID strings.
+- A subject must contain at least one non-whitespace character. An `aud` array
+  is invalid even if it contains the expected audience.
+- Scope uses U+0020 spaces only, with no leading, trailing, or repeated space
+  and no duplicates. OR scopes are a non-empty subset of `tests:create`,
+  `tests:read`, and `tests:launch`. Player scope is exactly `tests:play`.
+  Admin scope contains exactly `admin:read`, `admin:write`,
+  `admin:diagnostics`, and `admin:simulation`; scope order has no authorization
+  meaning.
+- Require `exp > iat`. Reject `iat` values more than 30 seconds in the future.
+  Expiration and any future-time check use the same 30-second leeway.
+- Missing credentials, a non-Bearer scheme, malformed compact JWTs, invalid
+  signatures, wrong algorithms, missing or mistyped claims, and failed
+  issuer/audience/time/profile validation all return the same generic `401`
+  application error below with `WWW-Authenticate: Bearer`. A valid token with
+  the wrong profile, insufficient scope, or wrong player test binding returns
+  the existing generic `403 forbidden` envelope before assessment processing.
+
+  ```json
+  {
+    "error": {
+      "code": "invalid_token",
+      "message": "Valid bearer credentials are required."
+    }
+  }
+  ```
+
+### Claim profiles
+
+| Profile | Signing and exact claims | Lifetime and authorization |
+|---|---|---|
+| OR | OR signs with `OR_JWT_SECRET`; `iss=<OR_JWT_ISSUER>`, `aud="assessment-api"`, nonblank service `sub`, canonical `scope`, integer `iat`, integer `exp`. | Require `exp - iat <= OR_JWT_MAX_LIFETIME_SECONDS`, default `300`. Create requires `tests:create`, status read requires `tests:read`, and link issuance requires `tests:launch`. |
+| Player | API signs with `API_JWT_SECRET`; `iss="assessment-api"`, `aud="assessment-player"`, `sub="player:<test_id>"`, `scope="tests:play"`, integer `iat`, integer `exp`, UUID `jti`, and UUID `test_id`. | Default lifetime `PLAYER_JWT_LIFETIME_SECONDS=28800` (eight hours). Both `sub` and `test_id` must identify the path test. |
+| Admin | API signs with `API_JWT_SECRET`; `iss="assessment-api"`, `aud="assessment-admin"`, `sub="development-admin"`, the exact four-scope admin profile, integer `iat`, integer `exp`, and UUID `jti`. | Default lifetime `ADMIN_JWT_LIFETIME_SECONDS=28800` (eight hours). Public `tests:*` grants are forbidden; simulation remains the explicit route-level exception already documented above. |
+
+`jti` makes separately issued API tokens distinct; there is no lookup,
+per-token revocation list, refresh token, or `kid`-based overlapping-key grace
+period in the pilot.
+
+### Settings and player URL construction
+
+- Add required `OR_JWT_SECRET`, `API_JWT_SECRET`, `OR_JWT_ISSUER`, and
+  `PLAYER_APP_URL` settings. Each secret must contain at least 32 characters,
+  and the two secrets must not be equal. Generate each from at least 32 random
+  bytes; `OR_JWT_SECRET` is shared only with OR and `API_JWT_SECRET` remains
+  API-only.
+- Add positive integer `OR_JWT_MAX_LIFETIME_SECONDS`,
+  `PLAYER_JWT_LIFETIME_SECONDS`, and `ADMIN_JWT_LIFETIME_SECONDS` settings with
+  defaults `300`, `28800`, and `28800` respectively.
+- `PLAYER_APP_URL` is an absolute origin, not a path base. Require HTTPS except
+  that HTTP is permitted for the exact local-development hosts `localhost`,
+  `127.0.0.1`, and `[::1]`, with an optional port. Reject user information,
+  non-root paths, query strings, and fragments. Accept an empty path or `/`
+  and normalize the optional trailing slash away.
+- Construct links from validated components, not generic relative URL joining:
+  `<origin>/test/<canonical-test-id>#token=<compact-jwt>`. The API/application
+  route remains the sole owner of link construction; domain and service code
+  continue to deal only in identifiers and state.
+
+## Frozen endpoint contracts
+
+### `POST /api/v1/admin/login`
+
+- Accept JSON only through a strict request DTO with no unknown fields:
+  `{"access_key":"<string>"}`. `access_key` has length 1 through 1024.
+- Compare the supplied UTF-8 value with `ADMIN_ACCESS_KEY` in constant time.
+  Do not log, persist, normalize, or return it.
+- On success return `200` with the strict response DTO below. `expires_in`
+  equals the configured admin lifetime, whose default is 28800 seconds.
+
+  ```json
+  {
+    "access_token": "<admin-jwt>",
+    "token_type": "Bearer",
+    "expires_in": 28800,
+    "session": {
+      "subject": "development-admin",
+      "capabilities": [
+        "admin:diagnostics",
+        "admin:read",
+        "admin:simulation",
+        "admin:write"
+      ],
+      "max_graph_nodes": 10,
+      "diagnostic_max_events": 500,
+      "diagnostic_ttl_seconds": 3600,
+      "source_max_bytes": 10000000,
+      "source_max_pdf_pages": 100,
+      "source_max_text_chars": 1000000
+    }
+  }
+  ```
+
+- An absent `ADMIN_ACCESS_KEY` disables login. Disabled login and an incorrect
+  key return the same generic `401 admin_unauthorized` envelope and do not
+  disclose configuration state. Request validation retains FastAPI's standard
+  `422`; the public edge may return its documented minimal `429` response.
+- Add `Cache-Control: no-store` to every login response, including failures.
+  Login does not use `WWW-Authenticate`; protected admin endpoints use the
+  common Bearer challenge.
+- After cutover, `ADMIN_ACCESS_KEY` is invalid on every endpoint except login.
+  `GET /api/v1/admin/session` and all other admin routes require the admin JWT.
+
+### `POST /api/v1/tests/{test_id}/player-token`
+
+- Accept no request body. Require a valid OR token with `tests:launch`.
+  `admin:simulation` is deliberately not accepted on this new route.
+- Any trusted OR subject with `tests:launch` may issue a new link for any
+  eligible test. The pilot does not persist or compare the creating OR
+  subject.
+- Preparing, active, and completed tests are eligible. Return `404` for an
+  unknown test, `409` for failed or unsupported persisted states, `503` when
+  persistence is unavailable, and the existing generic `500` fallback.
+- A successful call does not mutate assessment state. It always mints a new
+  player JWT and returns `200` with the strict DTO
+  `{"player_url":"<absolute-token-bearing-url>"}`. Repeat calls are not
+  idempotent and are not guaranteed to return the same URL.
+- Return `Cache-Control: no-store` on success. Add the route's `401`, `403`,
+  `404`, `409`, `422`, `503`, and `500` contracts to generated OpenAPI.
+
+### Test creation and token exposure
+
+- Keep the existing create request, `201`, `Location`, status, and
+  `missing_nodes` contracts. Replace only its relative `player_url` with a
+  newly issued absolute token-bearing link and mark the successful response
+  `Cache-Control: no-store`.
+- The only response-body locations allowed to contain compact JWTs are
+  `access_token` in a successful admin-login response and the fragment of
+  `player_url` in successful create-test and player-token responses. Errors,
+  status/player responses, diagnostics, diagnostic reports, telemetry, and
+  logs must not contain JWTs. Retain redaction of token-named fields, compact
+  JWT values, and token-bearing URL fragments at diagnostic ingestion.
+
+## Frontend credential lifecycle
+
+- The player bootstrap reads only an exact `#token=<non-empty-token>` fragment,
+  stores the token under a test-ID-specific `sessionStorage` key, and removes
+  the fragment with `history.replaceState` before starting API work. A reload
+  without a fragment reuses only the credential stored for that path's
+  `test_id`; another test's token is never selected.
+- The centralized player credential source attaches the token. An
+  authenticated `401` clears that test's stored token and moves the existing
+  player to its expired-link state. The credential remains available after
+  completion so a same-tab reload can recover completed feedback, and it
+  disappears when the tab session ends.
+- The admin unlock flow posts the entered key to `/api/v1/admin/login`, stores
+  only `access_token` in `sessionStorage` under a JWT-specific storage key, and
+  uses the returned `session` directly. Manual lock and any authenticated
+  `401` clear the JWT and return to the unlock screen. The access key is never
+  written to browser storage.
+
+## Expiry, rotation, and deployed abuse controls
+
+- Eight-hour player links are same-day credentials. OR owns learner-link
+  refresh and calls the player-token endpoint when scheduling, YG preparation,
+  or later feedback access falls outside that window. The learner has no login
+  or refresh flow.
+- Emergency replacement of `API_JWT_SECRET` followed by API restart
+  immediately invalidates every outstanding player and admin token. Replace
+  `OR_JWT_SECRET` independently to invalidate OR credentials. After API-secret
+  rotation, OR must issue replacement learner links.
+- Split the host-Nginx policy into per-client-IP locations. Apply
+  `5r/m` with `burst=5 nodelay` to admin login; a shared `2r/s` issuance zone
+  with `burst=10 nodelay` to exact test creation and player-token routes; and
+  `50r/s` with `burst=100 nodelay` to player start/answer routes. Retain the
+  current general API limiter for other routes and the existing two-connection
+  admin SSE limit.
+- Preserve `client_header_timeout 10s`, `client_body_timeout 30s`, the current
+  bounded proxy connect/send/read timeouts, query-free request logging, and
+  header-free logs. Sensitive endpoint responses and edge-generated `429`
+  responses must not be cached.
+- Deploy the endpoint limits in dry-run first. Run controlled probes that
+  cross each threshold, a shared-IP player burst representing the 100-student
+  pilot, and normal admin/OR/player workflows. Review summarized
+  `$limit_req_status` and `$limit_conn_status` results without copying token or
+  request data. Remove both dry-run directives only after the expected
+  thresholds trigger and normal workflows show no false positives during the
+  observation window; repeat the probes and verify enforced `429` responses.
+
+## Implementation changes
+
+- Add PyJWT and a centralized token service. Replace the three permissive
+  authorization dependencies while preserving `AuthContext`, route-level
+  `require_*` checks, admin-simulation opt-ins, and assessment-service
+  interfaces.
+- Add the login and player-token DTOs/routes, application-boundary link
+  builder, cache headers, settings validation, and OpenAPI declarations above.
+- Update the existing React player and admin credential boundaries exactly as
+  specified; feature pages continue to use the shared transport and never
+  assemble authorization headers.
+- Update `.env.example`, Compose settings, backend and frontend documentation,
+  and an OR integration guide with exact claims, secret-generation guidance,
+  endpoint examples, expiry/rotation behavior, and the no-fallback cutover.
+- Update `docs/pilot_architecture_plan.md` and the future-JWT transition notes
+  in `docs/contracts/public-assessment-api.md` with this frozen contract. The
+  latter remains authoritative for currently implemented pre-JWT wire behavior
+  until JWT implementation updates its examples, OpenAPI, and contract tests
+  in the same change.
 
 ## Test plan
 
-- Backend tests cover anonymous, wrong-scheme, malformed, expired,
-  bad-signature, wrong-algorithm, wrong-issuer, wrong-audience, missing-claim,
-  and wrong-scope tokens; verify `401` versus valid-token `403` behavior.
-- Verify valid OR create/read/link-refresh flow; player access for the intended
-  test only; OR/player/admin profile separation; and health endpoints remaining
-  anonymous.
-- Verify admin login accepts only the configured key, protected admin routes
-  reject that key directly, issued admin JWTs work until expiry, and simulation
-  diagnostics work only with a valid simulation-capable admin JWT.
-- Verify absolute player links use fragments, no response/diagnostic/log output
-  exposes a JWT, and settings reject missing, weak, or reused JWT secrets.
-- Run backend tests plus `python -m pyright`; run admin tests, lint, and build
-  plus `npm run lint`.
+- Token-unit tests cover fixed-algorithm enforcement; every missing and
+  mistyped claim; blank subjects; list audiences; malformed, unknown, and
+  duplicate scopes; invalid UUID claims; bad signatures; wrong profiles;
+  `iat`/`exp` ordering; the OR five-minute maximum; and both sides of the
+  30-second leeway boundary.
+- API tests cover anonymous and wrong-scheme requests; generic `401` plus the
+  exact `invalid_token` envelope and Bearer challenge; valid-token `403` for
+  wrong scope/profile/test binding;
+  valid OR create/read/link issuance; player access to its intended test only;
+  signed admin simulation; cross-profile denial; and anonymous health routes.
+- Admin-login tests cover the strict request and response DTOs, constant-time
+  comparison boundary, absent configuration, invalid key, validation error,
+  no-store headers on success and failure, protected-route rejection of the
+  raw key, eight-hour expiry, manual logout, and authenticated-`401` cleanup.
+- Link tests cover exact `PLAYER_APP_URL` acceptance and rejection, canonical
+  construction, no-store headers, preparing/active/completed eligibility,
+  unknown and failed tests, persistence failure, fresh repeat issuance, and
+  the deliberate denial of `admin:simulation` on the new route.
+- Player behavior tests cover fragment removal before requests, test-specific
+  session storage, reload recovery in preparing/active/completed states,
+  cross-test isolation, expired-link cleanup, and absence of query or
+  persistent-local-storage credentials.
+- Redaction tests exercise both allowed JWT response locations and verify that
+  all errors, other responses, structured logs, diagnostic events/replay, and
+  generated reports contain neither compact JWTs nor token-bearing fragments.
+- Settings and rotation tests reject missing, weak, or reused secrets and
+  prove that an API-secret change invalidates both player and admin tokens
+  while leaving OR verification independent.
+- Nginx configuration checks and deployed probes verify each exact endpoint
+  limit, shared-IP player headroom, request/header and proxy timeouts, dry-run
+  observations, the reviewed transition to enforcement, and enforced `429`.
+- Run backend tests with `backend/.venv`, then `python -m pyright`; run shared,
+  player, and admin tests, builds, and `npm run lint`. Complete the exact
+  signed OR-to-player end-to-end flow separately from admin simulation.
 
 ## Assumptions
 
-- Phase 2's remaining one-day dry run does not block Phase 3 code work; HTTPS,
-  authorization tests, and the later trusted-certificate gate remain mandatory
-  before public exposure.
-- HS256 is chosen for the pilot because it is the lowest-friction OR
-  integration. `OR_JWT_SECRET` is shared only with that service;
-  `API_JWT_SECRET` stays solely in this backend and signs player/admin tokens.
-- The current `frontend/` test player is not implemented or changed in this
-  phase. The API link contract is ready for its later implementation.
+- HS256 is the agreed pilot integration. OR can issue tokens with integer
+  `iat`/`exp` no more than five minutes apart and keep the shared OR secret
+  server-side.
+- OR subjects are trusted service identities, not ownership tenants. Any OR
+  subject granted `tests:launch` may refresh any eligible test link.
+- The player is deployed at `/test/{test_id}` on a root, same-origin host.
+  Path-prefixed player deployments, student accounts, refresh tokens, and
+  individual token revocation remain out of scope.
+- Phase 2 observation does not block JWT code development, but enforced edge
+  limits, HTTPS, signed authorization acceptance, and the later
+  trusted-certificate gate remain mandatory before public exposure.

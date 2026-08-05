@@ -344,9 +344,18 @@ application error envelope. Clients should branch first on HTTP status and
 then accept either documented `422` shape. Internal exception messages and
 secrets are never returned in the application envelope.
 
-The future JWT phase adds generic `401` failures for missing or invalid bearer
-credentials and preserves `403` for a valid but insufficient or cross-test
-credential. That behavior is not active in this pre-JWT contract.
+The frozen JWT target adds generic `401` failures with
+`WWW-Authenticate: Bearer` for missing or invalid credentials and preserves
+`403` for a valid but insufficient, wrong-profile, or cross-test credential.
+The `401` application envelope uses code `invalid_token` and the generic
+message `Valid bearer credentials are required.`
+It also changes successful creation to return an absolute token-bearing
+`player_url` with `Cache-Control: no-store` and adds the strict OR-only
+`POST /api/v1/tests/{test_id}/player-token` link-issuance route. Those changes
+are specified in
+[`docs/plans/active/jwt-authorization-plan.md`](../plans/active/jwt-authorization-plan.md)
+but are not active in this pre-JWT contract. JWT implementation must update
+this document, OpenAPI, and contract tests together when the cutover occurs.
 
 ## OpenAPI and compatibility
 
