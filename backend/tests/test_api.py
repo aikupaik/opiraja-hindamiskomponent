@@ -16,7 +16,16 @@ from supabase import AsyncClientOptions
 from uvicorn._types import ASGI3Application
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.api.auth import TESTS_PLAY, AuthContext, authorize_player
+from app.api.auth import (
+    ADMIN_SIMULATION,
+    TESTS_CREATE,
+    TESTS_PLAY,
+    AuthContext,
+    AuthorizationDenied,
+    authorize_player,
+    require_or,
+    require_player,
+)
 from app.api.dependencies import get_kst_engine, get_repository
 from app.config import Settings
 from app.domain.models import AdvanceCompleted, ItemId, ModelBuildResult
@@ -47,6 +56,51 @@ def _settings() -> Settings:
             "READINESS_TIMEOUT_SECONDS": 0.05,
         }
     )
+
+
+def test_admin_simulation_is_an_explicit_cross_profile_exception() -> None:
+    test_id = UUID("10000000-0000-4000-8000-000000000001")
+    admin = AuthContext(
+        actor_type="admin",
+        subject="operator",
+        scopes=frozenset({ADMIN_SIMULATION}),
+    )
+    admin_without_simulation = AuthContext(
+        actor_type="admin",
+        subject="read-only-operator",
+        scopes=frozenset(),
+    )
+    or_context = AuthContext(
+        actor_type="or",
+        subject="or-service",
+        scopes=frozenset({TESTS_CREATE}),
+    )
+    player_context = AuthContext(
+        actor_type="player",
+        subject="player",
+        scopes=frozenset({TESTS_PLAY}),
+        authorized_test_id=test_id,
+    )
+
+    require_or(or_context, TESTS_CREATE)
+    require_player(player_context, test_id)
+    require_or(admin, TESTS_CREATE, allow_admin_simulation=True)
+    require_player(admin, test_id, allow_admin_simulation=True)
+
+    with pytest.raises(AuthorizationDenied):
+        require_or(admin, TESTS_CREATE)
+    with pytest.raises(AuthorizationDenied):
+        require_player(admin, test_id)
+    with pytest.raises(AuthorizationDenied):
+        require_or(admin_without_simulation, TESTS_CREATE, allow_admin_simulation=True)
+    with pytest.raises(AuthorizationDenied):
+        require_player(
+            admin_without_simulation, test_id, allow_admin_simulation=True
+        )
+    with pytest.raises(AuthorizationDenied):
+        require_player(or_context, test_id, allow_admin_simulation=True)
+    with pytest.raises(AuthorizationDenied):
+        require_or(player_context, TESTS_CREATE, allow_admin_simulation=True)
 
 
 def _app(

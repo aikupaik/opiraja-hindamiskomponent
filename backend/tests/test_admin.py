@@ -42,9 +42,10 @@ from app.api.dependencies import (
     get_source_ingestor,
 )
 from app.config import Settings
-from app.domain.models import ItemStatus, SessionStatus
+from app.domain.models import ItemStatus, SessionStatus, TestId
 from app.main import create_app
 from app.services.assessment import (
+    AssessmentView,
     AssessmentService,
     CreateAssessmentCommand,
     CreateAssessmentResult,
@@ -105,6 +106,9 @@ async def test_admin_key_is_required_constant_boundary_and_can_be_disabled() -> 
         "admin:diagnostics",
         "admin:simulation",
     }
+    assert set(valid.json()["capabilities"]).isdisjoint(
+        {"tests:create", "tests:read", "tests:play"}
+    )
     assert valid.json()["max_graph_nodes"] == 10
 
     async with _client(_app(_settings(admin_key=None))) as client:
@@ -534,6 +538,46 @@ async def test_diagnostics_are_bounded_replayed_redacted_and_cleanup_subscribers
 
 
 @pytest.mark.asyncio
+async def test_diagnostics_redact_dynamic_tokens_at_the_capture_boundary() -> None:
+    hub = DiagnosticHub()
+    jwt = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJzdWIiOiJwbGF5ZXIifQ."
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO"
+    )
+
+    event = hub.emit(
+        "experiment",
+        source="client",
+        level="info",
+        event_type="response",
+        request_id="request-1",
+        test_id=None,
+        payload={
+            "player_url": f"/test/test-id#token={jwt}",
+            "nested": {"access_token": jwt, "message": f"Bearer {jwt}"},
+        },
+    )
+    serialized = str(event.as_dict())
+
+    assert jwt not in serialized
+    assert "/test/test-id#token=[REDACTED]" in serialized
+    assert event.payload == {
+        "player_url": "/test/test-id#token=[REDACTED]",
+        "nested": {
+            "access_token": "[REDACTED]",
+            "message": "Bearer [REDACTED]",
+        },
+    }
+    snapshot = hub.snapshot("experiment")
+    assert snapshot is not None
+    assert jwt not in str(snapshot)
+    stream = hub.stream("experiment")
+    replay = await anext(stream)
+    await stream.aclose()
+    assert jwt not in replay
+    assert "#token=[REDACTED]" in replay
+@pytest.mark.asyncio
 async def test_only_authenticated_correlated_test_requests_emit_diagnostics() -> None:
     app = _app(_settings())
     service = _CreatingService()
@@ -558,6 +602,17 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
             ),
             timeout=2,
         )
+        player_experiment_id = "35000000-0000-4000-8000-000000000003"
+        correlated_player = await asyncio.wait_for(
+            client.post(
+                "/api/v1/player/tests/10000000-0000-4000-8000-000000000001/start",
+                headers={
+                    "Authorization": "Bearer operator-secret",
+                    "X-Experiment-ID": player_experiment_id,
+                },
+            ),
+            timeout=2,
+        )
         uncorrelated = await asyncio.wait_for(
             client.post(
                 "/api/v1/tests",
@@ -573,16 +628,48 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
             ),
             timeout=2,
         )
+        malformed_correlation = await asyncio.wait_for(
+            client.post(
+                "/api/v1/tests",
+                headers={
+                    "Authorization": "Bearer operator-secret",
+                    "X-Experiment-ID": "not-a-uuid",
+                },
+                json={
+                    "user_id": "user",
+                    "learning_path_id": "path",
+                    "nodes": ["A"],
+                },
+            ),
+            timeout=2,
+        )
+        ineligible_route = await client.get(
+            "/api/v1/admin/session",
+            headers={
+                "Authorization": "Bearer operator-secret",
+                "X-Experiment-ID": "50000000-0000-4000-8000-000000000005",
+            },
+        )
         hub = cast(DiagnosticHub, app.state.diagnostic_hub)
         events = hub.events_after(experiment_id)
+        player_events = hub.events_after(player_experiment_id)
 
     assert correlated.status_code == uncorrelated.status_code == 201
+    assert correlated_player.status_code == 202
+    assert malformed_correlation.status_code == 201
+    assert ineligible_route.status_code == 200
     assert [event.type for event in events] == [
         "request",
         "response",
         "request_completed",
     ]
+    assert [event.type for event in player_events] == [
+        "request",
+        "response",
+        "request_completed",
+    ]
     assert hub.subscriber_count("40000000-0000-4000-8000-000000000004") == 0
+    assert hub.snapshot("50000000-0000-4000-8000-000000000005") is None
 
 
 def _editable(*, status: ItemStatus = ItemStatus.USABLE) -> EditableItem:
@@ -691,3 +778,7 @@ class _CreatingService:
             status=SessionStatus.ACTIVE,
             missing_nodes=(),
         )
+
+    async def start_assessment(self, test_id: TestId) -> AssessmentView:
+        del test_id
+        return AssessmentView(status=SessionStatus.PREPARING)

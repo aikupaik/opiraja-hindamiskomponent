@@ -44,7 +44,7 @@ async def create_test(
     service: Annotated[AssessmentService, Depends(get_assessment_service)],
     auth: Annotated[AuthContext, Depends(authorize_or)],
 ) -> CreateTestResponse:
-    require_or(auth, TESTS_CREATE)
+    require_or(auth, TESTS_CREATE, allow_admin_simulation=True)
     result = await service.create_assessment(payload.to_command())
     response.headers["Location"] = f"/api/v1/tests/{result.test_id}"
     return CreateTestResponse.from_domain(
@@ -71,6 +71,6 @@ async def get_test(
     service: Annotated[AssessmentService, Depends(get_assessment_service)],
     auth: Annotated[AuthContext, Depends(authorize_or)],
 ) -> TestStatusResponse:
-    require_or(auth, TESTS_READ)
+    require_or(auth, TESTS_READ, allow_admin_simulation=True)
     view = await service.get_assessment(TestId(test_id))
     return to_test_status_response(view)

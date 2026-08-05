@@ -24,9 +24,6 @@ ADMIN_SCOPES = frozenset(
         ADMIN_WRITE,
         ADMIN_DIAGNOSTICS,
         ADMIN_SIMULATION,
-        TESTS_CREATE,
-        TESTS_READ,
-        TESTS_PLAY,
     }
 )
 _bearer = HTTPBearer(auto_error=False)
@@ -67,6 +64,20 @@ def _validated_admin(
         actor_type="admin",
         subject="development-admin",
         scopes=ADMIN_SCOPES,
+    )
+
+
+def authenticated_admin_from_header(
+    request: Request, authorization: str
+) -> AuthContext | None:
+    """Resolve the admin profile for middleware that cannot use dependencies."""
+
+    scheme, separator, token = authorization.partition(" ")
+    if not separator or scheme.casefold() != "bearer" or not token:
+        return None
+    return _validated_admin(
+        request,
+        HTTPAuthorizationCredentials(scheme=scheme, credentials=token),
     )
 
 
@@ -114,17 +125,33 @@ async def authorize_player(
     )
 
 
-def require_or(context: AuthContext, scope: str) -> None:
-    if context.actor_type not in {"or", "admin"} or scope not in context.scopes:
+def require_or(
+    context: AuthContext, scope: str, *, allow_admin_simulation: bool = False
+) -> None:
+    is_or = context.actor_type == "or" and scope in context.scopes
+    is_admin_simulation = (
+        allow_admin_simulation
+        and context.actor_type == "admin"
+        and ADMIN_SIMULATION in context.scopes
+    )
+    if not (is_or or is_admin_simulation):
         raise AuthorizationDenied("operation is not authorized")
 
 
-def require_player(context: AuthContext, test_id: UUID) -> None:
-    if (
-        TESTS_PLAY not in context.scopes
-        or (context.actor_type == "player" and context.authorized_test_id != test_id)
-        or context.actor_type not in {"player", "admin"}
-    ):
+def require_player(
+    context: AuthContext, test_id: UUID, *, allow_admin_simulation: bool = False
+) -> None:
+    is_bound_player = (
+        context.actor_type == "player"
+        and TESTS_PLAY in context.scopes
+        and context.authorized_test_id == test_id
+    )
+    is_admin_simulation = (
+        allow_admin_simulation
+        and context.actor_type == "admin"
+        and ADMIN_SIMULATION in context.scopes
+    )
+    if not (is_bound_player or is_admin_simulation):
         raise AuthorizationDenied("operation is not authorized")
 
 

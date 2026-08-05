@@ -128,7 +128,9 @@ Readiness response:
 
 The OR authorization seam currently supplies a permissive phase-one identity.
 It is deliberately replaceable. Creating a test requires the `tests:create`
-scope and reading one requires `tests:read`.
+scope and reading one requires `tests:read`. The internal admin simulation is
+an explicit exception at the participating routes: an admin actor with
+`admin:simulation` may create and read tests without receiving OR scopes.
 
 #### `POST /api/v1/tests`
 
@@ -294,12 +296,16 @@ performed. URL credentials, localhost, non-global addresses, and redirects
 to unsafe destinations are rejected.
 
 Simulation calls use the existing OR/player routes and add a valid admin
-bearer plus `X-Experiment-ID`. Only those authenticated, correlated calls
-capture request/response bodies, R exchanges, Supabase operation summaries,
-completion fields, and warnings. Standard production logs remain body-free.
-Diagnostic buffers are process-local, expire after inactivity, do not survive
-restarts, and are intended for the current single-process experimentation
-environment.
+bearer plus `X-Experiment-ID`. Admin credentials carry only `admin:*` grants;
+the participating routes deliberately accept `admin:simulation` rather than
+treating the operator as an OR or player. Only authenticated create, start,
+and answer calls with a valid UUID correlation header capture request/response
+bodies, R exchanges, Supabase operation summaries, completion fields, and
+warnings. Standard production logs remain body-free. Diagnostic buffers are
+process-local, expire after inactivity, do not survive restarts, and are
+intended for the current single-process experimentation environment. Dynamic
+JWT values, token fields, and token-bearing URL fragments are redacted before
+an event enters the buffer.
 
 ## Internal dependencies and persistence
 

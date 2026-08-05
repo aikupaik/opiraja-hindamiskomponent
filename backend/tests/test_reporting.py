@@ -521,6 +521,11 @@ def _app(hub: DiagnosticHub) -> FastAPI:
 @pytest.mark.asyncio
 async def test_report_endpoint_requires_diagnostics_auth_and_returns_404() -> None:
     hub = DiagnosticHub()
+    jwt = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJzdWIiOiJwbGF5ZXIifQ."
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO"
+    )
     app = _app(hub)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(
@@ -541,7 +546,11 @@ async def test_report_endpoint_requires_diagnostics_auth_and_returns_404() -> No
                 event_type="request",
                 request_id="request",
                 test_id=None,
-                payload={"method": "POST", "path": "/api/v1/tests", "body": {}},
+                payload={
+                    "method": "POST",
+                    "path": "/api/v1/tests",
+                    "body": {"player_url": f"/test/{TEST_ID}#token={jwt}"},
+                },
             )
             partial = await client.get(
                 f"/api/v1/admin/experiments/{EXPERIMENT_ID}/report",
@@ -552,6 +561,7 @@ async def test_report_endpoint_requires_diagnostics_auth_and_returns_404() -> No
     assert missing.status_code == 404
     assert partial.status_code == 200
     assert partial.json()["completion_state"] == "partial"
+    assert jwt not in partial.text
 
 
 def test_expired_experiment_has_no_report_snapshot() -> None:

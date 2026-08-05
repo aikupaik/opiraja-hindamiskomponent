@@ -3,7 +3,6 @@
 import json
 import logging
 import re
-import secrets
 from collections.abc import (
     AsyncGenerator,
     AsyncIterator,
@@ -25,8 +24,12 @@ from starlette.responses import Response
 from starlette.types import Lifespan
 from supabase import AsyncClientOptions, acreate_client
 
-from app.api.auth import AuthorizationDenied
-from app.api.auth import AdminUnauthorized
+from app.api.auth import (
+    ADMIN_SIMULATION,
+    AdminUnauthorized,
+    AuthorizationDenied,
+    authenticated_admin_from_header,
+)
 from app.admin.diagnostics import DiagnosticHub, diagnostic_context, emit_diagnostic
 from app.admin.ingestion import (
     SourceIngestor,
@@ -57,6 +60,9 @@ logger = logging.getLogger("app.requests")
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _TEST_ID_PATH = re.compile(
     r"/tests/(?P<test_id>[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,35})(?:/|$)"
+)
+_SIMULATION_PLAYER_PATH = re.compile(
+    r"/api/v1/player/tests/[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,35}/(?:start|answers)"
 )
 
 
@@ -366,31 +372,25 @@ def _empty_context() -> Generator[None]:
 
 
 def _authenticated_experiment(request: Request) -> str | None:
-    if request.url.path.startswith("/api/v1/admin/experiments/"):
-        return None
-    if not (
-        request.url.path == "/api/v1/tests"
-        or request.url.path.startswith("/api/v1/player/tests/")
-    ):
+    if not _is_diagnostic_simulation_operation(request):
         return None
     experiment_id = request.headers.get("X-Experiment-ID")
     authorization = request.headers.get("Authorization", "")
-    settings = request.app.state.settings
-    if (
-        not isinstance(settings, Settings)
-        or settings.admin_access_key is None
-        or experiment_id is None
-        or not authorization.startswith("Bearer ")
-    ):
-        return None
-    expected = settings.admin_access_key.get_secret_value()
-    supplied = authorization.removeprefix("Bearer ")
-    if not secrets.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+    admin = authenticated_admin_from_header(request, authorization)
+    if experiment_id is None or admin is None or ADMIN_SIMULATION not in admin.scopes:
         return None
     try:
         return str(UUID(experiment_id))
     except ValueError:
         return None
+
+
+def _is_diagnostic_simulation_operation(request: Request) -> bool:
+    if request.method != "POST":
+        return False
+    if request.url.path == "/api/v1/tests":
+        return True
+    return _SIMULATION_PLAYER_PATH.fullmatch(request.url.path) is not None
 
 
 async def _json_request_body(request: Request) -> object:

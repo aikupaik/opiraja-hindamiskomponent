@@ -49,6 +49,13 @@ experiment ID, uses the production test/player routes, honors `Retry-After`,
 and lets the operator submit each answer manually. Cancel and page cleanup
 abort pending requests, polling, and event streams.
 
+This is a privileged internal workflow rather than an emulation of separate OR
+and player credentials. The admin profile uses `admin:simulation` as an
+explicit exception on the participating routes and does not receive public
+`tests:*` scopes. The correlation header enables capture only on authenticated
+create, start, and answer calls; access to retained events separately requires
+`admin:diagnostics`.
+
 Experiment diagnostics are bounded, process-local, and ephemeral. They do not
 survive a backend restart, expire after 60 minutes by default, and are
 intended for the current single-process experimentation environment.

@@ -106,24 +106,34 @@ feature request.
 
 ### Priority 4: Settle admin simulation boundaries
 
-1. Document whether an admin simulation is a privileged internal workflow or
-   an exact emulation of independent OR and player credentials.
-2. If it is privileged, specify the deliberate exception that lets an admin
-   simulation call OR/player routes, the required `admin:simulation` grant,
-   and when `X-Experiment-ID` is honored. Define profile-separation tests around
-   that explicit exception.
-3. If it is an exact emulation, define how the simulation obtains an OR
-   credential, extracts the issued player credential, switches credentials
-   between calls, and retains authenticated diagnostic correlation.
-4. Keep diagnostic capture opt-in, bounded, and restricted to authenticated
-   simulations. Redact any future token-bearing fragment or field before an
-   event enters the diagnostic buffer so reports and replay cannot recover it.
-5. Add tests for unauthorized correlation attempts, cross-profile tokens, and
-   diagnostic redaction at the capture boundary.
+**Status: complete (2026-08-05).** Admin simulation is a privileged internal
+workflow, not an exact emulation of independent OR and player credentials.
 
-**Exit criteria:** the chosen model is documented and tested; the JWT
-implementation does not need to infer whether admin tokens may authorize OR or
-player operations.
+1. Admin credentials remain a distinct profile and carry only `admin:*`
+   grants. They do not carry or impersonate `tests:create`, `tests:read`, or
+   `tests:play`.
+2. The current create, status-read, player-start, and player-answer routes each
+   opt in explicitly to the `admin:simulation` exception. Strict OR/player
+   profile checks remain the default, so future routes, including player-token
+   refresh, do not inherit admin access without a deliberate decision.
+3. `X-Experiment-ID` activates capture only for a valid UUID on authenticated
+   admin-simulation calls to create, start, or answer. It is ignored for OR and
+   player profiles, invalid or insufficient admin credentials, malformed IDs,
+   and other routes. `admin:simulation` permits capture while the independent
+   `admin:diagnostics` grant controls event and report access.
+4. Diagnostic capture remains opt-in, bounded, process-local, and ephemeral.
+   Token fields, compact JWT values, and token-bearing URL fragments are
+   redacted at the diagnostic-hub ingestion boundary before buffering, replay,
+   streaming, or report generation.
+5. Authorization-seam tests cover the privileged exception and cross-profile
+   denial. Correlation and capture-boundary tests cover unauthorized attempts,
+   route eligibility, and dynamic-token redaction. The JWT phase must repeat
+   profile-separation coverage with actually signed OR, player, and admin
+   tokens and retain a separate exact OR-to-player end-to-end acceptance flow.
+
+**Exit criteria:** satisfied. The JWT implementation must preserve this
+explicit route-level exception and must not add public `tests:*` scopes to the
+admin token profile.
 
 ### Priority 5: Freeze the JWT contracts and revise this plan
 
@@ -206,7 +216,9 @@ requests use bearer JWTs.
 - Update the admin React app to store only the admin JWT in `sessionStorage`,
   never the access key. On login it exchanges the entered key for a JWT; on any
   authenticated `401`, it clears the token and returns to the unlock screen.
-  Admin JWTs retain the current admin scopes and may run existing simulations.
+  Admin JWTs contain only `admin:*` scopes. `admin:simulation` is the explicit
+  route-level exception for the existing privileged simulation workflow; it
+  does not make an admin token an OR or player token.
 - Reuse centralized JWT validation for diagnostic correlation, allowing it only
   for a valid admin token with `admin:simulation`. Remove JWT fragments/tokens
   from diagnostic payloads and reports; request logs remain header-free.

@@ -55,10 +55,15 @@ environment:
   recognized admin credential is present. The bearer header is therefore
   optional in this phase, which generated OpenAPI represents as either bearer
   authentication or anonymous access.
-- A valid development admin credential is a deliberate privileged exception
-  accepted by the existing OR/player seams for the admin simulation workflow.
-  The exact post-JWT simulation policy remains a separate prerequisite
-  decision.
+- A valid admin credential remains a distinct profile with no `tests:*`
+  scopes. Routes used by the internal simulation explicitly accept an admin
+  actor with `admin:simulation` as a privileged exception: create, status
+  read, player start, and player answer. Future OR/player routes are strict by
+  default and must opt in separately if that exception is intended.
+- `X-Experiment-ID` is correlation metadata, not authorization. It is honored
+  only for a valid UUID on authenticated admin-simulation create, start, and
+  answer calls. Capturing requires `admin:simulation`; streaming or reporting
+  retained diagnostics independently requires `admin:diagnostics`.
 - A dependency-supplied valid identity without the required actor, scope, or
   test binding receives `403` before assessment processing.
 

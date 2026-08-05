@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+import re
 from time import monotonic
 from typing import TypeAlias, cast
 
@@ -28,6 +29,11 @@ _SENSITIVE_KEYS = {
     "api_key",
     "supabase_service_key",
 }
+_TOKEN_FRAGMENT = re.compile(r"(?i)([#&]token=)[^&\s\"'<>]+")
+_COMPACT_JWT = re.compile(
+    r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."
+    r"[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,7 +216,7 @@ class DiagnosticHub:
         return f"id: {event.sequence}\nevent: diagnostic\ndata: {data}\n\n"
 
     def _redact(self, value: object, *, key: str | None = None) -> JsonValue:
-        if key is not None and key.casefold() in _SENSITIVE_KEYS:
+        if key is not None and _is_sensitive_key(key):
             return "[REDACTED]"
         if value is None or isinstance(value, (bool, int, float)):
             return value
@@ -218,6 +224,8 @@ class DiagnosticHub:
             result = value
             for secret in self._secrets:
                 result = result.replace(secret, "[REDACTED]")
+            result = _TOKEN_FRAGMENT.sub(r"\1[REDACTED]", result)
+            result = _COMPACT_JWT.sub("[REDACTED]", result)
             return result
         if isinstance(value, Mapping):
             mapping = cast(Mapping[object, object], value)
@@ -231,6 +239,16 @@ class DiagnosticHub:
             sequence = cast(Sequence[object], value)
             return [self._redact(child) for child in sequence]
         return str(value)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    folded = key.casefold()
+    normalized = folded.replace("-", "_")
+    return (
+        folded in _SENSITIVE_KEYS
+        or normalized.endswith("_token")
+        or normalized.endswith("_secret")
+    )
 
 
 @dataclass(frozen=True, slots=True)

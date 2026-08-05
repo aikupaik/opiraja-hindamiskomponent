@@ -44,7 +44,7 @@ async def start_test(
     service: Annotated[AssessmentService, Depends(get_assessment_service)],
     auth: Annotated[AuthContext, Depends(authorize_player)],
 ) -> PlayerReadyResponse | JSONResponse:
-    require_player(auth, test_id)
+    require_player(auth, test_id, allow_admin_simulation=True)
     view = await service.start_assessment(TestId(test_id))
     if view.status.value == "preparing":
         body = PlayerPreparingResponse()
@@ -75,7 +75,7 @@ async def submit_answer(
     service: Annotated[AssessmentService, Depends(get_assessment_service)],
     auth: Annotated[AuthContext, Depends(authorize_player)],
 ) -> PlayerReadyResponse:
-    require_player(auth, test_id)
+    require_player(auth, test_id, allow_admin_simulation=True)
     view = await service.submit_answer(
         TestId(test_id),
         payload.domain_submission_id,
