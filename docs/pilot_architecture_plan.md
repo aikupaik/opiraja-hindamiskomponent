@@ -141,8 +141,8 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 2. Verify the deployed `vastus_id` constraint/default and its `submission_id` repository mapping, then add the asynchronous repository/domain interfaces with async in-memory fakes.
 3. Extract the pure KST functions into the R service, add Plumber contracts, validation, health checks, `testthat`, and `renv`.
 4. Implement FastAPI creation, preparation/YG polling, question selection, scoring, idempotent answer handling, feedback mapping, bounded R-call capacity, operational health endpoints, structured request/dependency timing logs, separate OR/player routers, and the permissive `AuthContext` dependency seam.
-5. Build the React player and behavior tests, then replace the Shiny UI/API entrypoints.
-6. Add Docker Compose with `web`, `api`, and `r-service`; only `web` publishes a host port. Supabase secrets go only to `api`.
+5. Build the separate learner React player and behavior tests; keep the operator dashboard in its own React application and container.
+6. Run Docker Compose with `web`, `player`, `api`, and `r-service`; only `web` publishes a host port. `web` forwards `/test/*` to `player` and `/api/*` to `api`. Supabase secrets go only to `api`.
 7. Verify the deployed Supabase webhook contract with one real missing-coverage test, then update the README with local startup, configuration, migration, smoke-test, and VM deployment instructions.
 
 ## Test and Acceptance Plan

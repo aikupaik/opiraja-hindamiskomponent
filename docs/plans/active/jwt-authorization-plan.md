@@ -45,6 +45,10 @@ requires an implementation agent to choose between competing definitions.
 
 ### Priority 2: Build the sample React test player
 
+**Status: complete (2026-08-04).** The standalone player, credential boundary,
+behavior tests, hardened container, same-origin Compose routing, reload/retry
+semantics, and real API completion flow passed local acceptance.
+
 1. Create the player entry point for `/test/{test_id}` and validate the path
    identifier before making API requests.
 2. Implement explicit `preparing`, `question`, `submitting`, `completed`, and
