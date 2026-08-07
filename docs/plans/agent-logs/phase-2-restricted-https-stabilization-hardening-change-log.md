@@ -168,6 +168,53 @@ The operator subsequently confirmed that the recreated API is healthy. The
 secret/access gate is therefore complete, subject to the later authenticated
 acceptance checks using the rotated credential.
 
+## JWT rollout prerequisites — 2026-08-07
+
+During the approved maintenance window, the deployment VM was prepared for
+the reviewed JWT application commit `3b12860b25459d8e70d0eff326b5d6b13b89425c`.
+No application container was rebuilt or recreated in this step.
+
+- Upgraded Docker Buildx from `0.36.0` to `0.36.1` and Docker Compose from
+  `5.3.1` to `5.4.0`, using Docker's already configured Ubuntu repository.
+  The package manager reported a newer installed kernel; a reboot is now
+  required, but was deliberately deferred rather than combined with this
+  JWT-edge preparation change.
+- Backed up the prior root-owned host site to
+  `/var/backups/nginx/opiraja-jwt-20260807/opiraja.conf.before`. Its SHA-256
+  checksum was `3fe748c6d11dc212fa31226abb55fc802096c459dbdea579949a7f0a7977dfbc`.
+- Installed the reviewed `deploy/nginx/opiraja.conf` at the normal live site
+  path and completed a successful `nginx -t` followed by a graceful reload.
+  The active and enabled configuration checksum is now
+  `5e7bff2b4fe5cc85d05b1036cbd864b4a95d4cde43a8c580074000bb9925bb10`.
+- The installed edge now has the exact JWT controls: the `admin/login` limit,
+  shared issuance limits for test creation and player-token issuance, and the
+  player start/answer limit. Both dry-run directives remain enabled.
+- Post-change checks passed at `2026-08-07T08:55:32Z`: Compose configuration
+  was structurally valid; all existing services remained healthy; loopback web
+  health and API readiness returned `200`; the HTTPS root returned `200`; and
+  only host IPv4 `80`/`443` plus loopback `8080` listened. The new login path
+  returned `404`, as expected while the pre-JWT API image is still running.
+
+Result: **JWT host and package prerequisites are complete.** The next approved
+deployment step is `docker compose build --pull` followed by `docker compose
+up -d --remove-orphans`, health verification, and signed OR-to-player and
+admin-login acceptance. Keep both limiter dry-run directives enabled during
+that rollout. Perform the endpoint-specific threshold probes, shared-IP player
+burst, normal workflow observation, and one-day sanitized log review before
+considering limiter enforcement. Schedule the deferred kernel reboot in a
+separate approved maintenance window and re-run the standard host/Compose/TLS
+checks afterward.
+
+The deployment operator will perform that reboot manually as the final
+pre-rollout maintenance action. Do not reboot the VM from a deployment-agent
+session before the operator explicitly confirms it.
+
+The operator completed the reboot on 2026-08-07. Post-reboot verification
+found kernel `6.8.0-137-generic`, no reboot-required marker, active and
+syntactically valid Nginx, healthy Compose services, successful loopback web
+health and API-readiness checks, and only host IPv4 `80`/`443` plus loopback
+`8080` listening. The JWT application rollout may proceed.
+
 ## VM deployment and operations — Step 3 patching and Step 4 dry-run install
 
 ### Maintenance execution record
