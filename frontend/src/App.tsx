@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   PlayerApiError,
   playerApi,
@@ -24,6 +24,7 @@ type Recovery =
     }
 
 type PlayerState =
+  | { kind: 'welcome' }
   | { kind: 'preparing'; requestKey: number }
   | { kind: 'question'; question: PlayerQuestion; selection: string | null }
   | {
@@ -71,8 +72,7 @@ function TestPlayer({
   testId: string
 }) {
   const [state, setState] = useState<PlayerState>({
-    kind: 'preparing',
-    requestKey: 0,
+    kind: 'welcome',
   })
 
   useEffect(
@@ -189,6 +189,12 @@ function TestPlayer({
       </header>
 
       <section className="player-card">
+        {state.kind === 'welcome' && (
+          <WelcomeScreen
+            onStart={() => setState({ kind: 'preparing', requestKey: 0 })}
+          />
+        )}
+
         {state.kind === 'preparing' && (
           <StatusPanel title="Valmistame testi ette">
             <p role="status" aria-live="polite">
@@ -218,6 +224,90 @@ function TestPlayer({
         )}
       </section>
     </main>
+  )
+}
+
+function WelcomeScreen({ onStart }: { onStart: () => void }) {
+  const [showInfo, setShowInfo] = useState(false)
+  const infoButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!showInfo) return
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowInfo(false)
+        infoButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [showInfo])
+
+  const closeInfo = () => {
+    setShowInfo(false)
+    window.requestAnimationFrame(() => infoButtonRef.current?.focus())
+  }
+
+  return (
+    <div className="welcome-screen">
+      <button
+        ref={infoButtonRef}
+        className="info-button"
+        type="button"
+        aria-label="Testi info"
+        aria-haspopup="dialog"
+        onClick={() => setShowInfo(true)}
+      >
+        <span aria-hidden="true">i</span>
+      </button>
+      <div className="welcome-content">
+        <p className="eyebrow">Tere tulemast</p>
+        <h1>Õpiraja test</h1>
+        <p className="welcome-intro">
+          Test aitab leida, mida sa juba oskad ja milliste teemadega võiksid
+          järgmisena edasi liikuda.
+        </p>
+        <button type="button" onClick={onStart}>Alusta testi</button>
+      </div>
+
+      {showInfo && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeInfo()
+        }}>
+          <section
+            className="info-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="test-info-title"
+          >
+            <button
+              className="modal-close"
+              type="button"
+              aria-label="Sulge testi info"
+              autoFocus
+              onClick={closeInfo}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+            <p className="eyebrow">Testi tutvustus</p>
+            <h2 id="test-info-title">Kuidas test töötab?</h2>
+            <div className="info-copy">
+              {/* Replace this sample copy with the final test information. */}
+              <p>
+                Test kohandub sinu vastuste järgi: järgmine küsimus valitakse
+                selle põhjal, milliseid teadmisi sinu senised vastused näitavad.
+              </p>
+              <p>
+                Vasta igale küsimusele iseseisvalt ja vali enda arvates parim
+                vastus. Testiseanss kestab ligikaudu 10–15 minutit ning lõpus
+                kuvatakse sulle personaalne tagasiside.
+              </p>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
   )
 }
 

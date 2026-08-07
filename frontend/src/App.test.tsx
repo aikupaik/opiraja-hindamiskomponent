@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -52,11 +52,45 @@ function mockApi(
   return { start, submit }
 }
 
+function beginTest() {
+  fireEvent.click(screen.getByRole('button', { name: 'Alusta testi' }))
+}
+
 afterEach(() => {
   cleanup()
   sessionStorage.clear()
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('welcome screen', () => {
+  it('waits for the student before starting the test', async () => {
+    const start = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
+    render(<App api={mockApi(start)} pathname={path} />)
+
+    expect(screen.getByRole('heading', { name: 'Õpiraja test' })).toBeInTheDocument()
+    expect(start).not.toHaveBeenCalled()
+
+    beginTest()
+
+    expect(
+      await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' }),
+    ).toBeInTheDocument()
+    expect(start).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens and closes the test information dialog', async () => {
+    const user = userEvent.setup()
+    render(<App api={mockApi()} pathname={path} />)
+
+    await user.click(screen.getByRole('button', { name: 'Testi info' }))
+    expect(screen.getByRole('dialog', { name: 'Kuidas test töötab?' })).toBeInTheDocument()
+    expect(screen.getByText(/kohandub sinu vastuste järgi/)).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Testi info' })).toHaveFocus()
+  })
 })
 
 describe('test link bootstrap', () => {
@@ -79,6 +113,7 @@ describe('test link bootstrap', () => {
     const start = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
     const api = mockApi(start)
     render(<App api={api} />)
+    beginTest()
 
     await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' })
     expect(start).toHaveBeenCalledWith(testId, expect.any(AbortSignal))
@@ -94,6 +129,7 @@ describe('test link bootstrap', () => {
     window.history.replaceState({}, '', `${path}?token=query-token`)
     const start = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
     render(<App api={mockApi(start)} />)
+    beginTest()
 
     await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' })
     expect(sessionStorage.getItem(playerCredentialStorageKey(testId))).toBeNull()
@@ -111,6 +147,7 @@ describe('preparation polling', () => {
       .mockResolvedValueOnce({ status: 'preparing', retryAfterSeconds: 3 })
       .mockResolvedValueOnce(active())
     render(<App api={mockApi(start)} pathname={path} random={() => 0.25} />)
+    beginTest()
 
     await act(async () => {})
     expect(start).toHaveBeenCalledTimes(1)
@@ -134,6 +171,7 @@ describe('preparation polling', () => {
       .mockResolvedValueOnce({ status: 'preparing', retryAfterSeconds: 1 })
       .mockResolvedValueOnce(completed)
     render(<App api={mockApi(start)} pathname={path} random={random} />)
+    beginTest()
 
     await act(async () => {})
     await act(() => vi.advanceTimersByTimeAsync(1001))
@@ -150,6 +188,7 @@ describe('preparation polling', () => {
     vi.useFakeTimers()
     const success = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
     const first = render(<App api={mockApi(success)} pathname={path} />)
+    beginTest()
     await act(async () => {})
     await act(() => vi.advanceTimersByTimeAsync(20_000))
     expect(success).toHaveBeenCalledTimes(1)
@@ -159,6 +198,7 @@ describe('preparation polling', () => {
       .fn<PlayerApi['start']>()
       .mockRejectedValue(new PlayerApiError('not_found'))
     render(<App api={mockApi(failure)} pathname={path} />)
+    beginTest()
     await act(async () => {})
     await act(() => vi.advanceTimersByTimeAsync(20_000))
     expect(failure).toHaveBeenCalledTimes(1)
@@ -172,6 +212,7 @@ describe('preparation polling', () => {
       return Promise.resolve({ status: 'preparing', retryAfterSeconds: 3 })
     })
     const view = render(<App api={mockApi(start)} pathname={path} />)
+    beginTest()
     await act(async () => {})
 
     view.unmount()
@@ -185,6 +226,7 @@ describe('question interaction and submission', () => {
   it('preserves option order and supports native keyboard radio interaction', async () => {
     const user = userEvent.setup()
     render(<App api={mockApi()} pathname={path} />)
+    beginTest()
 
     const radios = await screen.findAllByRole('radio')
     expect(radios.map((radio) => radio.getAttribute('value'))).toEqual([
@@ -208,6 +250,7 @@ describe('question interaction and submission', () => {
     const submit = vi.fn<PlayerApi['submit']>().mockReturnValue(pending)
     const user = userEvent.setup()
     render(<App api={mockApi(undefined, submit)} pathname={path} />)
+    beginTest()
 
     await user.click(await screen.findByLabelText('Neli'))
     await user.dblClick(screen.getByRole('button', { name: 'Edasi' }))
@@ -237,6 +280,7 @@ describe('question interaction and submission', () => {
         pathname={path}
       />,
     )
+    beginTest()
 
     await user.click(await screen.findByLabelText('Neli'))
     await user.click(screen.getByRole('button', { name: 'Edasi' }))
@@ -256,6 +300,7 @@ describe('question interaction and submission', () => {
       .mockResolvedValueOnce(completed)
     const user = userEvent.setup()
     render(<App api={mockApi(undefined, submit)} pathname={path} />)
+    beginTest()
 
     await user.click(await screen.findByLabelText('Neli'))
     await user.click(screen.getByRole('button', { name: 'Edasi' }))
@@ -283,6 +328,7 @@ describe('question interaction and submission', () => {
       .mockRejectedValue(new PlayerApiError('conflict'))
     const user = userEvent.setup()
     render(<App api={mockApi(start, submit)} pathname={path} />)
+    beginTest()
 
     await user.click(await screen.findByLabelText('Kolm'))
     await user.click(screen.getByRole('button', { name: 'Edasi' }))
@@ -307,6 +353,7 @@ describe('question interaction and submission', () => {
       .mockRejectedValue(new PlayerApiError(kind, { requestId: 'terminal-id' }))
     const user = userEvent.setup()
     render(<App api={mockApi(undefined, submit)} pathname={path} />)
+    beginTest()
 
     await user.click(await screen.findByLabelText('Kolm'))
     await user.click(screen.getByRole('button', { name: 'Edasi' }))
@@ -330,6 +377,7 @@ describe('completion and reload recovery', () => {
       },
     }
     render(<App api={mockApi(vi.fn().mockResolvedValue(feedback))} pathname={path} />)
+    beginTest()
 
     expect(await screen.findByText('Juba oskad')).toBeInTheDocument()
     expect(screen.getByText('Võid õppida / rohkem süveneda')).toBeInTheDocument()
@@ -355,12 +403,15 @@ describe('completion and reload recovery', () => {
     const api = mockApi(start)
 
     const first = render(<App api={api} pathname={path} />)
+    beginTest()
     await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' })
     first.unmount()
     const second = render(<App api={api} pathname={path} />)
+    beginTest()
     await screen.findByRole('group', { name: 'Taastatud pärast laadimist' })
     second.unmount()
     render(<App api={api} pathname={path} />)
+    beginTest()
     await screen.findByRole('heading', { name: 'Sinu tagasiside' })
 
     expect(start).toHaveBeenCalledTimes(3)

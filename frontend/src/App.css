@@ -30,12 +30,109 @@
 }
 
 .player-card {
+  position: relative;
   overflow: hidden;
   padding: clamp(28px, 6vw, 64px);
   border: 1px solid var(--border);
   border-radius: 24px;
   background: rgba(255, 255, 252, 0.96);
   box-shadow: 0 24px 65px rgba(36, 55, 45, 0.1);
+}
+
+.welcome-screen {
+  min-height: 420px;
+}
+
+.welcome-content {
+  display: grid;
+  justify-items: center;
+  min-height: 420px;
+  align-content: center;
+  text-align: center;
+}
+
+.welcome-intro {
+  max-width: 570px;
+  margin: 22px 0 30px;
+  color: var(--ink-muted);
+  font-size: 1.08rem;
+}
+
+.info-button,
+.modal-close {
+  display: grid;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--forest);
+  background: white;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.info-button {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+}
+
+.info-button:hover:not(:disabled),
+.modal-close:hover:not(:disabled) {
+  color: white;
+  background: var(--forest);
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  padding: 20px;
+  background: rgba(22, 36, 30, 0.58);
+  inset: 0;
+  place-items: center;
+}
+
+.info-modal {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: clamp(30px, 6vw, 52px);
+  border-radius: 20px;
+  background: #fffffc;
+  box-shadow: 0 28px 90px rgba(17, 31, 25, 0.3);
+}
+
+.info-modal h2 {
+  margin: 0;
+  padding-right: 32px;
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  font-family: inherit;
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.info-copy {
+  margin-top: 24px;
+  color: var(--ink-muted);
+}
+
+.info-copy p:last-child {
+  margin-bottom: 0;
 }
 
 .eyebrow {
@@ -296,6 +393,7 @@ button:disabled {
 
   .brand { margin-bottom: 16px; }
   .player-card { border-radius: 18px; }
+  .info-button { top: 16px; right: 16px; }
   .option { padding-inline: 14px; }
   .actions button { width: 100%; }
 }
