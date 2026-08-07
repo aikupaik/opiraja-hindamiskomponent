@@ -7,7 +7,10 @@ import {
   type PlayerQuestion,
   type SubmissionPayload,
 } from './api'
-import { subscribeToPlayerCredentialExpiry } from './credential'
+import {
+  bootstrapPlayerCredential,
+  subscribeToPlayerCredentialExpiry,
+} from './credential'
 import { parseTestPath } from './path'
 import './App.css'
 
@@ -54,6 +57,7 @@ function App({
   if (testId === null) {
     return <InvalidLink />
   }
+  bootstrapPlayerCredential(testId)
   return <TestPlayer api={api} random={random} testId={testId} />
 }
 

@@ -24,6 +24,17 @@ class AdminSession(AdminModel):
     source_max_text_chars: int
 
 
+class AdminLoginRequest(AdminModel):
+    access_key: str = Field(min_length=1, max_length=1024)
+
+
+class AdminLoginResponse(AdminModel):
+    access_token: str
+    token_type: Literal["Bearer"] = "Bearer"
+    expires_in: int
+    session: AdminSession
+
+
 class CourseChoice(AdminModel):
     value: str
     title: str

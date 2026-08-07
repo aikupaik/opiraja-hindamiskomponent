@@ -4,6 +4,12 @@ This directory is the learner-facing React/Vite application. It is deliberately
 separate from the operator dashboard in `admin/`: the applications have
 different users, state lifecycles, presentation, and runtime containers.
 
+Learner links carry a test-bound JWT only in `#token=`. The app moves it into a
+test-specific `sessionStorage` entry, removes the fragment before API work, and
+attaches it through the centralized client. An authenticated `401` clears that
+test's token. Query parameters and persistent local storage are never used for
+credentials.
+
 ## Local development
 
 Run FastAPI on `127.0.0.1:8000`, then start the player:
@@ -41,12 +47,10 @@ submission IDs, posterior data, or internal graph identity.
 
 ## Authorization boundary
 
-The pre-JWT player link is unlisted but not secured: anyone who knows a valid
-UUID can currently use it. The credential source in `src/credential.ts` is the
-single bootstrap boundary and intentionally returns no credential. Query
-strings and fragments are ignored. The JWT phase will replace that boundary
-with fragment-token bootstrap and centralized bearer attachment without
-changing feature components.
+The player link carries a signed, test-bound JWT in its fragment. The
+credential source in `src/credential.ts` is the single bootstrap and storage
+boundary. It isolates credentials by path test ID, ignores query credentials,
+and clears the active test credential after an authenticated `401`.
 
 ## Production routing
 

@@ -20,6 +20,13 @@ export type AdminSession = {
   source_max_text_chars: number
 }
 
+export type AdminLoginResponse = {
+  access_token: string
+  token_type: 'Bearer'
+  expires_in: number
+  session: AdminSession
+}
+
 export type CourseChoice = {
   value: string
   title: string
@@ -188,14 +195,15 @@ export async function api<T>(
   return (await apiResponse<T>(path, options)).data
 }
 
-export async function validateAdminCredential<T>(
-  path: string,
-  credential: string,
+export async function loginAdmin(
+  accessKey: string,
   signal?: AbortSignal,
-): Promise<T> {
+): Promise<AdminLoginResponse> {
   return (
-    await client.json<T>(path, {
-      authentication: { mode: 'credential-validation', credential },
+    await client.json<AdminLoginResponse>('/api/v1/admin/login', {
+      method: 'POST',
+      authentication: { mode: 'none' },
+      json: { access_key: accessKey },
       signal,
     })
   ).data

@@ -18,6 +18,8 @@ from uuid import UUID, uuid4
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
@@ -30,6 +32,7 @@ from app.api.auth import (
     AuthorizationDenied,
     authenticated_admin_from_header,
 )
+from app.api.tokens import InvalidBearerToken, TokenService
 from app.admin.diagnostics import DiagnosticHub, diagnostic_context, emit_diagnostic
 from app.admin.ingestion import (
     SourceIngestor,
@@ -111,6 +114,8 @@ def build_lifespan(settings: Settings) -> Lifespan[FastAPI]:
                 ttl_seconds=settings.admin_diagnostic_ttl_seconds,
                 secrets=(
                     settings.supabase_service_key.get_secret_value(),
+                    settings.or_jwt_secret.get_secret_value(),
+                    settings.api_jwt_secret.get_secret_value(),
                     (
                         ""
                         if settings.admin_access_key is None
@@ -152,6 +157,7 @@ def create_app(
         allowed_hosts=resolved_settings.allowed_hosts,
     )
     app.state.settings = resolved_settings
+    app.state.token_service = TokenService(resolved_settings)
     app.include_router(health_router)
     app.include_router(or_router)
     app.include_router(player_router)
@@ -178,6 +184,12 @@ def _register_exception_handlers(app: FastAPI) -> None:
             401,
             "admin_unauthorized",
             "Valid admin credentials are required.",
+        ),
+        (
+            InvalidBearerToken,
+            401,
+            "invalid_token",
+            "Valid bearer credentials are required.",
         ),
         (AdminRowNotFound, 404, "admin_not_found", "Admin row was not found."),
         (SourceTooLarge, 413, "source_too_large", "Source exceeds configured limits."),
@@ -210,11 +222,34 @@ def _register_exception_handlers(app: FastAPI) -> None:
         ),
     )
     for exception_type, status_code, code, message in mappings:
+        headers = (
+            {"WWW-Authenticate": "Bearer"}
+            if exception_type is InvalidBearerToken
+            else None
+        )
         app.add_exception_handler(
             exception_type,
-            _failure_handler(status_code, code, message),
+            _failure_handler(status_code, code, message, headers=headers),
         )
     app.add_exception_handler(SourceRemoteFailure, _remote_source_failure)
+    app.add_exception_handler(RequestValidationError, _request_validation_failure)
+
+
+async def _request_validation_failure(request: Request, error: Exception) -> Response:
+    if not isinstance(error, RequestValidationError):
+        return _error_response(422, "validation_error", "Request validation failed.")
+    request.state.outcome_code = "validation_error"
+    if request.url.path != "/api/v1/admin/login":
+        return await request_validation_exception_handler(request, error)
+    detail = [
+        {
+            "type": item["type"],
+            "loc": item["loc"],
+            "msg": item["msg"],
+        }
+        for item in error.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 async def _remote_source_failure(request: Request, error: Exception) -> Response:
@@ -239,11 +274,15 @@ async def _remote_source_failure(request: Request, error: Exception) -> Response
 
 
 def _failure_handler(
-    status_code: int, code: str, message: str
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    headers: Mapping[str, str] | None = None,
 ) -> Callable[[Request, Exception], Awaitable[Response]]:
     async def handler(request: Request, _error: Exception) -> Response:
         request.state.outcome_code = code
-        return _error_response(status_code, code, message)
+        return _error_response(status_code, code, message, headers=headers)
 
     return handler
 
@@ -307,6 +346,8 @@ async def _request_completion_middleware(
                     500, "internal_error", "The request could not be completed."
                 )
             response.headers["X-Request-ID"] = request_id
+            if request.url.path == "/api/v1/admin/login":
+                response.headers["Cache-Control"] = "no-store"
             status_code = response.status_code
         response_body: object = None
         if experiment_id is not None:
@@ -442,8 +483,15 @@ def _outcome_for_status(status_code: int) -> str:
     return "server_error"
 
 
-def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def _error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message}},
+        headers=None if headers is None else dict(headers),
     )

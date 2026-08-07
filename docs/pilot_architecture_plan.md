@@ -90,12 +90,13 @@ Create and commit an `renv.lock`; the container must restore it rather than rely
 
 ### Public API
 
-The authoritative pre-JWT behavioral contract for the OR and player routes is
+The authoritative JWT-protected behavioral contract for the OR and player routes is
 [`docs/contracts/public-assessment-api.md`](contracts/public-assessment-api.md).
 FastAPI's generated OpenAPI schema is its machine-readable representation, and
 contract tests enforce state-dependent behavior that OpenAPI cannot express.
 
-The phase-one MVP keeps these routes callable without credentials through the permissive authorization dependency. Their separation and required pre-pilot permissions are defined now so authorization can later be enabled without changing assessment services or persistence.
+These routes require the signed bearer profiles and permissions summarized in
+the implemented authorization section below.
 
 - `POST /api/v1/tests`
   - OR-facing; pre-pilot permission: `tests:create`.
@@ -155,9 +156,12 @@ Question responses contain `submission_id`, `item_id`, instruction, prompt, opti
 - End-to-end acceptance: `docker compose up --build` starts services that pass their readiness checks; a created link survives browser/API container restarts; missing items progress through the existing webhook; every accepted submission creates exactly one result; and a test reaches reproducible final feedback.
 - Changing `MAX_GRAPH_NODES` in one setting changes the enforced limit; changing the KST configuration file affects new sessions while existing sessions retain their stored configuration.
 
-## Pre-Pilot Security and Authorization
+## Implemented Pre-Pilot Security and Authorization
 
-This section is deliberately outside the phase-one MVP implementation and acceptance scope, but it is mandatory before exposing the application for a student pilot. It adds bearer authorization without adding student accounts, login screens, Supabase Auth, RLS changes, or authorization between FastAPI and the internal R service.
+This bearer-authorization architecture is implemented without student
+accounts, learner login screens, Supabase Auth, RLS changes, or authorization
+between FastAPI and the internal R service. Deployment probes and the reviewed
+transition from dry-run to enforced edge limits remain operational gates.
 
 The exact implementation contract is frozen in
 [`docs/plans/active/jwt-authorization-plan.md`](plans/active/jwt-authorization-plan.md).
@@ -166,7 +170,7 @@ different token profile, endpoint shape, or operational policy.
 
 ### Authorization model
 
-- Replace the permissive phase-one authorization dependencies with centralized
+- Use centralized
   PyJWT validation while preserving `AuthContext`, route handlers, and the
   explicit admin-simulation exceptions. Pin `HS256`, require each profile's
   exact claims and types, and use 30 seconds of leeway.
@@ -281,7 +285,9 @@ These are deliberately outside the phase-one MVP implementation and acceptance s
 ## Assumptions and Deferred Work
 
 - The deployed Supabase INSERT webhook invokes the existing YG Edge Function and uses the documented order payload/status values.
-- The phase-one MVP runs in a controlled development environment with a permissive authorization dependency. The externally reachable pilot enables the mandatory pre-pilot authorization section above, while still having no student login, Supabase Auth, or RLS changes.
+- JWT authorization is implemented while the learner flow still has no student
+  login, Supabase Auth, or RLS changes. Public exposure remains gated by the
+  operational acceptance checks above.
 - Only KST and multiple-choice questions are supported.
 - No YG migration, OR UI integration, calibration/AN component, WebSockets, queues, Redis, background workers, load balancing, or multi-replica concurrency work is included.
 - Full identity management, student accounts, fine-grained administrative roles, general token revocation, production-scale denial-of-service protection, transaction redesign beyond submission idempotency, monitoring infrastructure, and multi-replica hardening remain later phases.

@@ -1,7 +1,6 @@
 """Replaceable authorization seams for OR, player, and admin routes."""
 
 from dataclasses import dataclass
-import secrets
 from typing import Literal
 from uuid import UUID
 
@@ -18,6 +17,7 @@ ADMIN_SIMULATION = "admin:simulation"
 TESTS_CREATE = "tests:create"
 TESTS_READ = "tests:read"
 TESTS_PLAY = "tests:play"
+TESTS_LAUNCH = "tests:launch"
 ADMIN_SCOPES = frozenset(
     {
         ADMIN_READ,
@@ -47,24 +47,20 @@ class AdminUnauthorized(RuntimeError):
     """Admin credentials are missing, invalid, or disabled."""
 
 
-def _validated_admin(
+def _validated_context(
     request: Request, credentials: HTTPAuthorizationCredentials | None
-) -> AuthContext | None:
-    settings = request.app.state.settings
-    if not isinstance(settings, Settings) or settings.admin_access_key is None:
-        return None
+) -> AuthContext:
+    from .tokens import InvalidBearerToken, TokenService
+
     if credentials is None or credentials.scheme.casefold() != "bearer":
-        return None
-    expected = settings.admin_access_key.get_secret_value()
-    if not secrets.compare_digest(
-        credentials.credentials.encode("utf-8"), expected.encode("utf-8")
-    ):
-        return None
-    return AuthContext(
-        actor_type="admin",
-        subject="development-admin",
-        scopes=ADMIN_SCOPES,
-    )
+        raise InvalidBearerToken("valid bearer credentials are required")
+    settings = request.app.state.settings
+    if not isinstance(settings, Settings):
+        raise InvalidBearerToken("authorization configuration is unavailable")
+    service = getattr(request.app.state, "token_service", None)
+    if not isinstance(service, TokenService):
+        service = TokenService(settings)
+    return service.decode(credentials.credentials)
 
 
 def authenticated_admin_from_header(
@@ -75,36 +71,28 @@ def authenticated_admin_from_header(
     scheme, separator, token = authorization.partition(" ")
     if not separator or scheme.casefold() != "bearer" or not token:
         return None
-    return _validated_admin(
-        request,
-        HTTPAuthorizationCredentials(scheme=scheme, credentials=token),
-    )
+    try:
+        context = _validated_context(
+            request,
+            HTTPAuthorizationCredentials(scheme=scheme, credentials=token),
+        )
+    except RuntimeError:
+        return None
+    return context if context.actor_type == "admin" else None
 
 
 async def authorize_admin(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> AuthContext:
-    context = _validated_admin(request, credentials)
-    if context is None:
-        raise AdminUnauthorized("valid admin credentials are required")
-    return context
+    return _validated_context(request, credentials)
 
 
 async def authorize_or(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> AuthContext:
-    """Phase-one permissive OR authorization dependency."""
-
-    admin = _validated_admin(request, credentials)
-    if admin is not None:
-        return admin
-    return AuthContext(
-        actor_type="or",
-        subject="phase-one-or",
-        scopes=frozenset({TESTS_CREATE, TESTS_READ}),
-    )
+    return _validated_context(request, credentials)
 
 
 async def authorize_player(
@@ -112,17 +100,7 @@ async def authorize_player(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> AuthContext:
-    """Phase-one permissive player dependency bound to the path test ID."""
-
-    admin = _validated_admin(request, credentials)
-    if admin is not None:
-        return admin
-    return AuthContext(
-        actor_type="player",
-        subject="phase-one-player",
-        scopes=frozenset({TESTS_PLAY}),
-        authorized_test_id=test_id,
-    )
+    return _validated_context(request, credentials)
 
 
 def require_or(

@@ -2,6 +2,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { playerCredentialStorageKey } from './credential'
 import {
   PlayerApiError,
   type ActiveResult,
@@ -53,6 +54,7 @@ function mockApi(
 
 afterEach(() => {
   cleanup()
+  sessionStorage.clear()
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -72,14 +74,32 @@ describe('test link bootstrap', () => {
     },
   )
 
-  it('ignores the browser query and fragment in the permissive phase', async () => {
-    window.history.replaceState({}, '', `${path}?token=query#token=fragment`)
+  it('moves an exact fragment token to test-specific session storage before API work', async () => {
+    window.history.replaceState({}, '', `${path}#token=signed-player-jwt`)
     const start = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
     const api = mockApi(start)
     render(<App api={api} />)
 
     await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' })
     expect(start).toHaveBeenCalledWith(testId, expect.any(AbortSignal))
+    expect(window.location.hash).toBe('')
+    expect(sessionStorage.getItem(playerCredentialStorageKey(testId))).toBe(
+      'signed-player-jwt',
+    )
+  })
+
+  it('does not accept query credentials or another test token', async () => {
+    const otherId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    sessionStorage.setItem(playerCredentialStorageKey(otherId), 'other-token')
+    window.history.replaceState({}, '', `${path}?token=query-token`)
+    const start = vi.fn<PlayerApi['start']>().mockResolvedValue(active())
+    render(<App api={mockApi(start)} />)
+
+    await screen.findByRole('group', { name: 'Mis on kaks pluss kaks?' })
+    expect(sessionStorage.getItem(playerCredentialStorageKey(testId))).toBeNull()
+    expect(sessionStorage.getItem(playerCredentialStorageKey(otherId))).toBe(
+      'other-token',
+    )
   })
 })
 

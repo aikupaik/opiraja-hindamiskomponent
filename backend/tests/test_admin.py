@@ -41,6 +41,7 @@ from app.api.dependencies import (
     get_assessment_service,
     get_source_ingestor,
 )
+from app.api.tokens import TokenService
 from app.config import Settings
 from app.domain.models import ItemStatus, SessionStatus, TestId
 from app.main import create_app
@@ -58,10 +59,18 @@ def _settings(*, admin_key: str | None = "operator-secret") -> Settings:
         "SUPABASE_SERVICE_KEY": "service-secret",
         "R_SERVICE_URL": "http://r-service:8000",
         "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
+        "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+        "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+        "OR_JWT_ISSUER": "test-or",
+        "PLAYER_APP_URL": "http://localhost:5173",
     }
     if admin_key is not None:
         values["ADMIN_ACCESS_KEY"] = admin_key
     return Settings.model_validate(values)
+
+
+def _admin_token(settings: Settings | None = None) -> str:
+    return TokenService(settings or _settings()).issue_admin()
 
 
 @asynccontextmanager
@@ -84,7 +93,7 @@ def _app(settings: Settings) -> FastAPI:
 
 
 @pytest.mark.asyncio
-async def test_admin_key_is_required_constant_boundary_and_can_be_disabled() -> None:
+async def test_admin_login_issues_jwt_and_raw_key_is_rejected_elsewhere() -> None:
     app = _app(_settings())
     async with _client(app) as client:
         missing = await client.get("/api/v1/admin/session")
@@ -92,14 +101,27 @@ async def test_admin_key_is_required_constant_boundary_and_can_be_disabled() -> 
             "/api/v1/admin/session",
             headers={"Authorization": "Bearer wrong"},
         )
+        login = await client.post(
+            "/api/v1/admin/login",
+            json={"access_key": "operator-secret"},
+        )
+        token = login.json()["access_token"]
         valid = await client.get(
+            "/api/v1/admin/session", headers={"Authorization": f"Bearer {token}"}
+        )
+        raw_key = await client.get(
             "/api/v1/admin/session",
             headers={"Authorization": "Bearer operator-secret"},
         )
 
     assert missing.status_code == invalid.status_code == 401
     assert "operator-secret" not in missing.text + invalid.text
+    assert login.status_code == 200
+    assert login.headers["cache-control"] == "no-store"
+    assert login.json()["token_type"] == "Bearer"
+    assert login.json()["expires_in"] == 28_800
     assert valid.status_code == 200
+    assert raw_key.status_code == 401
     assert set(valid.json()["capabilities"]) >= {
         "admin:read",
         "admin:write",
@@ -107,16 +129,49 @@ async def test_admin_key_is_required_constant_boundary_and_can_be_disabled() -> 
         "admin:simulation",
     }
     assert set(valid.json()["capabilities"]).isdisjoint(
-        {"tests:create", "tests:read", "tests:play"}
+        {"tests:create", "tests:read", "tests:launch", "tests:play"}
     )
     assert valid.json()["max_graph_nodes"] == 10
 
     async with _client(_app(_settings(admin_key=None))) as client:
-        disabled = await client.get(
-            "/api/v1/admin/session",
-            headers={"Authorization": "Bearer operator-secret"},
+        disabled = await client.post(
+            "/api/v1/admin/login",
+            json={"access_key": "operator-secret"},
         )
     assert disabled.status_code == 401
+    assert disabled.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_admin_login_request_is_strict_generic_and_never_cacheable() -> None:
+    async with _client(_app(_settings())) as client:
+        wrong = await client.post(
+            "/api/v1/admin/login", json={"access_key": "wrong"}
+        )
+        empty = await client.post(
+            "/api/v1/admin/login", json={"access_key": ""}
+        )
+        unknown = await client.post(
+            "/api/v1/admin/login",
+            json={"access_key": "operator-secret", "extra": True},
+        )
+        too_long = await client.post(
+            "/api/v1/admin/login", json={"access_key": "x" * 1025}
+        )
+
+    assert wrong.status_code == 401
+    assert wrong.json() == {
+        "error": {
+            "code": "admin_unauthorized",
+            "message": "Valid admin credentials are required.",
+        }
+    }
+    assert "www-authenticate" not in wrong.headers
+    for response in (wrong, empty, unknown, too_long):
+        assert response.headers["cache-control"] == "no-store"
+    assert empty.status_code == unknown.status_code == too_long.status_code == 422
+    assert "operator-secret" not in unknown.text
+    assert "x" * 1025 not in too_long.text
 
 
 def test_course_aggregation_uses_newest_title_and_null_course_fallback() -> None:
@@ -427,7 +482,7 @@ async def test_upload_takes_precedence_over_url_and_returns_saved_preview() -> N
     async with _client(app) as client:
         saved = await client.post(
             "/api/v1/admin/source-materials",
-            headers={"Authorization": "Bearer operator-secret"},
+            headers={"Authorization": f"Bearer {_admin_token()}"},
             data={
                 "course": "FÜS101",
                 "title": "Physics",
@@ -461,7 +516,7 @@ async def test_request_logs_exclude_sensitive_headers_query_and_upload_content(
         saved = await client.post(
             "/api/v1/admin/source-materials?redirect_token=query-secret",
             headers={
-                "Authorization": "Bearer operator-secret",
+                "Authorization": f"Bearer {_admin_token()}",
                 "Cookie": "session=browser-cookie-secret",
             },
             data={
@@ -591,7 +646,7 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
             client.post(
                 "/api/v1/tests",
                 headers={
-                    "Authorization": "Bearer operator-secret",
+                    "Authorization": f"Bearer {_admin_token()}",
                     "X-Experiment-ID": experiment_id,
                 },
                 json={
@@ -607,7 +662,7 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
             client.post(
                 "/api/v1/player/tests/10000000-0000-4000-8000-000000000001/start",
                 headers={
-                    "Authorization": "Bearer operator-secret",
+                    "Authorization": f"Bearer {_admin_token()}",
                     "X-Experiment-ID": player_experiment_id,
                 },
             ),
@@ -632,7 +687,7 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
             client.post(
                 "/api/v1/tests",
                 headers={
-                    "Authorization": "Bearer operator-secret",
+                    "Authorization": f"Bearer {_admin_token()}",
                     "X-Experiment-ID": "not-a-uuid",
                 },
                 json={
@@ -646,7 +701,7 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
         ineligible_route = await client.get(
             "/api/v1/admin/session",
             headers={
-                "Authorization": "Bearer operator-secret",
+                "Authorization": f"Bearer {_admin_token()}",
                 "X-Experiment-ID": "50000000-0000-4000-8000-000000000005",
             },
         )
@@ -654,7 +709,8 @@ async def test_only_authenticated_correlated_test_requests_emit_diagnostics() ->
         events = hub.events_after(experiment_id)
         player_events = hub.events_after(player_experiment_id)
 
-    assert correlated.status_code == uncorrelated.status_code == 201
+        assert correlated.status_code == 201
+        assert uncorrelated.status_code == 401
     assert correlated_player.status_code == 202
     assert malformed_correlation.status_code == 201
     assert ineligible_route.status_code == 200

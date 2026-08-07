@@ -3,8 +3,8 @@ import type { FormEvent } from 'react'
 import {
   api,
   errorMessage,
+  loginAdmin,
   loginErrorMessage,
-  validateAdminCredential,
   type AdminSession,
   type CourseChoice,
 } from './api'
@@ -59,11 +59,7 @@ function App() {
     }
     const controller = new AbortController()
     setUnlocking(true)
-    validateAdminCredential<AdminSession>(
-      '/api/v1/admin/session',
-      stored,
-      controller.signal,
-    )
+    api<AdminSession>('/api/v1/admin/session', { signal: controller.signal })
       .then((validated) => {
         setSession(validated)
         setUnlockError('')
@@ -96,12 +92,9 @@ function App() {
     setUnlocking(true)
     setUnlockError('')
     try {
-      const validated = await validateAdminCredential<AdminSession>(
-        '/api/v1/admin/session',
-        key,
-      )
-      storeAdminCredential(key)
-      setSession(validated)
+      const loggedIn = await loginAdmin(key)
+      storeAdminCredential(loggedIn.access_token)
+      setSession(loggedIn.session)
     } catch (caught) {
       clearAdminCredential()
       setUnlockError(loginErrorMessage(caught))
@@ -221,8 +214,8 @@ function UnlockScreen({
         <p className="eyebrow">Restricted operator surface</p>
         <h1>Unlock Assessment Lab</h1>
         <p>
-          Enter the development admin access key. It stays in this browser tab
-          only.
+          Enter the development admin access key. It is exchanged for a
+          browser-tab session and is not stored.
         </p>
         <label>
           <span>Admin access key</span>
@@ -239,7 +232,8 @@ function UnlockScreen({
           {loading ? 'Validating…' : 'Enter console'}
         </button>
         <small>
-          The key is validated by FastAPI and never bundled into the client.
+          The key is validated by FastAPI and only the signed session token is
+          retained in this tab.
         </small>
       </form>
     </main>

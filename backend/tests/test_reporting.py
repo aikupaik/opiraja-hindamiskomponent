@@ -18,6 +18,7 @@ from app.admin.diagnostics import (
 )
 from app.admin.reporting import build_experiment_report
 from app.config import Settings
+from app.api.tokens import TokenService
 from app.main import create_app
 
 EXPERIMENT_ID = "30000000-0000-4000-8000-000000000003"
@@ -505,6 +506,10 @@ def _settings() -> Settings:
             "R_SERVICE_URL": "http://r-service:8000",
             "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
             "ADMIN_ACCESS_KEY": "operator-secret",
+            "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+            "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+            "OR_JWT_ISSUER": "test-or",
+            "PLAYER_APP_URL": "http://localhost:5173",
         }
     )
 
@@ -516,6 +521,10 @@ def _app(hub: DiagnosticHub) -> FastAPI:
         yield
 
     return create_app(_settings(), lifespan=lifespan)
+
+
+def _admin_token() -> str:
+    return TokenService(_settings()).issue_admin()
 
 
 @pytest.mark.asyncio
@@ -537,7 +546,7 @@ async def test_report_endpoint_requires_diagnostics_auth_and_returns_404() -> No
             )
             missing = await client.get(
                 f"/api/v1/admin/experiments/{EXPERIMENT_ID}/report",
-                headers={"Authorization": "Bearer operator-secret"},
+                headers={"Authorization": f"Bearer {_admin_token()}"},
             )
             hub.emit(
                 EXPERIMENT_ID,
@@ -554,7 +563,7 @@ async def test_report_endpoint_requires_diagnostics_auth_and_returns_404() -> No
             )
             partial = await client.get(
                 f"/api/v1/admin/experiments/{EXPERIMENT_ID}/report",
-                headers={"Authorization": "Bearer operator-secret"},
+                headers={"Authorization": f"Bearer {_admin_token()}"},
             )
 
     assert unauthorized.status_code == 401

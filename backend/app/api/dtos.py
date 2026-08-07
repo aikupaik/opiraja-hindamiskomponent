@@ -120,6 +120,10 @@ class CreateTestResponse(PublicModel):
         )
 
 
+class PlayerTokenResponse(PublicModel):
+    player_url: str
+
+
 class TestPreparingResponse(PublicModel):
     status: Literal["preparing"] = "preparing"
 

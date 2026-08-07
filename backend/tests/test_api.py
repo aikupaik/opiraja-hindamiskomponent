@@ -2,12 +2,14 @@
 
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 from uuid import UUID
 
 import httpx
+import jwt
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -19,7 +21,9 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.api.auth import (
     ADMIN_SIMULATION,
     TESTS_CREATE,
+    TESTS_LAUNCH,
     TESTS_PLAY,
+    TESTS_READ,
     AuthContext,
     AuthorizationDenied,
     authorize_player,
@@ -27,8 +31,9 @@ from app.api.auth import (
     require_player,
 )
 from app.api.dependencies import get_kst_engine, get_repository
+from app.api.tokens import TokenService
 from app.config import Settings
-from app.domain.models import AdvanceCompleted, ItemId, ModelBuildResult
+from app.domain.models import AdvanceCompleted, ItemId, ModelBuildResult, SessionStatus
 from app.domain.repository import AssessmentRepository
 from app.domain.repository import RepositoryUnavailable
 from app.integrations.kst_engine import KstEngine
@@ -54,8 +59,42 @@ def _settings() -> Settings:
             "R_SERVICE_URL": "http://r-service:8000",
             "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1", "testserver"],
             "READINESS_TIMEOUT_SECONDS": 0.05,
+            "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+            "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+            "OR_JWT_ISSUER": "test-or",
+            "PLAYER_APP_URL": "http://localhost:5173",
         }
     )
+
+
+def _or_token(*scopes: str) -> str:
+    now = int(time.time())
+    granted = scopes or (TESTS_CREATE, TESTS_READ, TESTS_LAUNCH)
+    settings = _settings()
+    return jwt.encode(
+        {
+            "iss": settings.or_jwt_issuer,
+            "aud": "assessment-api",
+            "sub": "test-or-service",
+            "scope": " ".join(granted),
+            "iat": now,
+            "exp": now + 300,
+        },
+        settings.or_jwt_secret.get_secret_value(),
+        algorithm="HS256",
+    )
+
+
+def _player_token(test_id: UUID) -> str:
+    return TokenService(_settings()).issue_player(test_id)
+
+
+def _admin_token() -> str:
+    return TokenService(_settings()).issue_admin()
+
+
+def _authorization(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_admin_simulation_is_an_explicit_cross_profile_exception() -> None:
@@ -258,6 +297,7 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
     async with _client(app) as client:
         created = await client.post(
             "/api/v1/tests",
+            headers=_authorization(_or_token()),
             json={
                 "user_id": "or-user",
                 "learning_path_id": "path-1",
@@ -272,22 +312,33 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
         assert body == {
             "test_id": str(test_id),
             "status": "preparing",
-            "player_url": f"/test/{test_id}",
+            "player_url": body["player_url"],
             "missing_nodes": ["A", "B"],
         }
+        assert body["player_url"].startswith(
+            f"http://localhost:5173/test/{test_id}#token="
+        )
+        player_token = body["player_url"].split("#token=", 1)[1]
+        assert created.headers["cache-control"] == "no-store"
         assert created.headers["location"] == f"/api/v1/tests/{test_id}"
 
-        status_response = await client.get(f"/api/v1/tests/{test_id}")
+        status_response = await client.get(
+            f"/api/v1/tests/{test_id}", headers=_authorization(_or_token())
+        )
         assert status_response.status_code == 200
         assert status_response.json() == {"status": "preparing"}
 
-        player = await client.post(f"/api/v1/player/tests/{test_id}/start")
+        player = await client.post(
+            f"/api/v1/player/tests/{test_id}/start",
+            headers=_authorization(player_token),
+        )
         assert player.status_code == 202
         assert player.headers["retry-after"] == "3"
         assert player.json() == {"status": "preparing"}
 
         invalid = await client.post(
             "/api/v1/tests",
+            headers=_authorization(_or_token()),
             json={
                 "user_id": "or-user",
                 "learning_path_id": "path-1",
@@ -301,6 +352,7 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
 
         invalid_graph = await client.post(
             "/api/v1/tests",
+            headers=_authorization(_or_token()),
             json={
                 "user_id": "or-user",
                 "learning_path_id": "path-1",
@@ -323,12 +375,14 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
     operations = {
         "create": paths["/api/v1/tests"]["post"],
         "status": paths["/api/v1/tests/{test_id}"]["get"],
+        "link": paths["/api/v1/tests/{test_id}/player-token"]["post"],
         "start": paths["/api/v1/player/tests/{test_id}/start"]["post"],
         "answer": paths["/api/v1/player/tests/{test_id}/answers"]["post"],
     }
 
     assert set(operations["create"]["responses"]) == {
         "201",
+        "401",
         "403",
         "422",
         "500",
@@ -336,6 +390,7 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
     }
     assert set(operations["status"]["responses"]) == {
         "200",
+        "401",
         "403",
         "404",
         "409",
@@ -346,6 +401,17 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
     assert set(operations["start"]["responses"]) == {
         "200",
         "202",
+        "401",
+        "403",
+        "404",
+        "409",
+        "422",
+        "500",
+        "503",
+    }
+    assert set(operations["link"]["responses"]) == {
+        "200",
+        "401",
         "403",
         "404",
         "409",
@@ -355,6 +421,7 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
     }
     assert set(operations["answer"]["responses"]) == {
         "200",
+        "401",
         "403",
         "404",
         "409",
@@ -363,7 +430,7 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
         "503",
     }
     for operation in operations.values():
-        assert operation["security"] == [{"HTTPBearer": []}, {}]
+        assert operation["security"] == [{"HTTPBearer": []}]
 
     start_success = operations["start"]["responses"]["200"]["content"][
         "application/json"
@@ -393,7 +460,10 @@ async def test_player_start_and_completion_never_expose_internal_assessment_data
     )
 
     async with _client(_app(repository, engine, seed_active=True)) as client:
-        started = await client.post(f"/api/v1/player/tests/{TEST_ID}/start")
+        player_headers = _authorization(_player_token(UUID(str(TEST_ID))))
+        started = await client.post(
+            f"/api/v1/player/tests/{TEST_ID}/start", headers=player_headers
+        )
         assert started.status_code == 200
         question = started.json()
         assert question == {
@@ -425,6 +495,7 @@ async def test_player_start_and_completion_never_expose_internal_assessment_data
 
         completed = await client.post(
             f"/api/v1/player/tests/{TEST_ID}/answers",
+            headers=player_headers,
             json={
                 "submission_id": str(SUBMISSION_ID),
                 "option_id": "option-1",
@@ -442,7 +513,9 @@ async def test_player_start_and_completion_never_expose_internal_assessment_data
             },
         }
 
-        or_view = await client.get(f"/api/v1/tests/{TEST_ID}")
+        or_view = await client.get(
+            f"/api/v1/tests/{TEST_ID}", headers=_authorization(_or_token())
+        )
         assert or_view.json() == completed.json()
 
 
@@ -470,7 +543,9 @@ async def test_authorization_override_and_stable_error_mapping_are_independent()
             }
         }
 
-        missing = await client.get(f"/api/v1/tests/{TEST_ID}")
+        missing = await client.get(
+            f"/api/v1/tests/{TEST_ID}", headers=_authorization(_or_token())
+        )
         assert missing.status_code == 404
         assert missing.json()["error"]["code"] == "assessment_not_found"
 
@@ -479,7 +554,9 @@ async def test_authorization_override_and_stable_error_mapping_are_independent()
     )
     app.dependency_overrides.clear()
     async with _client(app) as client:
-        unavailable = await client.get(f"/api/v1/tests/{TEST_ID}")
+        unavailable = await client.get(
+            f"/api/v1/tests/{TEST_ID}", headers=_authorization(_or_token())
+        )
         assert unavailable.status_code == 503
         assert unavailable.json() == {
             "error": {
@@ -502,7 +579,7 @@ async def test_request_id_completion_event_and_redaction(
             f"/api/v1/tests/{TEST_ID}",
             headers={
                 "X-Request-ID": "request.safe-123",
-                "Authorization": "Bearer player-secret",
+                "Authorization": f"Bearer {_or_token()}",
             },
         )
 
@@ -520,7 +597,7 @@ async def test_request_id_completion_event_and_redaction(
     assert event["outcome"] == "assessment_not_found"
     assert event["supabase_execute_count"] == 0
     assert event["r_request_count"] == 0
-    assert "player-secret" not in messages[0]
+    assert _or_token() not in messages[0]
     assert "super-secret-service-key" not in messages[0]
 
 
@@ -536,7 +613,9 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
 
     app.dependency_overrides[get_repository] = repository_override
     async with _client(app) as client:
-        response = await client.get(f"/api/v1/tests/{TEST_ID}")
+        response = await client.get(
+            f"/api/v1/tests/{TEST_ID}", headers=_authorization(_or_token())
+        )
     assert response.json() == {"status": "active"}
 
     app.dependency_overrides.clear()
@@ -560,6 +639,7 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
     async with _client(app) as client:
         created = await client.post(
             "/api/v1/tests",
+            headers=_authorization(_or_token()),
             json={
                 "user_id": "or-user",
                 "learning_path_id": "path-1",
@@ -573,6 +653,85 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
         "build_model",
         "select",
     ]
+
+
+@pytest.mark.asyncio
+async def test_signed_profiles_have_generic_401_and_cross_profile_403() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_session(make_session())
+    app = _app(repository, FakeKstEngine())
+    wrong_test = UUID("30000000-0000-4000-8000-000000000003")
+
+    async with _client(app) as client:
+        for headers in ({}, {"Authorization": "Basic opaque"}, {"Authorization": "Bearer bad"}):
+            response = await client.get(f"/api/v1/tests/{TEST_ID}", headers=headers)
+            assert response.status_code == 401
+            assert response.headers["www-authenticate"] == "Bearer"
+            assert response.json() == {
+                "error": {
+                    "code": "invalid_token",
+                    "message": "Valid bearer credentials are required.",
+                }
+            }
+
+        player_on_or = await client.get(
+            f"/api/v1/tests/{TEST_ID}",
+            headers=_authorization(_player_token(UUID(str(TEST_ID)))),
+        )
+        or_on_player = await client.post(
+            f"/api/v1/player/tests/{TEST_ID}/start",
+            headers=_authorization(_or_token(TESTS_READ)),
+        )
+        wrong_binding = await client.post(
+            f"/api/v1/player/tests/{TEST_ID}/start",
+            headers=_authorization(_player_token(wrong_test)),
+        )
+
+    assert player_on_or.status_code == 403
+    assert or_on_player.status_code == 403
+    assert wrong_binding.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_player_token_route_is_fresh_no_store_and_strictly_or_launch() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_session(make_session())
+    app = _app(repository, FakeKstEngine())
+    path = f"/api/v1/tests/{TEST_ID}/player-token"
+
+    async with _client(app) as client:
+        first = await client.post(
+            path, headers=_authorization(_or_token(TESTS_LAUNCH))
+        )
+        second = await client.post(
+            path, headers=_authorization(_or_token(TESTS_LAUNCH))
+        )
+        insufficient = await client.post(
+            path, headers=_authorization(_or_token(TESTS_READ))
+        )
+        admin = await client.post(path, headers=_authorization(_admin_token()))
+        unknown = await client.post(
+            "/api/v1/tests/30000000-0000-4000-8000-000000000003/player-token",
+            headers=_authorization(_or_token(TESTS_LAUNCH)),
+        )
+
+    assert first.status_code == second.status_code == 200
+    assert first.headers["cache-control"] == "no-store"
+    assert first.json()["player_url"].startswith(
+        f"http://localhost:5173/test/{TEST_ID}#token="
+    )
+    assert first.json() != second.json()
+    assert insufficient.status_code == 403
+    assert admin.status_code == 403
+    assert unknown.status_code == 404
+
+    failed_repository = InMemoryAssessmentRepository()
+    await failed_repository.seed_session(make_session(status=SessionStatus.FAILED))
+    async with _client(_app(failed_repository, FakeKstEngine())) as client:
+        failed = await client.post(
+            path, headers=_authorization(_or_token(TESTS_LAUNCH))
+        )
+    assert failed.status_code == 409
 
 
 @pytest.mark.asyncio

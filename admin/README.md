@@ -33,8 +33,9 @@ npm run dev
 
 Vite proxies same-origin `/api` requests to `http://127.0.0.1:8001`, so broad
 CORS is not required. The operator enters the key on the unlock screen; after
-FastAPI validates `/api/v1/admin/session`, it is kept only in
-`sessionStorage`. Locking removes it.
+FastAPI exchanges it at `/api/v1/admin/login`, only the returned JWT is kept in
+`sessionStorage`. Locking or an authenticated `401` removes the JWT. The raw
+key is never stored by the browser.
 
 ## Verification
 
@@ -65,6 +66,6 @@ experiment diagnostic stream. It creates through `POST /api/v1/tests`, opens
 the returned same-origin player URL only after an operator action, and polls
 `GET /api/v1/tests/{test_id}` every three seconds until completion or failure.
 Monitoring is page-local and stops on navigation or reload; the created test
-and player link remain valid. During the current permissive phase the admin key
-authorizes the OR calls, while the unlisted player URL itself is not yet secured
-by the future player-token contract.
+and signed player link remain valid for their configured lifetime. The admin
+JWT authorizes only the explicit simulation routes and never receives public
+OR or player scopes.

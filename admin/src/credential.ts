@@ -1,6 +1,6 @@
 import type { CredentialSource } from '@opiraja/frontend-api'
 
-export const ADMIN_CREDENTIAL_STORAGE_KEY = 'assessment-admin-access-key'
+export const ADMIN_CREDENTIAL_STORAGE_KEY = 'assessment-admin-jwt'
 
 const expiredListeners = new Set<() => void>()
 

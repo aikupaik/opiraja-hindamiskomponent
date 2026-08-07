@@ -4,7 +4,7 @@ import {
 } from '@opiraja/frontend-api'
 import {
   expirePlayerCredential,
-  permissiveCredentialSource,
+  playerCredentialSource,
   type CredentialSource,
 } from './credential'
 
@@ -106,7 +106,7 @@ interface PlayerApiOptions {
 
 export function createPlayerApi(options: PlayerApiOptions = {}): PlayerApi {
   const credentialSource =
-    options.credentialSource ?? permissiveCredentialSource
+    options.credentialSource ?? playerCredentialSource
   const client = createApiClient({
     credentialSource,
     ...(options.fetcher ? { fetcher: options.fetcher } : {}),

@@ -2,8 +2,8 @@
 
 ## Status and authority
 
-This document is the authoritative behavioral contract for the public OR and
-test-player assessment flow before JWT enforcement. FastAPI's generated OpenAPI
+This document is the authoritative behavioral contract for the JWT-protected
+public OR and test-player assessment flow. FastAPI's generated OpenAPI
 schema is the machine-readable representation of the request and response
 models. Backend contract tests enforce wire behavior that cannot be expressed
 fully in OpenAPI, including state-dependent status codes, retry semantics,
@@ -20,8 +20,8 @@ This contract covers:
 - `POST /api/v1/player/tests/{test_id}/start`; and
 - `POST /api/v1/player/tests/{test_id}/answers`.
 
-Admin endpoints, the internal R service, persistence schemas, and the future
-JWT issuance/login endpoints are outside this contract.
+Admin endpoints, the internal R service, and persistence schemas are outside
+this contract. Player-link issuance is included in the public launch flow.
 
 ## Cross-cutting rules
 
@@ -44,17 +44,13 @@ JWT issuance/login endpoints are outside this contract.
 
 ### Authorization seam
 
-The pre-JWT implementation remains restricted to the controlled development
-environment:
-
 - OR requests use the `tests:create` or `tests:read` scope as specified per
   route.
 - Player requests use `tests:play` and are logically bound to the path
   `test_id`.
-- The current dependencies supply permissive OR/player identities when no
-  recognized admin credential is present. The bearer header is therefore
-  optional in this phase, which generated OpenAPI represents as either bearer
-  authentication or anonymous access.
+- Every assessment route requires a Bearer JWT. Missing, malformed, expired,
+  or invalid credentials return the generic `401 invalid_token` envelope and
+  `WWW-Authenticate: Bearer`.
 - A valid admin credential remains a distinct profile with no `tests:*`
   scopes. Routes used by the internal simulation explicitly accept an admin
   actor with `admin:simulation` as a privileged exception: create, status
@@ -67,8 +63,8 @@ environment:
 - A dependency-supplied valid identity without the required actor, scope, or
   test binding receives `403` before assessment processing.
 
-The permissive behavior is not approval for public exposure. JWT authorization
-and enforced edge controls remain mandatory pilot gates.
+JWT authorization is active. Enforced edge controls and the remaining
+deployment acceptance checks remain mandatory pilot gates.
 
 ### Public data boundary
 
@@ -77,11 +73,11 @@ feedback. They never contain answer keys, correctness, graph-node identity,
 posterior values, candidate metadata, BLIM parameters, knowledge states, model
 configuration, or item telemetry.
 
-The pre-JWT player link is the relative path `/test/{test_id}`. The API route,
-not the assessment domain service, owns construction of this presentation URL.
-The future fragment form `/test/{test_id}#token=<token>` is reserved for JWT
-work. URL fragments and query parameters are not backend credentials in this
-phase.
+The player link is
+`<PLAYER_APP_URL>/test/{test_id}#token=<player-jwt>`. The API route, not the
+assessment domain service, owns construction. The browser removes the fragment
+before API work and sends the token only as a Bearer header. Query parameters
+are never credentials.
 
 ## Shared response models
 
@@ -175,7 +171,7 @@ Location: /api/v1/tests/{test_id}
 {
   "test_id": "00000000-0000-0000-0000-000000000000",
   "status": "preparing",
-  "player_url": "/test/00000000-0000-0000-0000-000000000000",
+  "player_url": "https://assessment.example/test/00000000-0000-0000-0000-000000000000#token=<player-jwt>",
   "missing_nodes": ["Lahutamine"]
 }
 ```
@@ -186,6 +182,8 @@ created immediately. It is `preparing` when missing usable items were ordered.
 
 Creating a test is not idempotent: each successful request creates a new
 `test_id`.
+
+The successful response includes `Cache-Control: no-store`.
 
 ### Failures
 
@@ -344,18 +342,16 @@ application error envelope. Clients should branch first on HTTP status and
 then accept either documented `422` shape. Internal exception messages and
 secrets are never returned in the application envelope.
 
-The frozen JWT target adds generic `401` failures with
+JWT authorization returns generic `401` failures with
 `WWW-Authenticate: Bearer` for missing or invalid credentials and preserves
 `403` for a valid but insufficient, wrong-profile, or cross-test credential.
 The `401` application envelope uses code `invalid_token` and the generic
 message `Valid bearer credentials are required.`
-It also changes successful creation to return an absolute token-bearing
+Successful creation returns an absolute token-bearing
 `player_url` with `Cache-Control: no-store` and adds the strict OR-only
-`POST /api/v1/tests/{test_id}/player-token` link-issuance route. Those changes
-are specified in
-[`docs/plans/active/jwt-authorization-plan.md`](../plans/active/jwt-authorization-plan.md)
-but are not active in this pre-JWT contract. JWT implementation must update
-this document, OpenAPI, and contract tests together when the cutover occurs.
+`POST /api/v1/tests/{test_id}/player-token` link-issuance route. The latter
+requires `tests:launch`, returns a fresh link for preparing, active, or
+completed tests, and never accepts the admin-simulation exception.
 
 ## OpenAPI and compatibility
 
@@ -367,7 +363,7 @@ these four operations it must describe:
 - application error models for `403`, `404`, `409`, `500`, and `503` where the
   route can produce them;
 - FastAPI's standard validation `422`; and
-- optional bearer authentication during the permissive pre-JWT phase.
+- required bearer authentication.
 
 The public Nginx deployment may block `/docs`, `/redoc`, and `/openapi.json`.
 That exposure policy does not change the generated schema's role as the

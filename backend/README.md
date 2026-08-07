@@ -14,6 +14,18 @@ scoring, persistence, retry safety, and public response shaping. It does not
 calculate KST models itself, generate missing questions itself, or expose
 answer keys and KST internals to API clients.
 
+## JWT authorization
+
+Configure distinct `OR_JWT_SECRET` and `API_JWT_SECRET` values of at least 32
+characters, `OR_JWT_ISSUER`, and an origin-only `PLAYER_APP_URL`. Generate the
+secrets independently from at least 32 random bytes. OR tokens use HS256,
+audience `assessment-api`, integer `iat`/`exp` no more than five minutes apart,
+and a canonical subset of `tests:create tests:read tests:launch`.
+
+`POST /api/v1/admin/login` exchanges `ADMIN_ACCESS_KEY` for an eight-hour JWT;
+the raw key is rejected everywhere else. Rotating `API_JWT_SECRET` invalidates
+all player and admin tokens. Rotating `OR_JWT_SECRET` is independent.
+
 ## Assessment lifecycle
 
 1. OR submits a graph through `POST /api/v1/tests`.
@@ -58,7 +70,11 @@ required values:
 | `SUPABASE_SERVICE_KEY` | Server-side service-role credential. Never expose it to a browser. |
 | `R_SERVICE_URL` | Base URL of the internal stateless R KST service. |
 | `ALLOWED_HOSTS` | JSON list of exact API hosts, including the VM public IPv4 and `127.0.0.1` for direct health checks. Wildcards are not allowed. |
-| `ADMIN_ACCESS_KEY` | Optional server-only bearer key enabling the admin API. If absent, every admin endpoint returns `401`. |
+| `ADMIN_ACCESS_KEY` | Optional server-only key accepted only by admin login. If absent, login returns `401`. |
+| `OR_JWT_SECRET` | OR-only shared HS256 verification secret, at least 32 characters. |
+| `API_JWT_SECRET` | Distinct API-only player/admin signing secret, at least 32 characters. |
+| `OR_JWT_ISSUER` | Exact trusted OR issuer claim. |
+| `PLAYER_APP_URL` | HTTPS learner-app origin; HTTP is allowed only on loopback development hosts. |
 
 Optional settings and their defaults:
 
@@ -126,9 +142,9 @@ Readiness response:
 
 ### OR endpoints
 
-The OR authorization seam currently supplies a permissive phase-one identity.
-It is deliberately replaceable. Creating a test requires the `tests:create`
-scope and reading one requires `tests:read`. The internal admin simulation is
+The OR authorization seam validates the strict signed JWT profile. Creating a
+test requires `tests:create`, reading one requires `tests:read`, and issuing a
+replacement learner link requires `tests:launch`. The internal admin simulation is
 an explicit exception at the participating routes: an admin actor with
 `admin:simulation` may create and read tests without receiving OR scopes.
 
@@ -196,8 +212,8 @@ response also includes public feedback:
 
 ### Player endpoints
 
-The player authorization seam is currently permissive and binds the generated
-identity to the `test_id` in the path. Public player responses never contain
+The player authorization seam validates an API-signed JWT and binds both its
+subject and `test_id` claim to the path. Public player responses never contain
 the answer key, correctness, graph node identity, posterior, BLIM parameters,
 knowledge states, model configuration, or item telemetry.
 
@@ -268,18 +284,20 @@ The optional admin surface is implemented under `app/admin/` with a separate
 repository protocol. It reuses the lifespan-managed Supabase client but does
 not add CRUD methods to `AssessmentRepository`.
 
-All routes below require:
+All protected routes below require:
 
 ```http
-Authorization: Bearer <ADMIN_ACCESS_KEY>
+Authorization: Bearer <admin-jwt>
 ```
 
-The development key is compared in constant time. Missing, invalid, and
-disabled credentials return the normal error envelope with `401`; the key and
-authorization header are never logged.
+`POST /api/v1/admin/login` compares the development key in constant time and
+returns the JWT. Missing, invalid, and disabled credentials return the same
+generic `401`; signing material, keys, tokens, and authorization headers are
+never logged.
 
 | Method | Path | Purpose |
 |---|---|---|
+| `POST` | `/api/v1/admin/login` | Exchange the development key for an admin JWT. |
 | `GET` | `/api/v1/admin/session` | Validate access and return scopes and configured limits. |
 | `GET` | `/api/v1/admin/courses` | Aggregate course choices from source materials. |
 | `GET/POST` | `/api/v1/admin/source-materials` | List or ingest course source text. |
@@ -346,11 +364,12 @@ submission token and persisted player state provide the recovery mechanism.
 | `app/main.py` | Creates the FastAPI application; constructs and closes shared Supabase and HTTPX clients during lifespan; registers routers and exception mappings; adds request-ID middleware and one structured completion log per request. |
 | `app/config.py` | Defines strict environment-backed settings, required service credentials/URLs, limits, and timeout defaults. |
 | `app/observability.py` | Holds request-local Supabase/R timing and request-count metrics accumulated by adapters and emitted by middleware. |
-| `app/api/auth.py` | Defines the replaceable OR/player authorization boundary, immutable auth context, scope checks, and current permissive phase-one dependencies. |
+| `app/api/auth.py` | Defines the OR/player/admin bearer boundary, immutable auth context, and route-level scope/profile checks. |
+| `app/api/tokens.py` | Issues API JWTs and strictly validates the exact OR, player, and admin claim profiles. |
 | `app/api/dependencies.py` | Retrieves configured objects from `app.state` and supports independent FastAPI dependency overrides in tests. |
 | `app/api/dtos.py` | Defines strict public request/response DTOs and maps service results to OR-safe and player-safe response unions. |
 | `app/api/health_routes.py` | Implements dependency-free liveness and concurrently bounded Supabase/R readiness checks. |
-| `app/api/or_routes.py` | Implements assessment creation and OR status routes, including scopes and the creation `Location` header. |
+| `app/api/or_routes.py` | Implements assessment creation, OR status, and fresh player-link issuance. |
 | `app/api/player_routes.py` | Implements idempotent player start/polling and answer-submission routes. |
 | `app/domain/models.py` | Defines immutable typed domain IDs, enums, graph/item/model/session/player-state/profile values, transition commands, and answer-commit outcomes. |
 | `app/domain/graphs.py` | Validates and deterministically normalizes graph inputs, creates canonical UTF-8 JSON, computes versioned SHA-256 graph IDs, and creates pending snapshots. |

@@ -31,13 +31,13 @@ router = APIRouter(prefix="/api/v1/player/tests", tags=["player-tests"])
             "model": PlayerPreparingResponse,
             "description": "Assessment is still preparing; honor Retry-After.",
         },
+        401: {"model": ErrorResponse, "description": "Bearer token is invalid."},
         403: {"model": ErrorResponse, "description": "Operation is forbidden."},
         404: {"model": ErrorResponse, "description": "Assessment was not found."},
         409: {"model": ErrorResponse, "description": "Assessment cannot be started."},
         503: {"model": ErrorResponse, "description": "A dependency is unavailable."},
         500: {"model": ErrorResponse, "description": "Request could not be completed."},
     },
-    openapi_extra={"security": [{}]},
 )
 async def start_test(
     test_id: UUID,
@@ -61,13 +61,13 @@ async def start_test(
     response_model=PlayerReadyResponse,
     response_description="Next question or completed feedback.",
     responses={
+        401: {"model": ErrorResponse, "description": "Bearer token is invalid."},
         403: {"model": ErrorResponse, "description": "Operation is forbidden."},
         404: {"model": ErrorResponse, "description": "Assessment was not found."},
         409: {"model": ErrorResponse, "description": "Submission conflicts with state."},
         503: {"model": ErrorResponse, "description": "A dependency is unavailable."},
         500: {"model": ErrorResponse, "description": "Request could not be completed."},
     },
-    openapi_extra={"security": [{}]},
 )
 async def submit_answer(
     test_id: UUID,

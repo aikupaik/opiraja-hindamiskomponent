@@ -40,10 +40,17 @@ afterEach(() => {
 })
 
 describe('admin shell', () => {
-  it('validates, stores, and explicitly removes the tab-scoped key', async () => {
+  it('exchanges the key, stores only the JWT, and explicitly removes it', async () => {
     const fetchMock = vi
       .fn()
-      .mockImplementationOnce(() => response(session))
+      .mockImplementationOnce(() =>
+        response({
+          access_token: 'signed-admin-jwt',
+          token_type: 'Bearer',
+          expires_in: 28_800,
+          session,
+        }),
+      )
       .mockImplementationOnce(() => response([]))
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
@@ -55,11 +62,16 @@ describe('admin shell', () => {
     expect(
       await screen.findByRole('heading', { name: 'Course materials' }),
     ).toBeInTheDocument()
-    expect(sessionStorage.getItem('assessment-admin-access-key')).toBe(
-      'operator-key',
+    expect(sessionStorage.getItem('assessment-admin-jwt')).toBe(
+      'signed-admin-jwt',
     )
+    expect(JSON.stringify(sessionStorage)).not.toContain('operator-key')
+    const [loginUrl, loginInit] = fetchMock.mock.calls[0]
+    expect(loginUrl).toBe('/api/v1/admin/login')
+    expect(loginInit.body).toBe(JSON.stringify({ access_key: 'operator-key' }))
+    expect(loginInit.headers.get('Authorization')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Lock' }))
-    expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
+    expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
     expect(
       screen.getByRole('heading', { name: 'Unlock Assessment Lab' }),
     ).toBeInTheDocument()
@@ -89,11 +101,11 @@ describe('admin shell', () => {
     expect(
       await screen.findByText('The credentials were not accepted.'),
     ).toBeInTheDocument()
-    expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
+    expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
   })
 
   it('locks an authenticated session on 401 without treating login as expired', async () => {
-    sessionStorage.setItem('assessment-admin-access-key', 'operator-key')
+    sessionStorage.setItem('assessment-admin-jwt', 'signed-admin-jwt')
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(() => response(session))
@@ -125,11 +137,11 @@ describe('admin shell', () => {
     expect(
       screen.getByRole('heading', { name: 'Unlock Assessment Lab' }),
     ).toBeInTheDocument()
-    expect(sessionStorage.getItem('assessment-admin-access-key')).toBeNull()
+    expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
   })
 
   it('routes authenticated operators to the Player demo tab', async () => {
-    sessionStorage.setItem('assessment-admin-access-key', 'operator-key')
+    sessionStorage.setItem('assessment-admin-jwt', 'signed-admin-jwt')
     window.location.hash = '#/player-demo'
     vi.stubGlobal(
       'fetch',

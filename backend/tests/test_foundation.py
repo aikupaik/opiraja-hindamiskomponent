@@ -28,6 +28,10 @@ def test_settings_require_service_locations_and_credentials() -> None:
             "SUPABASE_SERVICE_KEY": "secret",
             "R_SERVICE_URL": "http://r-service:8000",
             "ALLOWED_HOSTS": ["193.40.157.124", "127.0.0.1"],
+            "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+            "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+            "OR_JWT_ISSUER": "test-or",
+            "PLAYER_APP_URL": "http://localhost:5173",
         }
     )
 
@@ -41,6 +45,10 @@ def test_settings_require_service_locations_and_credentials() -> None:
     assert settings.readiness_timeout_seconds == 1
     assert settings.supabase_request_timeout_seconds == 10
     assert settings.admin_access_key is None
+    assert settings.or_jwt_max_lifetime_seconds == 300
+    assert settings.player_jwt_lifetime_seconds == 28_800
+    assert settings.admin_jwt_lifetime_seconds == 28_800
+    assert settings.player_app_url == "http://localhost:5173"
     assert settings.admin_source_max_bytes == 10_000_000
     assert settings.admin_source_max_pdf_pages == 100
     assert settings.admin_source_max_text_chars == 1_000_000
@@ -63,6 +71,10 @@ def test_settings_require_explicit_non_empty_allowed_hosts(
         "SUPABASE_SERVICE_KEY": "secret",
         "R_SERVICE_URL": "http://r-service:8000",
         "ALLOWED_HOSTS": allowed_hosts,
+        "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+        "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+        "OR_JWT_ISSUER": "test-or",
+        "PLAYER_APP_URL": "http://localhost:5173",
     }
 
     with pytest.raises(ValidationError):

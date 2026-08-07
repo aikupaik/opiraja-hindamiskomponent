@@ -11,10 +11,15 @@ from app.config import Settings
 from app.domain.repository import AssessmentRepository
 from app.integrations.kst_engine import KstEngine
 from app.services.assessment import AssessmentService
+from app.api.tokens import TokenService
 
 
 def get_settings(request: Request) -> Settings:
     return cast(Settings, request.app.state.settings)
+
+
+def get_token_service(request: Request) -> TokenService:
+    return cast(TokenService, request.app.state.token_service)
 
 
 def get_repository(request: Request) -> AssessmentRepository:

@@ -1,5 +1,15 @@
 # Phase 3: Non-Permissive JWT Authorization
 
+## Implementation status
+
+**Application implementation complete (2026-08-05).** Strict backend JWT
+profiles, login and player-link issuance, browser credential lifecycles,
+configuration, documentation, contract tests, and the endpoint-specific Nginx
+dry-run policy are implemented. The plan remains active only for the deployed
+threshold probes, observation review, and approved removal of
+`limit_req_dry_run`/`limit_conn_dry_run`; those operational steps cannot be
+completed from the source workspace alone.
+
 ## Prerequisite: Pre-JWT Player and Contract Work
 
 Do not start the JWT implementation until this prerequisite is complete. The

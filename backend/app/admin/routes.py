@@ -1,6 +1,7 @@
 """Authenticated administration and experiment diagnostic endpoints."""
 
 from typing import Annotated
+import secrets
 from uuid import UUID
 
 from fastapi import (
@@ -11,6 +12,7 @@ from fastapi import (
     Header,
     Query,
     UploadFile,
+    Response,
     status,
 )
 from fastapi.responses import StreamingResponse
@@ -18,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from app.api.auth import (
     ADMIN_DIAGNOSTICS,
     ADMIN_READ,
+    ADMIN_SCOPES,
     ADMIN_WRITE,
     AuthContext,
     authorize_admin,
@@ -28,13 +31,17 @@ from app.api.dependencies import (
     get_diagnostic_hub,
     get_settings,
     get_source_ingestor,
+    get_token_service,
 )
+from app.api.tokens import TokenService
 from app.config import Settings
 
 from .diagnostics import DiagnosticHub
 from .ingestion import SourceIngestor, SourceInvalid
 from .models import (
     AdminItem,
+    AdminLoginRequest,
+    AdminLoginResponse,
     AdminSession,
     CourseChoice,
     CreateYgRuleRequest,
@@ -50,15 +57,10 @@ from .reporting import ExperimentReport, build_experiment_report
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
-@router.get("/session", response_model=AdminSession)
-async def get_admin_session(
-    settings: Annotated[Settings, Depends(get_settings)],
-    auth: Annotated[AuthContext, Depends(authorize_admin)],
-) -> AdminSession:
-    require_admin(auth, ADMIN_READ)
+def _session(settings: Settings, *, subject: str, capabilities: frozenset[str]) -> AdminSession:
     return AdminSession(
-        subject=auth.subject,
-        capabilities=tuple(sorted(auth.scopes)),
+        subject=subject,
+        capabilities=tuple(sorted(capabilities)),
         max_graph_nodes=settings.max_graph_nodes,
         diagnostic_max_events=settings.admin_diagnostic_max_events,
         diagnostic_ttl_seconds=settings.admin_diagnostic_ttl_seconds,
@@ -66,6 +68,52 @@ async def get_admin_session(
         source_max_pdf_pages=settings.admin_source_max_pdf_pages,
         source_max_text_chars=settings.admin_source_max_text_chars,
     )
+
+
+@router.post(
+    "/login",
+    response_model=AdminLoginResponse,
+    responses={
+        401: {"description": "Access key was invalid or login is disabled."},
+        422: {"description": "Request validation failed."},
+    },
+)
+async def login(
+    payload: AdminLoginRequest,
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings)],
+    tokens: Annotated[TokenService, Depends(get_token_service)],
+) -> AdminLoginResponse:
+    expected = settings.admin_access_key
+    supplied_bytes = payload.access_key.encode("utf-8")
+    valid = expected is not None and secrets.compare_digest(
+        supplied_bytes,
+        expected.get_secret_value().encode("utf-8"),
+    )
+    if not valid:
+        from app.api.auth import AdminUnauthorized
+
+        raise AdminUnauthorized("valid admin credentials are required")
+    response.headers["Cache-Control"] = "no-store"
+    session = _session(
+        settings,
+        subject="development-admin",
+        capabilities=ADMIN_SCOPES,
+    )
+    return AdminLoginResponse(
+        access_token=tokens.issue_admin(),
+        expires_in=settings.admin_jwt_lifetime_seconds,
+        session=session,
+    )
+
+
+@router.get("/session", response_model=AdminSession)
+async def get_admin_session(
+    settings: Annotated[Settings, Depends(get_settings)],
+    auth: Annotated[AuthContext, Depends(authorize_admin)],
+) -> AdminSession:
+    require_admin(auth, ADMIN_READ)
+    return _session(settings, subject=auth.subject, capabilities=auth.scopes)
 
 
 @router.get("/courses", response_model=tuple[CourseChoice, ...])
