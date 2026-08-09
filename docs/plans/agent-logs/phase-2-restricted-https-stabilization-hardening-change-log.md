@@ -401,3 +401,71 @@ affects temporary-disk use or SSE behavior.
    backend/admin/R/Compose/Nginx validation; and the first seven daily
    enforcement reviews. Retain the DNS-rebinding risk as a public-launch
    blocker.
+
+### Controlled dry-run general API and JWT-login probes — 2026-08-09
+
+The operator ran the approved-client probe procedure from a VPN-connected PC.
+The client reported only UTC boundaries; host Nginx logs were correlated using
+the corresponding local timestamps. No credential, client address, raw request
+line, header, body, or response body was displayed or recorded.
+
+- General API probe: `2026-08-09T12:12:33Z`. A concurrent harmless 60-request
+  request to a non-existent `/api/` path produced 60 `404` responses. Sanitized
+  host access evidence recorded 21 `limit_req_status=PASSED` and 39
+  `limit_req_status=REJECTED_DRY_RUN`; the host error log recorded 39 matching
+  request-limit warnings.
+- Strict JWT login probe: `2026-08-09T12:12:57Z`. Eight concurrent POSTs to
+  `/api/v1/admin/login` with a deliberately invalid non-secret test value
+  produced eight `401` responses. Sanitized host access evidence recorded six
+  `limit_req_status=PASSED` and two `limit_req_status=REJECTED_DRY_RUN`; the
+  host error log recorded two matching request-limit warnings.
+
+Result: **both request-rate dry-run excess probes passed on the live JWT
+deployment.** Requests were observed as excess but were not edge-rejected,
+which is the expected dry-run behavior. For Phase 2 enforcement evidence, the
+strict JWT `/api/v1/admin/login` limiter is the documented successor to the
+original `/api/v1/admin/session` probe; the session endpoint was not used
+because it no longer has the exact strict limiter. The remaining dry-run work
+is the authenticated three-connection SSE probe, the additional active JWT
+limiter-zone probes, normal workflow/upload/simulation observation, and the
+sanitized normal-operating-day review.
+
+### Initial SSE dry-run attempt — 2026-08-09
+
+The operator began an authenticated UI simulation from the approved VPN client
+at `2026-08-09T12:21:47Z` and ended the attempt at
+`2026-08-09T12:24:52Z`. The UI diagnostic terminal received events. One manual
+browser-console stream reported `200` and incremental data, but the expected
+second manual stream did not appear in the console.
+
+Sanitized host correlation for the local 15:20–15:26 window found one logged
+SSE request with HTTP `200` and `limit_conn_status=PASSED`, and no
+connection-limit warnings. This does not establish three concurrent
+connections or a `REJECTED_DRY_RUN` connection-limit observation.
+
+Result: **not accepted; retry required.** Clean up any still-open browser
+streams, then repeat using sequentially opened, separately labelled manual
+streams while the UI stream remains open. Do not disable dry-run or proceed to
+enforcement based on this attempt.
+
+### Second SSE dry-run attempt — 2026-08-09
+
+The operator cleaned up the prior UI flow, then recorded a new UI simulation
+start at `2026-08-09T12:29:42Z`, began the manual browser-console attempt at
+`2026-08-09T12:30:48Z`, and aborted the console streams at
+`2026-08-09T12:32:55Z`. The console showed `stream-2` returning `200` and
+receiving incremental data, but never showed a `stream-3` response.
+
+Sanitized host evidence found three completed SSE requests in the broader
+window, all HTTP `200` with `limit_conn_status=PASSED`, and no
+connection-limit warnings. Sanitized timing metadata shows that the earlier
+stream closed before the later UI and `stream-2` streams overlapped; no third
+manual request reached Nginx. Therefore no point in the attempt had the
+required three simultaneous streams from the same client IP.
+
+Result: **not accepted; retry required.** The browser-console calls were
+syntactically valid, but the browser did not dispatch the third request. Retry
+with the UI stream in one browser process and one independently opened manual
+stream in each of two other browser processes or profiles on the same
+VPN-connected PC. This avoids browser connection-pool queueing and provides
+separately observable connection establishment.
