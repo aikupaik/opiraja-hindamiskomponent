@@ -17,19 +17,19 @@ export function MaterialsPage({
   courses,
   refreshCourses,
 }: Props) {
-  const [selectedCourse, setSelectedCourse] = useState(courses[0]?.value ?? '')
+  const [selectedCourse, setSelectedCourse] = useState('')
   const [materials, setMaterials] = useState<SourceMaterial[]>([])
   const [rules, setRules] = useState<YgRule[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState<Record<number, SourceMaterial>>({})
   const [savedPreview, setSavedPreview] = useState<SourceMaterial | null>(null)
-  const [courseCode, setCourseCode] = useState(courses[0]?.value ?? '')
-  const [courseTitle, setCourseTitle] = useState(courses[0]?.title ?? '')
+  const [courseCode, setCourseCode] = useState('')
+  const [courseTitle, setCourseTitle] = useState('')
   const [sourceUrl, setSourceUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [savingMaterial, setSavingMaterial] = useState(false)
-  const [ruleCourse, setRuleCourse] = useState(courses[0]?.value ?? '')
+  const [ruleCourse, setRuleCourse] = useState('')
   const [ruleDescription, setRuleDescription] = useState('')
   const [ruleExample, setRuleExample] = useState('{}')
   const [savingRule, setSavingRule] = useState(false)

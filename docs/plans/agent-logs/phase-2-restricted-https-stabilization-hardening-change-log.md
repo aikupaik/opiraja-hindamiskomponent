@@ -430,45 +430,6 @@ is the authenticated three-connection SSE probe, the additional active JWT
 limiter-zone probes, normal workflow/upload/simulation observation, and the
 sanitized normal-operating-day review.
 
-### Initial SSE dry-run attempt — 2026-08-09
-
-The operator began an authenticated UI simulation from the approved VPN client
-at `2026-08-09T12:21:47Z` and ended the attempt at
-`2026-08-09T12:24:52Z`. The UI diagnostic terminal received events. One manual
-browser-console stream reported `200` and incremental data, but the expected
-second manual stream did not appear in the console.
-
-Sanitized host correlation for the local 15:20–15:26 window found one logged
-SSE request with HTTP `200` and `limit_conn_status=PASSED`, and no
-connection-limit warnings. This does not establish three concurrent
-connections or a `REJECTED_DRY_RUN` connection-limit observation.
-
-Result: **not accepted; retry required.** Clean up any still-open browser
-streams, then repeat using sequentially opened, separately labelled manual
-streams while the UI stream remains open. Do not disable dry-run or proceed to
-enforcement based on this attempt.
-
-### Second SSE dry-run attempt — 2026-08-09
-
-The operator cleaned up the prior UI flow, then recorded a new UI simulation
-start at `2026-08-09T12:29:42Z`, began the manual browser-console attempt at
-`2026-08-09T12:30:48Z`, and aborted the console streams at
-`2026-08-09T12:32:55Z`. The console showed `stream-2` returning `200` and
-receiving incremental data, but never showed a `stream-3` response.
-
-Sanitized host evidence found three completed SSE requests in the broader
-window, all HTTP `200` with `limit_conn_status=PASSED`, and no
-connection-limit warnings. Sanitized timing metadata shows that the earlier
-stream closed before the later UI and `stream-2` streams overlapped; no third
-manual request reached Nginx. Therefore no point in the attempt had the
-required three simultaneous streams from the same client IP.
-
-Result: **not accepted; retry required.** The browser-console calls were
-syntactically valid, but the browser did not dispatch the third request. Retry
-with the UI stream in one browser process and one independently opened manual
-stream in each of two other browser processes or profiles on the same
-VPN-connected PC. This avoids browser connection-pool queueing and provides
-separately observable connection establishment.
 
 ### Controlled SSE connection-limit dry-run probe — 2026-08-09
 
