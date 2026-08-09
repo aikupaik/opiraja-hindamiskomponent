@@ -496,3 +496,43 @@ The general-API, JWT-login, and SSE dry-run limiter probes are now complete.
 Remaining work before enforcement is the additional active JWT limiter-zone
 testing, normal authenticated workflow/upload/simulation observation, and the
 sanitized normal-operating-day review.
+
+### Controlled JWT issuance and player-limit dry-run probes — 2026-08-09
+
+The operator ran both probes from the approved VPN client. Each request was
+intentionally unauthenticated and targeted a harmless non-existent resource or
+an endpoint that cannot mutate state without authorization. All client-visible
+responses were `401`; no response bodies, client address, bearer token, or raw
+request line was recorded.
+
+- Shared issuance-zone probe: `2026-08-09T12:50:13Z`. Twelve concurrent
+  requests to test creation and twelve concurrent requests to player-token
+  issuance produced 24 `401` responses. Sanitized host evidence recorded four
+  create requests and seven player-token requests as `PASSED`, with eight
+  create and five player-token requests as `REJECTED_DRY_RUN`. The host error
+  log recorded matching warning counts. The combined 13 dry-run excesses prove
+  the two endpoint locations consume the same issuance zone.
+- Shared player-zone probe: `2026-08-09T12:51:39Z` to
+  `2026-08-09T12:51:40Z`. Eighty start and 80 answer requests produced 160
+  `401` responses. Sanitized host evidence recorded all 80 start requests as
+  `PASSED`, then 26 answer requests as `PASSED` and 54 as
+  `REJECTED_DRY_RUN`, with 54 matching request-limit warnings. This confirms
+  the start and answer locations consume the same player zone and that its
+  excesses are observed without rejection in dry-run mode.
+
+Result: **all additional active JWT request-limit dry-run probes passed.** The
+general API, JWT login, SSE connection, shared issuance, and shared player
+zones have each produced the required dry-run excess evidence. Remaining work
+before enforcement is a normal authenticated administrative workflow, valid and
+over-limit upload checks, a complete simulation, and at least one normal
+operating day of sanitized log observation without false-positive throttling.
+
+### Live source-upload limit confirmation — 2026-08-09
+
+A read-only command run in the live API container printed only the effective
+numeric `ADMIN_SOURCE_MAX_BYTES` setting: `10000000` bytes. No rendered
+environment values or secrets were displayed. The reviewed and active host
+Nginx configuration retains `client_max_body_size 11m`, equivalent to
+11,534,336 bytes. The normal-workflow upload validation must therefore
+distinguish the application `413` above 10,000,000 bytes from the edge-Nginx
+`413` above 11 MiB.
