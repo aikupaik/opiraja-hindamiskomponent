@@ -469,3 +469,30 @@ with the UI stream in one browser process and one independently opened manual
 stream in each of two other browser processes or profiles on the same
 VPN-connected PC. This avoids browser connection-pool queueing and provides
 separately observable connection establishment.
+
+### Controlled SSE connection-limit dry-run probe — 2026-08-09
+
+The operator ran a fresh authenticated UI simulation from the approved
+VPN-connected PC. The UI experiment terminal continued receiving diagnostic
+events, providing the first SSE connection. Two additional same-client
+connections were opened with local `curl` processes that discarded all event
+content and intentionally ended after 35 seconds.
+
+- Probe window: `2026-08-09T12:44:51Z` to `2026-08-09T12:45:27Z`.
+- Each manual stream established HTTP `200`; each intentionally timed out with
+  curl exit status `28` after the configured 35-second maximum duration. This
+  is expected for an otherwise unbounded SSE response and is not an application
+  or proxy failure.
+- Sanitized host access evidence recorded two completed manual SSE requests:
+  one `limit_conn_status=PASSED` and one
+  `limit_conn_status=REJECTED_DRY_RUN`. The host error log recorded one matching
+  connection-limit warning. The browser UI stream remained incremental during
+  the overlap.
+
+Result: **SSE connection-limit dry-run probe passed.** Three concurrent,
+authenticated streams from one approved client IP were established; two streams
+remained usable and the third was observed as excess without edge rejection.
+The general-API, JWT-login, and SSE dry-run limiter probes are now complete.
+Remaining work before enforcement is the additional active JWT limiter-zone
+testing, normal authenticated workflow/upload/simulation observation, and the
+sanitized normal-operating-day review.
