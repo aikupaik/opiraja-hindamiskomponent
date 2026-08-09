@@ -316,3 +316,88 @@ dry-run mode.
 Result: **general API dry-run excess probe passed**. The SSE connection-limit
 probe, normal authenticated workflow/upload/SSE observation, and one-day
 sanitized log review remain outstanding before enforcement.
+
+## Phase 2 blocker assessment and live-VM preflight — 2026-08-09
+
+This entry records a read-only assessment and privileged VM preflight performed
+from the deployment VM. No Nginx, Compose, package, firewall, certificate, or
+application state was changed. No rendered environment value, credential,
+token, cookie, request body, uploaded content, private key, client address, or
+raw log line was displayed or recorded.
+
+### Live preflight evidence
+
+- Repository HEAD was `7acb18733c1e946cf318b4d801d58b82456a2281`; the working
+  tree was clean.
+- The repository host-site file, enabled host-site file, and active host-site
+  file all had SHA-256
+  `5e7bff2b4fe5cc85d05b1036cbd864b4a95d4cde43a8c580074000bb9925bb10`.
+- The active site retains `limit_req_dry_run on` and `limit_conn_dry_run on`.
+  Host Nginx syntax validation passed and the Nginx service was active.
+- The live strict administrative limiter is now the JWT
+  `/api/v1/admin/login` location at `5r/m` with `burst=5`, rather than the
+  original Phase 2 `/api/v1/admin/session` location. The general API,
+  experiment-SSE connection, shared issuance, and player request limiter zones
+  are also present. A change-control record must explicitly treat the login
+  endpoint as the successor to the originally planned session endpoint before
+  the dry-run results are used for enforcement approval.
+- All Compose services were healthy. Loopback web health and API readiness both
+  returned `200`; the HTTPS root returned `200`; and a deliberately invalid
+  admin-login request returned `401`, confirming the JWT API deployment is
+  live without recording the submitted value.
+- Listener inspection found host IPv4 `80` and `443`, loopback
+  `127.0.0.1:8080`, SSH, and local resolver listeners only; host port `8000`
+  was not published. No reboot-required marker was present.
+
+### Sanitized initial observation findings
+
+The immediately preceding 24-hour host access-log window contained 10
+requests: eight `200`, one `308`, and one `401`. It contained six
+`limit_req_status=PASSED`, four requests without a request-limit status, and no
+connection-limit excess. This is not sufficient to satisfy the required normal
+operating-day observation, particularly because the API and R containers had
+been recreated shortly before the preflight.
+
+The same window had no error-level Nginx entries and no rate- or
+connection-limit warnings. It had one warning at `2026/08/09T14:52:50` that a
+proxied response was buffered to a temporary file. This is one warning, not an
+upstream failure plus a separate buffering event: the word "upstream" caused
+the first aggregate to count it in both categories. It is unrelated to rate
+limiting and is not a timeout, connection failure, premature close, or `5xx`.
+The dedicated SSE location retains disabled proxy buffering. Include the
+warning in the normal-operation review and investigate only if it recurs or
+affects temporary-disk use or SSE behavior.
+
+### Seven remaining steps to finish the Phase 2 blocker
+
+1. Record the change-control decision that `/api/v1/admin/login` supersedes
+   the planned strict `/api/v1/admin/session` limiter probe, and confirm the
+   live checksum/dry-run state again immediately before testing.
+2. From one approved VPN client, perform the controlled dry-run general-API
+   and admin-login excess probes. Record only response-status totals and
+   `REJECTED_DRY_RUN`/`PASSED` counts; the old session endpoint is not a valid
+   test of the strict JWT login zone.
+3. During a real authenticated admin simulation, open three concurrent
+   experiment SSE streams from the same client IP. Confirm two remain
+   incremental, the third is logged as a connection-limit dry-run excess, and
+   no established stream is interrupted.
+4. Test all additional currently deployed JWT request-limit zones before
+   enforcement: the shared test-creation/player-token issuance zone and the
+   player start/answer zone, including the intended shared-IP player burst.
+5. Complete a normal authenticated admin workflow, valid upload, over-limit
+   upload (`413`), and full signed OR-to-player simulation. Then review at
+   least one normal operating day of sanitized host/container logs; investigate
+   every unexpected `429` or `5xx`, false positive, or recurring buffering
+   warning before enforcement.
+6. Create and deploy a reviewed, version-controlled enforcement revision with
+   both dry-run directives disabled. Run `nginx -t` and perform a graceful
+   reload, then repeat all limiter probes. Excesses must now receive the
+   documented `429` `rate_limited` response while normal UI, API, upload, and
+   SSE flows continue working.
+7. Complete and record the remaining acceptance evidence: post-enforcement
+   Phase 1 approved/non-approved-source, certificate, browser, forwarding,
+   upload, and SSE checks; certificate-replacement, Compose-update,
+   per-service-recovery, and network-first rollback rehearsals; current-commit
+   backend/admin/R/Compose/Nginx validation; and the first seven daily
+   enforcement reviews. Retain the DNS-rebinding risk as a public-launch
+   blocker.
