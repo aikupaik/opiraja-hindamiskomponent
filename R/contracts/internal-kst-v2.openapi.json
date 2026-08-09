@@ -6,6 +6,31 @@
     "description": "Candidate-aware stateless KST model, selection, and advancement contract."
   },
   "paths": {
+    "/internal/v2/kst/configuration/validate": {
+      "post": {
+        "operationId": "validateKstConfigurationV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ConfigurationValidationRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical configuration snapshot and hash",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ConfigurationValidationResponse"}
+              }
+            }
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "500": {"$ref": "#/components/responses/UnexpectedError"}
+        }
+      }
+    },
     "/internal/v2/kst/model": {
       "post": {
         "operationId": "buildKstModelV2",
@@ -118,7 +143,43 @@
       },
       "Configuration": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": false,
+        "required": ["feedback_credible_mass", "reliability_floor", "safety_cap", "schema_version", "stop_confidence"],
+        "properties": {
+          "feedback_credible_mass": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+          "reliability_floor": {
+            "type": "object", "additionalProperties": false,
+            "required": ["maximum", "minimum", "multiplier"],
+            "properties": {
+              "maximum": {"type": "integer", "minimum": 0},
+              "minimum": {"type": "integer", "minimum": 0},
+              "multiplier": {"type": "number", "exclusiveMinimum": 0}
+            }
+          },
+          "safety_cap": {
+            "type": "object", "additionalProperties": false,
+            "required": ["minimum_above_floor", "node_multiplier"],
+            "properties": {
+              "minimum_above_floor": {"type": "integer", "minimum": 0},
+              "node_multiplier": {"type": "number", "exclusiveMinimum": 0}
+            }
+          },
+          "schema_version": {"type": "integer", "const": 1},
+          "stop_confidence": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+        }
+      },
+      "ConfigurationValidationRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["configuration"],
+        "properties": {"configuration": {"$ref": "#/components/schemas/Configuration"}}
+      },
+      "ConfigurationValidationResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["configuration", "configuration_hash"],
+        "properties": {
+          "configuration": {"$ref": "#/components/schemas/Configuration"},
+          "configuration_hash": {"type": "string", "pattern": "^kst-config-v1:sha256:[0-9a-f]{64}$"}
+        }
       },
       "Model": {
         "type": "object",
@@ -151,7 +212,7 @@
             "items": {"type": "number", "minimum": 0, "maximum": 1}
           },
           "configuration": {"$ref": "#/components/schemas/Configuration"},
-          "configuration_hash": {"type": "string"},
+          "configuration_hash": {"type": "string", "pattern": "^kst-config-v1:sha256:[0-9a-f]{64}$"},
           "reliability_floor": {"type": "integer", "minimum": 0},
           "safety_cap": {"type": "integer", "minimum": 0}
         }
@@ -174,7 +235,8 @@
           "cached_knowledge_states": {
             "type": "array",
             "items": {"type": "array", "items": {"type": "string"}}
-          }
+          },
+          "configuration": {"$ref": "#/components/schemas/Configuration"}
         }
       },
       "ModelResponse": {

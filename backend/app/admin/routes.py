@@ -32,12 +32,18 @@ from app.api.dependencies import (
     get_settings,
     get_source_ingestor,
     get_token_service,
+    get_kst_configuration_repository,
+    get_kst_configuration_validator,
 )
 from app.api.tokens import TokenService
 from app.config import Settings
 
 from .diagnostics import DiagnosticHub
 from .ingestion import SourceIngestor, SourceInvalid
+from .kst_configuration import KstConfigurationRepository
+from .kst_configuration_service import (
+    KstConfigurationService,
+)
 from .models import (
     AdminItem,
     AdminLoginRequest,
@@ -50,11 +56,86 @@ from .models import (
     SourceMaterial,
     UpdateItemRequest,
     YgRule,
+    KstConfigurationHistoryResponse,
+    KstConfigurationPayload,
+    KstConfigurationVersionResponse,
 )
 from .repository import AdminRepository
+from app.integrations.kst_engine import KstConfigurationValidator
 from .reporting import ExperimentReport, build_experiment_report
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+
+def _kst_version_response(version: object) -> KstConfigurationVersionResponse:
+    from .kst_configuration import KstConfigurationVersion
+
+    if not isinstance(version, KstConfigurationVersion):
+        raise RuntimeError("invalid KST configuration version")
+    return KstConfigurationVersionResponse(
+        id=str(version.id),
+        schema_version=version.schema_version,
+        configuration=KstConfigurationPayload.model_validate(version.configuration),
+        configuration_hash=version.configuration_hash,
+        created_by=version.created_by,
+        created_at=version.created_at,
+        is_active=version.is_active,
+        last_activated_by=version.last_activated_by,
+        last_activated_at=version.last_activated_at,
+    )
+
+
+def _kst_service(
+    repository: KstConfigurationRepository, engine: KstConfigurationValidator
+) -> KstConfigurationService:
+    return KstConfigurationService(repository, engine)
+
+
+@router.get("/kst-configurations", response_model=KstConfigurationHistoryResponse)
+async def list_kst_configurations(
+    repository: Annotated[KstConfigurationRepository, Depends(get_kst_configuration_repository)],
+    auth: Annotated[AuthContext, Depends(authorize_admin)],
+) -> KstConfigurationHistoryResponse:
+    require_admin(auth, ADMIN_READ)
+    versions = await repository.list_configuration_versions()
+    active_id = next((version.id for version in versions if version.is_active), None)
+    return KstConfigurationHistoryResponse(
+        active_version_id=None if active_id is None else str(active_id),
+        versions=tuple(_kst_version_response(version) for version in versions),
+    )
+
+
+@router.post(
+    "/kst-configurations",
+    response_model=KstConfigurationVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_kst_configuration(
+    payload: KstConfigurationPayload,
+    repository: Annotated[KstConfigurationRepository, Depends(get_kst_configuration_repository)],
+    engine: Annotated[KstConfigurationValidator, Depends(get_kst_configuration_validator)],
+    auth: Annotated[AuthContext, Depends(authorize_admin)],
+) -> KstConfigurationVersionResponse:
+    require_admin(auth, ADMIN_WRITE)
+    version = await _kst_service(repository, engine).create_draft(
+        payload.model_dump(mode="json"), auth.subject
+    )
+    return _kst_version_response(version)
+
+
+@router.post(
+    "/kst-configurations/{version_id}/activate",
+    response_model=KstConfigurationVersionResponse,
+)
+async def activate_kst_configuration(
+    version_id: UUID,
+    repository: Annotated[KstConfigurationRepository, Depends(get_kst_configuration_repository)],
+    engine: Annotated[KstConfigurationValidator, Depends(get_kst_configuration_validator)],
+    auth: Annotated[AuthContext, Depends(authorize_admin)],
+) -> KstConfigurationVersionResponse:
+    require_admin(auth, ADMIN_WRITE)
+    version = await _kst_service(repository, engine).activate(version_id, auth.subject)
+    return _kst_version_response(version)
 
 
 def _session(settings: Settings, *, subject: str, capabilities: frozenset[str]) -> AdminSession:

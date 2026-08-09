@@ -19,9 +19,10 @@ import { ItemsPage } from './ItemsPage'
 import { MaterialsPage } from './MaterialsPage'
 import { PlayerDemoPage } from './PlayerDemoPage'
 import { SimulationPage } from './SimulationPage'
+import { KstParametersPage } from './KstParametersPage'
 import './App.css'
 
-type Page = 'materials' | 'items' | 'simulation' | 'player-demo'
+type Page = 'materials' | 'items' | 'simulation' | 'player-demo' | 'kst-parameters'
 
 function App() {
   const [session, setSession] = useState<AdminSession | null>(null)
@@ -146,6 +147,9 @@ function App() {
           <NavLink page="simulation" current={page}>
             Simulation
           </NavLink>
+          <NavLink page="kst-parameters" current={page}>
+            KST parameters
+          </NavLink>
           <NavLink page="player-demo" current={page}>
             Player demo
           </NavLink>
@@ -181,6 +185,9 @@ function App() {
           courses={courses}
           maxGraphNodes={session.max_graph_nodes}
         />
+      )}
+      {page === 'kst-parameters' && (
+        <KstParametersPage maxGraphNodes={session.max_graph_nodes} />
       )}
     </div>
   )
@@ -262,7 +269,7 @@ function NavLink({
 
 function readPage(): Page {
   const value = window.location.hash.replace(/^#\/?/, '')
-  return value === 'items' || value === 'simulation' || value === 'player-demo'
+  return value === 'items' || value === 'simulation' || value === 'player-demo' || value === 'kst-parameters'
     ? value
     : 'materials'
 }

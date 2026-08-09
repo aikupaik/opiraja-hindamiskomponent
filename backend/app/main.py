@@ -41,15 +41,21 @@ from app.admin.ingestion import (
     SourceTooLarge,
 )
 from app.admin.routes import AdminRowNotFound
+from app.admin.kst_configuration_service import (
+    KstConfigurationAlreadyActive,
+    KstConfigurationAlreadyExists,
+    KstConfigurationVersionNotFound,
+)
 from app.admin.routes import router as admin_router
 from app.admin.supabase_repository import SupabaseAdminRepository
+from app.admin.kst_configuration import SupabaseKstConfigurationRepository
 from app.api.health_routes import router as health_router
 from app.api.or_routes import router as or_router
 from app.api.player_routes import router as player_router
 from app.config import Settings
 from app.domain.graphs import GraphValidationError
 from app.domain.repository import RepositoryDataError, RepositoryUnavailable
-from app.integrations.kst_engine import HttpxKstEngine, RUnavailable
+from app.integrations.kst_engine import HttpxKstEngine, RUnavailable, RValidationError
 from app.observability import collect_dependency_metrics
 from app.persistence.supabase_repository import SupabaseAssessmentRepository
 from app.services.assessment import (
@@ -104,9 +110,11 @@ def build_lifespan(settings: Settings) -> Lifespan[FastAPI]:
             source_http = httpx.AsyncClient()
             repository = SupabaseAssessmentRepository(supabase)
             admin_repository = SupabaseAdminRepository(supabase)
+            kst_configuration_repository = SupabaseKstConfigurationRepository(supabase)
             engine = HttpxKstEngine(r_http)
             app.state.repository = repository
             app.state.admin_repository = admin_repository
+            app.state.kst_configuration_repository = kst_configuration_repository
             app.state.kst_engine = engine
             app.state.source_ingestor = SourceIngestor(source_http, settings)
             app.state.diagnostic_hub = DiagnosticHub(
@@ -127,6 +135,7 @@ def build_lifespan(settings: Settings) -> Lifespan[FastAPI]:
                 repository,
                 engine,
                 max_graph_nodes=settings.max_graph_nodes,
+                configuration_repository=kst_configuration_repository,
             )
             yield
         finally:
@@ -192,6 +201,9 @@ def _register_exception_handlers(app: FastAPI) -> None:
             "Valid bearer credentials are required.",
         ),
         (AdminRowNotFound, 404, "admin_not_found", "Admin row was not found."),
+        (KstConfigurationVersionNotFound, 404, "admin_not_found", "Admin row was not found."),
+        (KstConfigurationAlreadyExists, 409, "configuration_already_exists", "Configuration already exists."),
+        (KstConfigurationAlreadyActive, 409, "configuration_already_active", "Configuration is already active."),
         (SourceTooLarge, 413, "source_too_large", "Source exceeds configured limits."),
         (SourceInvalid, 422, "invalid_source", "Source content is invalid."),
         (
@@ -208,6 +220,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
             "Persistence service is unavailable.",
         ),
         (RUnavailable, 503, "r_unavailable", "Calculation service is unavailable."),
+        (RValidationError, 422, "validation_error", "Request validation failed."),
         (
             RepositoryDataError,
             500,

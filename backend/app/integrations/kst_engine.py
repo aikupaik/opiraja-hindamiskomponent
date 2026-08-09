@@ -23,6 +23,10 @@ class RUnavailable(RuntimeError):
     """The internal KST service was unavailable or violated its contract."""
 
 
+class RValidationError(RuntimeError):
+    """R rejected a supplied configuration as invalid."""
+
+
 class KstEngine(Protocol):
     async def build_model(
         self,
@@ -50,6 +54,21 @@ class KstEngine(Protocol):
     async def is_ready(self) -> bool: ...
 
 
+class KstModelBuilderWithConfiguration(Protocol):
+    async def build_model(
+        self,
+        graph: GraphDefinition,
+        cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
+        configuration: KstConfiguration | None = None,
+    ) -> ModelBuildResult: ...
+
+
+class KstConfigurationValidator(Protocol):
+    async def validate_configuration(
+        self, configuration: dict[str, object]
+    ) -> tuple[dict[str, object], str]: ...
+
+
 class HttpxKstEngine:
     """Typed adapter over one lifespan-managed shared HTTPX client."""
 
@@ -60,6 +79,7 @@ class HttpxKstEngine:
         self,
         graph: GraphDefinition,
         cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
+        configuration: KstConfiguration | None = None,
     ) -> ModelBuildResult:
         request = ModelRequestDto(
             nodes=graph.nodes,
@@ -74,6 +94,11 @@ class HttpxKstEngine:
                 if cached_knowledge_states is None
                 else tuple(state.nodes for state in cached_knowledge_states)
             ),
+            configuration=(
+                None
+                if configuration is None
+                else _configuration_to_dto(configuration)
+            ),
         )
         response = await self._request(
             "POST",
@@ -87,6 +112,26 @@ class HttpxKstEngine:
         return ModelBuildResult(
             model=_model_from_dto(parsed.model),
             posterior=parsed.posterior,
+        )
+
+    async def validate_configuration(
+        self, configuration: dict[str, object]
+    ) -> tuple[dict[str, object], str]:
+        request = ConfigurationValidationRequestDto.model_validate(
+            {"configuration": configuration}
+        )
+        response = await self._request(
+            "POST",
+            "/internal/v2/kst/configuration/validate",
+            json=request.model_dump(mode="json"),
+        )
+        try:
+            parsed = ConfigurationValidationResponseDto.model_validate(response.json())
+        except (ValueError, ValidationError) as error:
+            self._malformed(error)
+        return (
+            parsed.configuration.model_dump(mode="json"),
+            parsed.configuration_hash,
         )
 
     async def select(
@@ -199,6 +244,11 @@ class HttpxKstEngine:
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as error:
+            if (
+                path == "/internal/v2/kst/configuration/validate"
+                and error.response.status_code == 422
+            ):
+                raise RValidationError("configuration is invalid") from error
             logger.warning(
                 "r_request_failed",
                 extra={
@@ -293,6 +343,23 @@ def _model_to_dto(model: KstModel) -> KstModelDto:
         configuration_hash=model.configuration_hash,
         reliability_floor=model.derived_limits.reliability_floor,
         safety_cap=model.derived_limits.safety_cap,
+    )
+
+
+def _configuration_to_dto(configuration: KstConfiguration) -> KstConfigurationDto:
+    return KstConfigurationDto(
+        schema_version=1,
+        stop_confidence=configuration.stop_confidence,
+        feedback_credible_mass=configuration.feedback_credible_mass,
+        reliability_floor=ReliabilityFloorDto(
+            minimum=configuration.reliability_floor.minimum,
+            multiplier=configuration.reliability_floor.multiplier,
+            maximum=configuration.reliability_floor.maximum,
+        ),
+        safety_cap=SafetyCapDto(
+            minimum_above_floor=configuration.safety_cap.responses_above_floor,
+            node_multiplier=configuration.safety_cap.node_multiplier,
+        ),
     )
 
 

@@ -1,6 +1,8 @@
 create_model_response <- function(request, configuration_path = NULL) {
   validated <- validate_model_request(request)
-  configuration <- if (is.null(configuration_path)) {
+  configuration <- if (!is.null(validated$configuration)) {
+    validated$configuration
+  } else if (is.null(configuration_path)) {
     read_kst_configuration()
   } else {
     read_kst_configuration(configuration_path)
@@ -62,7 +64,9 @@ advance_assessment <- function(request) {
 
 create_model_response_v2 <- function(request, configuration_path = NULL) {
   validated <- validate_model_request_v2(request)
-  configuration <- if (is.null(configuration_path)) {
+  configuration <- if (!is.null(validated$configuration)) {
+    validated$configuration
+  } else if (is.null(configuration_path)) {
     read_kst_configuration()
   } else {
     read_kst_configuration(configuration_path)
@@ -74,6 +78,17 @@ create_model_response_v2 <- function(request, configuration_path = NULL) {
     configuration
   )
   list(model = model, posterior = model$uniform_prior)
+}
+
+validate_configuration_request <- function(request) {
+  details <- validate_object_fields(request, "", "configuration")
+  if (length(details) > 0L) throw_validation(details)
+  details <- validate_kst_configuration(request$configuration)
+  if (length(details) > 0L) throw_validation(details)
+  list(
+    configuration = canonicalize_json_value(request$configuration),
+    configuration_hash = configuration_hash(request$configuration)
+  )
 }
 
 select_assessment_candidate_v2 <- function(request) {

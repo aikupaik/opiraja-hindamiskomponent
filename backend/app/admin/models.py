@@ -176,3 +176,45 @@ class ItemPage(AdminModel):
     total: int
     limit: int
     offset: int
+
+
+class KstReliabilityFloorConfiguration(AdminModel):
+    minimum: int = Field(ge=0)
+    multiplier: float = Field(gt=0)
+    maximum: int = Field(ge=0)
+
+
+class KstSafetyCapConfiguration(AdminModel):
+    minimum_above_floor: int = Field(ge=0)
+    node_multiplier: float = Field(gt=0)
+
+
+class KstConfigurationPayload(AdminModel):
+    feedback_credible_mass: float = Field(gt=0, le=1)
+    reliability_floor: KstReliabilityFloorConfiguration
+    safety_cap: KstSafetyCapConfiguration
+    schema_version: Literal[1]
+    stop_confidence: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_floor(self) -> "KstConfigurationPayload":
+        if self.reliability_floor.minimum > self.reliability_floor.maximum:
+            raise ValueError("reliability_floor.minimum must not exceed maximum")
+        return self
+
+
+class KstConfigurationVersionResponse(AdminModel):
+    id: str
+    schema_version: int
+    configuration: KstConfigurationPayload
+    configuration_hash: str
+    created_by: str
+    created_at: datetime
+    is_active: bool
+    last_activated_by: str | None
+    last_activated_at: datetime | None
+
+
+class KstConfigurationHistoryResponse(AdminModel):
+    active_version_id: str | None
+    versions: tuple[KstConfigurationVersionResponse, ...]

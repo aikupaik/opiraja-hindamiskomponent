@@ -371,6 +371,10 @@
           "cached_knowledge_states": {
             "$ref": "#/components/schemas/KnowledgeStates",
             "description": "Optional canonical prerequisite-closed state list. Members and states must be unique, use declared node order, respect all relations, and include the empty and full states."
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/KstConfiguration",
+            "description": "Optional request-supplied configuration snapshot. When omitted, the service reads its version-controlled seed file."
           }
         }
       },

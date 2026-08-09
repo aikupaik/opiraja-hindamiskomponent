@@ -8,12 +8,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
+from typing import cast
 
 from app.admin.diagnostics import emit_diagnostic
+from app.admin.kst_configuration import KstConfigurationRepository
+from app.domain.repository import RepositoryUnavailable
 from app.domain.graphs import graph_hash, normalize_graph
 from app.domain.models import *
 from app.domain.repository import AssessmentRepository, RepositoryDataError
-from app.integrations.kst_engine import KstEngine
+from app.integrations.kst_engine import KstEngine, KstModelBuilderWithConfiguration
 
 from .questions import QuestionOutput, RandomSource, build_question, to_question_output
 
@@ -82,6 +85,7 @@ class AssessmentService:
         random_source: RandomSource | None = None,
         uuid_factory: Callable[[], UUID] = uuid4,
         now_factory: Callable[[], datetime] | None = None,
+        configuration_repository: KstConfigurationRepository | None = None,
     ) -> None:
         self._repository = repository
         self._engine = engine
@@ -90,6 +94,7 @@ class AssessmentService:
         self._uuid_factory = uuid_factory
         self._now_factory = now_factory or (lambda: datetime.now(UTC))
         self._start_locks: defaultdict[TestId, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._configuration_repository = configuration_repository
 
     async def create_assessment(
         self, command: CreateAssessmentCommand
@@ -103,10 +108,62 @@ class AssessmentService:
         )
         identifier = graph_hash(graph)
         cached = await self._repository.get_cached_graph(identifier)
-        built = await self._engine.build_model(
-            graph,
-            None if cached is None else cached.knowledge_states,
-        )
+        if self._configuration_repository is None:
+            built = await cast(KstModelBuilderWithConfiguration, self._engine).build_model(
+                graph,
+                None if cached is None else cached.knowledge_states,
+            )
+        else:
+            active = await self._configuration_repository.get_active_configuration()
+            if active is None:
+                raise RepositoryUnavailable("no active KST configuration exists")
+            from app.integrations.r_dtos import KstConfigurationDto
+
+            configuration = KstConfigurationDto.model_validate(
+                active.configuration
+            )
+            domain_configuration = KstConfiguration(
+                schema_version=configuration.schema_version,
+                stop_confidence=configuration.stop_confidence,
+                feedback_credible_mass=configuration.feedback_credible_mass,
+                reliability_floor=ReliabilityFloorConfiguration(
+                    minimum=configuration.reliability_floor.minimum,
+                    multiplier=configuration.reliability_floor.multiplier,
+                    maximum=configuration.reliability_floor.maximum,
+                ),
+                safety_cap=SafetyCapConfiguration(
+                    node_multiplier=configuration.safety_cap.node_multiplier,
+                    responses_above_floor=configuration.safety_cap.minimum_above_floor,
+                ),
+            )
+            built = await cast(KstModelBuilderWithConfiguration, self._engine).build_model(
+                graph,
+                None if cached is None else cached.knowledge_states,
+                domain_configuration,
+            )
+            returned = KstConfigurationDto.model_validate(
+                {
+                    "schema_version": built.model.configuration.schema_version,
+                    "stop_confidence": built.model.configuration.stop_confidence,
+                    "feedback_credible_mass": built.model.configuration.feedback_credible_mass,
+                    "reliability_floor": {
+                        "minimum": built.model.configuration.reliability_floor.minimum,
+                        "multiplier": built.model.configuration.reliability_floor.multiplier,
+                        "maximum": built.model.configuration.reliability_floor.maximum,
+                    },
+                    "safety_cap": {
+                        "minimum_above_floor": built.model.configuration.safety_cap.responses_above_floor,
+                        "node_multiplier": built.model.configuration.safety_cap.node_multiplier,
+                    },
+                }
+            )
+            if (
+                returned.model_dump(mode="json") != configuration.model_dump(mode="json")
+                or built.model.configuration_hash != active.configuration_hash
+            ):
+                raise RepositoryDataError(
+                    "R returned a KST configuration different from the active version"
+                )
         self._validate_model_build(graph, built)
         if cached is None:
             cached = await self._repository.insert_cached_graph_if_absent(

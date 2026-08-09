@@ -59,6 +59,16 @@ class ModelRequestDto(RDto):
     nodes: tuple[str, ...] = Field(min_length=1)
     relations: tuple[RelationDto, ...]
     cached_knowledge_states: tuple[tuple[str, ...], ...] | None = None
+    configuration: KstConfigurationDto | None = None
+
+
+class ConfigurationValidationRequestDto(RDto):
+    configuration: KstConfigurationDto
+
+
+class ConfigurationValidationResponseDto(RDto):
+    configuration: KstConfigurationDto
+    configuration_hash: str = Field(pattern=r"^kst-config-v1:sha256:[0-9a-f]{64}$")
 
 
 class ModelResponseDto(RDto):

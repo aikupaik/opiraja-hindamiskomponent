@@ -7,9 +7,10 @@ from fastapi import Depends, Request
 from app.admin.diagnostics import DiagnosticHub
 from app.admin.ingestion import SourceIngestor
 from app.admin.repository import AdminRepository
+from app.admin.kst_configuration import KstConfigurationRepository
 from app.config import Settings
 from app.domain.repository import AssessmentRepository
-from app.integrations.kst_engine import KstEngine
+from app.integrations.kst_engine import KstConfigurationValidator, KstEngine
 from app.services.assessment import AssessmentService
 from app.api.tokens import TokenService
 
@@ -30,8 +31,19 @@ def get_kst_engine(request: Request) -> KstEngine:
     return cast(KstEngine, request.app.state.kst_engine)
 
 
+def get_kst_configuration_validator(request: Request) -> KstConfigurationValidator:
+    return cast(KstConfigurationValidator, request.app.state.kst_engine)
+
+
 def get_admin_repository(request: Request) -> AdminRepository:
     return cast(AdminRepository, request.app.state.admin_repository)
+
+
+def get_kst_configuration_repository(request: Request) -> KstConfigurationRepository:
+    return cast(
+        KstConfigurationRepository,
+        request.app.state.kst_configuration_repository,
+    )
 
 
 def get_source_ingestor(request: Request) -> SourceIngestor:

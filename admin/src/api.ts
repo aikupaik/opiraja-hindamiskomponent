@@ -20,6 +20,31 @@ export type AdminSession = {
   source_max_text_chars: number
 }
 
+export type KstConfiguration = {
+  feedback_credible_mass: number
+  reliability_floor: { minimum: number; multiplier: number; maximum: number }
+  safety_cap: { minimum_above_floor: number; node_multiplier: number }
+  schema_version: 1
+  stop_confidence: number
+}
+
+export type KstConfigurationVersion = {
+  id: string
+  schema_version: number
+  configuration: KstConfiguration
+  configuration_hash: string
+  created_by: string
+  created_at: string
+  is_active: boolean
+  last_activated_by: string | null
+  last_activated_at: string | null
+}
+
+export type KstConfigurationHistory = {
+  active_version_id: string | null
+  versions: KstConfigurationVersion[]
+}
+
 export type AdminLoginResponse = {
   access_token: string
   token_type: 'Bearer'

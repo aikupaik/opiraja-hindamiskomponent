@@ -256,7 +256,7 @@ validate_model_request <- function(request) {
     request,
     "",
     c("nodes", "relations", "node_parameters"),
-    c("nodes", "relations", "node_parameters", "cached_knowledge_states")
+    c("nodes", "relations", "node_parameters", "cached_knowledge_states", "configuration")
   )
   if (length(details) > 0L) throw_validation(details)
 
@@ -274,12 +274,24 @@ validate_model_request <- function(request) {
       relations
     ))
   }
+  configuration <- NULL
+  if (!is.null(request$configuration)) {
+    configuration_details <- validate_kst_configuration(request$configuration)
+    details <- c(details, configuration_details)
+    if (length(configuration_details) == 0L) {
+      configuration <- list(
+        snapshot = canonicalize_json_value(request$configuration),
+        hash = configuration_hash(request$configuration)
+      )
+    }
+  }
   throw_validation(details)
   list(
     nodes = nodes,
     relations = relations,
     node_parameters = parameter_result$value,
-    cached_knowledge_states = request$cached_knowledge_states
+    cached_knowledge_states = request$cached_knowledge_states,
+    configuration = configuration
   )
 }
 
@@ -481,7 +493,7 @@ validate_model_request_v2 <- function(request) {
     request,
     "",
     c("nodes", "relations"),
-    c("nodes", "relations", "cached_knowledge_states")
+    c("nodes", "relations", "cached_knowledge_states", "configuration")
   )
   if (length(details) > 0L) throw_validation(details)
   details <- validate_string_array(request$nodes, "nodes", unique = TRUE)
@@ -496,11 +508,23 @@ validate_model_request_v2 <- function(request) {
       relation_result$value
     ))
   }
+  configuration <- NULL
+  if (!is.null(request$configuration)) {
+    configuration_details <- validate_kst_configuration(request$configuration)
+    details <- c(details, configuration_details)
+    if (length(configuration_details) == 0L) {
+      configuration <- list(
+        snapshot = canonicalize_json_value(request$configuration),
+        hash = configuration_hash(request$configuration)
+      )
+    }
+  }
   throw_validation(details)
   list(
     nodes = nodes,
     relations = relation_result$value,
-    cached_knowledge_states = request$cached_knowledge_states
+    cached_knowledge_states = request$cached_knowledge_states,
+    configuration = configuration
   )
 }
 
