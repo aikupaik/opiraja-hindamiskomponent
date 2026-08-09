@@ -536,3 +536,31 @@ Nginx configuration retains `client_max_body_size 11m`, equivalent to
 11,534,336 bytes. The normal-workflow upload validation must therefore
 distinguish the application `413` above 10,000,000 bytes from the edge-Nginx
 `413` above 11 MiB.
+
+### Normal authenticated workflow and upload-boundary checks — 2026-08-09
+
+The operator completed a normal authenticated administrative workflow from the
+approved VPN client between `2026-08-09T13:09:26Z` and
+`2026-08-09T13:14:35Z`. A valid source upload succeeded, the 10,000,001-byte
+application-limit upload and 11,600,000-byte edge-limit upload each returned
+`413`, and a test simulation ran to completion without a reported error.
+
+Sanitized host correlation for the local 16:09–16:15 window recorded one
+successful source-material creation (`201`), four normal source-material reads
+(`200`), two source-material `413` responses, two test-creation responses
+(`201`), and nine player responses (`200`). All normal OR/player requests had
+`limit_req_status=PASSED`; there were no request- or connection-limit warnings.
+
+The two upload rejections were correctly distinguished without recording any
+source content: one `413` had upstream status `413`, confirming the
+application's 10,000,000-byte limit; one had no upstream status and produced
+the expected Nginx `client intended to send too large body` error-level event,
+confirming the 11 MiB edge boundary. No unexpected Nginx error-level entry was
+present.
+
+Result: **normal workflow, valid upload, application-limit `413`, edge-limit
+`413`, and complete simulation checks passed.** Begin the separate one-normal-
+operating-day dry-run observation after this workflow. During that interval,
+use the restricted application normally and record only sanitized traffic,
+limiter, error, health, storage, and certificate findings; do not run further
+artificial burst probes.
