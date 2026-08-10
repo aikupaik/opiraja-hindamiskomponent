@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/v1/player/tests", tags=["player-tests"])
 @router.post(
     "/{test_id}/start",
     response_model=PlayerReadyResponse,
-    response_description="Current question or completed feedback.",
+    response_description="Current question or completed feedback and review.",
     responses={
         202: {
             "model": PlayerPreparingResponse,
@@ -53,13 +53,18 @@ async def start_test(
             headers={"Retry-After": "3"},
             content=body.model_dump(mode="json"),
         )
-    return to_player_ready_response(view)
+    question_results = (
+        await service.get_question_results(TestId(test_id))
+        if view.status.value == "completed"
+        else ()
+    )
+    return to_player_ready_response(view, question_results)
 
 
 @router.post(
     "/{test_id}/answers",
     response_model=PlayerReadyResponse,
-    response_description="Next question or completed feedback.",
+    response_description="Next question or completed feedback and review.",
     responses={
         401: {"model": ErrorResponse, "description": "Bearer token is invalid."},
         403: {"model": ErrorResponse, "description": "Operation is forbidden."},
@@ -81,4 +86,9 @@ async def submit_answer(
         payload.domain_submission_id,
         payload.domain_option_id,
     )
-    return to_player_ready_response(view)
+    question_results = (
+        await service.get_question_results(TestId(test_id))
+        if view.status.value == "completed"
+        else ()
+    )
+    return to_player_ready_response(view, question_results)

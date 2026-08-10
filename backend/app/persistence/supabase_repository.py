@@ -220,6 +220,18 @@ class SupabaseAssessmentRepository:
         row = self._zero_or_one(response, ITEM_TABLE)
         return None if row is None else decode_item(row)
 
+    async def list_answers_for_test(
+        self, test_id: TestId
+    ) -> tuple[AnswerRecord, ...]:
+        response = await self._execute(
+            self._apply_filters(
+                self._client.table(ANSWER_TABLE).select(ANSWER_COLUMNS),
+                answer_test_filters(test_id),
+            ),
+            operation="tulemustepank.list_for_test",
+        )
+        return tuple(decode_answer(row) for row in self._rows(response, ANSWER_TABLE))
+
     async def get_latest_yg_order(self, test_id: TestId) -> YgOrder | None:
         response = await self._execute(
             self._apply_filters(

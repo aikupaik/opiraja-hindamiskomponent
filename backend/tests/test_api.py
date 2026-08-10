@@ -453,7 +453,7 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
 
 
 @pytest.mark.asyncio
-async def test_player_start_and_completion_never_expose_internal_assessment_data() -> None:
+async def test_player_completion_exposes_only_public_question_results() -> None:
     repository = InMemoryAssessmentRepository()
     engine = FakeKstEngine(
         advance_results=(AdvanceCompleted((0.1, 0.2, 0.7), make_profile()),)
@@ -511,12 +511,25 @@ async def test_player_start_and_completion_never_expose_internal_assessment_data
                 "summary": None,
                 "confidence_limited": False,
             },
+            "question_results": [
+                {
+                    "item_id": 41,
+                    "prompt": "What is A?",
+                    "stimulus": None,
+                    "student_answer": "Correct",
+                    "correct_answer": "Correct",
+                    "is_correct": True,
+                }
+            ],
         }
 
         or_view = await client.get(
             f"/api/v1/tests/{TEST_ID}", headers=_authorization(_or_token())
         )
-        assert or_view.json() == completed.json()
+        assert or_view.json() == {
+            "status": "completed",
+            "feedback": completed.json()["feedback"],
+        }
 
 
 @pytest.mark.asyncio

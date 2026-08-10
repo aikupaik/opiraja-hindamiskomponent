@@ -56,6 +56,7 @@ ITEM_STATUS_COLUMN = "staatus"
 ITEM_USAGE_COUNT_COLUMN = "kasutamiste_arv"
 ITEM_LAST_USED_COLUMN = "viimane_kasutus"
 ANSWER_ID_COLUMN = "vastus_id"
+ANSWER_TEST_ID_COLUMN = "test_id"
 CURRENT_SUBMISSION_PATH = "tp_seisund->current_question->>submission_id"
 YG_ORDER_ID_COLUMN = "id"
 YG_ORDER_STATUS_COLUMN = "staatus"
@@ -120,6 +121,10 @@ def preparing_session_filters(test_id: TestId) -> Filters:
 
 def answer_id_filters(submission_id: SubmissionId) -> Filters:
     return {ANSWER_ID_COLUMN: str(submission_id)}
+
+
+def answer_test_filters(test_id: TestId) -> Filters:
+    return {ANSWER_TEST_ID_COLUMN: str(test_id)}
 
 
 def item_id_filters(item_id: ItemId) -> Filters:

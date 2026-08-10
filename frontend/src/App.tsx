@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   PlayerApiError,
   playerApi,
   type PlayerApi,
   type PlayerFeedback,
   type PlayerQuestion,
+  type PlayerQuestionResult,
   type SubmissionPayload,
 } from './api'
 import {
@@ -34,7 +35,11 @@ type PlayerState =
       payload: SubmissionPayload
       requestKey: number
     }
-  | { kind: 'completed'; feedback: PlayerFeedback }
+  | {
+      kind: 'completed'
+      feedback: PlayerFeedback
+      questionResults: PlayerQuestionResult[]
+    }
   | {
       kind: 'failed'
       message: string
@@ -103,7 +108,11 @@ function TestPlayer({
           return
         }
         if (result.status === 'completed') {
-          setState({ kind: 'completed', feedback: result.feedback })
+          setState({
+            kind: 'completed',
+            feedback: result.feedback,
+            questionResults: result.question_results,
+          })
           return
         }
         const jitter = Math.floor(random() * 1000) + 1
@@ -137,7 +146,11 @@ function TestPlayer({
         if (result.status === 'active') {
           setState({ kind: 'question', question: result.question, selection: null })
         } else {
-          setState({ kind: 'completed', feedback: result.feedback })
+          setState({
+            kind: 'completed',
+            feedback: result.feedback,
+            questionResults: result.question_results,
+          })
         }
       })
       .catch((error: unknown) => {
@@ -217,7 +230,12 @@ function TestPlayer({
           />
         )}
 
-        {state.kind === 'completed' && <Feedback feedback={state.feedback} />}
+        {state.kind === 'completed' && (
+          <Feedback
+            feedback={state.feedback}
+            questionResults={state.questionResults}
+          />
+        )}
 
         {state.kind === 'failed' && (
           <FailurePanel state={state} onRecover={recover} />
@@ -396,7 +414,13 @@ function QuestionView({
   )
 }
 
-function Feedback({ feedback }: { feedback: PlayerFeedback }) {
+function Feedback({
+  feedback,
+  questionResults,
+}: {
+  feedback: PlayerFeedback
+  questionResults: PlayerQuestionResult[]
+}) {
   return (
     <div className="feedback">
       <p className="eyebrow">Test on lõpetatud, võid selle akna sulgeda.</p>
@@ -428,8 +452,98 @@ function Feedback({ feedback }: { feedback: PlayerFeedback }) {
           empty="Midagi kindlat kordamist ei vaja."
         />
       </div>
+      {questionResults.length > 0 && (
+        <QuestionResults results={questionResults} />
+      )}
     </div>
   )
+}
+
+function QuestionResults({ results }: { results: PlayerQuestionResult[] }) {
+  return (
+    <details className="question-results">
+      <summary>Näita küsimusi ja vastuseid</summary>
+      <div className="question-results-scroll">
+        <table>
+          <caption className="visually-hidden">
+            Küsimuste ja vastuste tulemused
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Küsimus</th>
+              <th scope="col">Sinu vastus</th>
+              <th scope="col">Õige vastus</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((result) => (
+              <tr
+                className={result.is_correct ? 'correct' : 'incorrect'}
+                key={result.item_id}
+              >
+                <td>
+                  <span className="visually-hidden">
+                    {result.is_correct ? 'Õige vastus. ' : 'Vale vastus. '}
+                  </span>
+                  <ResultQuestion result={result} />
+                </td>
+                <td>{result.student_answer}</td>
+                <td>{result.correct_answer}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  )
+}
+
+const STIMULUS_PREVIEW_LENGTH = 110
+const PROMPT_PREVIEW_LENGTH = 160
+
+function ResultQuestion({ result }: { result: PlayerQuestionResult }) {
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
+  const stimulusIsLong =
+    result.stimulus !== null &&
+    Array.from(result.stimulus).length > STIMULUS_PREVIEW_LENGTH
+  const promptIsLong = Array.from(result.prompt).length > PROMPT_PREVIEW_LENGTH
+  const canExpand = stimulusIsLong || promptIsLong
+  const stimulus =
+    result.stimulus === null || expanded
+      ? result.stimulus
+      : truncateText(result.stimulus, STIMULUS_PREVIEW_LENGTH)
+  const prompt = expanded
+    ? result.prompt
+    : truncateText(result.prompt, PROMPT_PREVIEW_LENGTH)
+
+  return (
+    <div className="result-question">
+      <div id={contentId} className="result-question-copy">
+        {stimulus !== null && (
+          <p className="result-question-stimulus">{stimulus}</p>
+        )}
+        <p className="result-question-prompt">{prompt}</p>
+      </div>
+      {canExpand && (
+        <button
+          className="question-text-toggle"
+          type="button"
+          aria-controls={contentId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? 'Peida kogu küsimus' : 'Näita kogu küsimust'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function truncateText(value: string, maximumLength: number): string {
+  const characters = Array.from(value)
+  if (characters.length <= maximumLength) return value
+  return `${characters.slice(0, maximumLength).join('').trimEnd()}…`
 }
 
 function FeedbackSection({

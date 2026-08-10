@@ -87,6 +87,20 @@ class InMemoryAssessmentRepository:
             self._raise_injected("get_session")
             return deepcopy(self._sessions.get(test_id))
 
+    async def list_answers_for_test(
+        self, test_id: TestId
+    ) -> tuple[AnswerRecord, ...]:
+        async with self._lock:
+            self._record("list_answers_for_test", test_id)
+            self._raise_injected("list_answers_for_test")
+            return deepcopy(
+                tuple(
+                    answer
+                    for answer in self._answers.values()
+                    if answer.test_id == test_id
+                )
+            )
+
     async def activate_session(self, command: ActivationCommand) -> AssessmentSession:
         async with self._lock:
             self._record("activate_session", command)

@@ -69,9 +69,11 @@ deployment acceptance checks remain mandatory pilot gates.
 ### Public data boundary
 
 Player responses may contain only the current public question or final public
-feedback. They never contain answer keys, correctness, graph-node identity,
-posterior values, candidate metadata, BLIM parameters, knowledge states, model
-configuration, or item telemetry.
+feedback. A completed player response additionally contains the persisted
+question review, including answer keys and correctness. Active responses never
+contain answer keys or correctness. No player response contains graph-node
+identity, posterior values, candidate metadata, BLIM parameters, knowledge
+states, model configuration, or item telemetry.
 
 The player link is
 `<PLAYER_APP_URL>/test/{test_id}#token=<player-jwt>`. The API route, not the
@@ -122,6 +124,30 @@ it.
 The three arrays contain graph-node labels. `summary` is a string or `null`.
 `confidence_limited` is true when completion was caused by insufficient usable
 item inventory rather than the normal confidence or safety-cap conditions.
+
+The OR completed response ends after `feedback`. The player completed response
+adds the following sibling field:
+
+```json
+{
+  "question_results": [
+    {
+      "item_id": 123,
+      "prompt": "What is 2 + 2?",
+      "stimulus": null,
+      "student_answer": "3",
+      "correct_answer": "4",
+      "is_correct": false
+    }
+  ]
+}
+```
+
+`question_results` follows administration order and is reconstructed from the
+completed session, accepted answer records, and item bank. Current v2 sessions
+must return one entry per accepted answer. Legacy completed sessions return an
+empty array. A valid player token bound to the completed test may retrieve this
+review, including through a repeated `start` call.
 
 ## `POST /api/v1/tests`
 
@@ -237,7 +263,8 @@ the same `test_id`. It has no request body and is idempotent.
 ### Success and preparation
 
 - `200 OK` returns the shared question view when active.
-- `200 OK` returns the shared completed-feedback view when already completed.
+- `200 OK` returns completed feedback and the player question review when
+  already completed.
 - `202 Accepted` returns the following body while item generation remains
   outstanding:
 
@@ -283,8 +310,8 @@ contain at least one character. Unknown fields are rejected.
 
 ### Success
 
-Returns `200 OK` with either the next shared question view or shared completed
-feedback.
+Returns `200 OK` with either the next shared question view or completed feedback
+and the player question review.
 
 The accepted `submission_id` is the idempotency and compare-and-set token for
 that persisted question:

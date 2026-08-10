@@ -11,6 +11,7 @@ from app.services.assessment import (
     CreateAssessmentCommand,
     CreateAssessmentResult,
     Feedback,
+    QuestionResult,
 )
 from app.services.questions import QuestionOutput
 
@@ -172,20 +173,48 @@ class PlayerActiveResponse(PublicModel):
     question: QuestionOutput
 
 
+class QuestionResultResponse(PublicModel):
+    item_id: int
+    prompt: str
+    stimulus: str | None
+    student_answer: str
+    correct_answer: str
+    is_correct: bool
+
+    @classmethod
+    def from_domain(cls, result: QuestionResult) -> "QuestionResultResponse":
+        return cls(
+            item_id=int(result.item_id),
+            prompt=result.prompt,
+            stimulus=result.stimulus,
+            student_answer=result.student_answer,
+            correct_answer=result.correct_answer,
+            is_correct=result.is_correct,
+        )
+
+
 class PlayerCompletedResponse(PublicModel):
     status: Literal["completed"] = "completed"
     feedback: FeedbackResponse
+    question_results: tuple[QuestionResultResponse, ...]
 
 
 PlayerReadyResponse = PlayerActiveResponse | PlayerCompletedResponse
 
 
-def to_player_ready_response(view: AssessmentView) -> PlayerReadyResponse:
+def to_player_ready_response(
+    view: AssessmentView,
+    question_results: tuple[QuestionResult, ...] = (),
+) -> PlayerReadyResponse:
     if view.status.value == "active" and view.question is not None:
         return PlayerActiveResponse(question=view.question)
     if view.status.value == "completed" and view.feedback is not None:
         return PlayerCompletedResponse(
-            feedback=FeedbackResponse.from_domain(view.feedback)
+            feedback=FeedbackResponse.from_domain(view.feedback),
+            question_results=tuple(
+                QuestionResultResponse.from_domain(result)
+                for result in question_results
+            ),
         )
     raise ValueError("assessment does not have a ready player view")
 

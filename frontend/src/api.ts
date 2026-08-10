@@ -30,6 +30,15 @@ export interface PlayerFeedback {
   confidence_limited: boolean
 }
 
+export interface PlayerQuestionResult {
+  item_id: number
+  prompt: string
+  stimulus: string | null
+  student_answer: string
+  correct_answer: string
+  is_correct: boolean
+}
+
 export interface PreparingResult {
   status: 'preparing'
   retryAfterSeconds: number
@@ -43,6 +52,7 @@ export interface ActiveResult {
 export interface CompletedResult {
   status: 'completed'
   feedback: PlayerFeedback
+  question_results: PlayerQuestionResult[]
 }
 
 export type StartResult = PreparingResult | ActiveResult | CompletedResult
@@ -246,7 +256,22 @@ function isCompleted(value: unknown): value is CompletedResult {
     isStringArray(feedback.learn_next) &&
     isStringArray(feedback.review) &&
     (feedback.summary === null || typeof feedback.summary === 'string') &&
-    typeof feedback.confidence_limited === 'boolean'
+    typeof feedback.confidence_limited === 'boolean' &&
+    Array.isArray(value.question_results) &&
+    value.question_results.every(isQuestionResult)
+  )
+}
+
+function isQuestionResult(value: unknown): value is PlayerQuestionResult {
+  return (
+    isRecord(value) &&
+    typeof value.item_id === 'number' &&
+    Number.isInteger(value.item_id) &&
+    typeof value.prompt === 'string' &&
+    (value.stimulus === null || typeof value.stimulus === 'string') &&
+    typeof value.student_answer === 'string' &&
+    typeof value.correct_answer === 'string' &&
+    typeof value.is_correct === 'boolean'
   )
 }
 

@@ -9,6 +9,7 @@ from .assessment import (
     CreateAssessmentCommand,
     CreateAssessmentResult,
     Feedback,
+    QuestionResult,
     feedback_from_profile,
 )
 from .questions import (
@@ -29,6 +30,7 @@ __all__ = [
     "Feedback",
     "InvalidQuestion",
     "QuestionOutput",
+    "QuestionResult",
     "build_question",
     "feedback_from_profile",
     "to_question_output",

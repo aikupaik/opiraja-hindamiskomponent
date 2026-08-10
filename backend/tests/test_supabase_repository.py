@@ -146,6 +146,21 @@ def test_reads_use_exact_filters_stable_order_and_request_metrics() -> None:
     assert len(requests) == 5
 
 
+def test_lists_answers_for_exact_test() -> None:
+    answer = make_answer()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert _path_table(request) == ANSWER_TABLE
+        assert request.method == "GET"
+        assert request.url.params.get("test_id") == f"eq.{TEST_ID}"
+        return _response([encode_answer(answer)])
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        assert await repository.list_answers_for_test(TEST_ID) == (answer,)
+
+    asyncio.run(_with_repository(handler, scenario))
+
+
 def test_graph_cache_ignores_conflicts_and_reloads_canonical_row() -> None:
     entry = GraphCacheEntry(
         graph_hash="kst-graph-v1:sha256:abc",

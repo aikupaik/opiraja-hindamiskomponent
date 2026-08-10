@@ -88,6 +88,16 @@ describe('player API client', () => {
         summary: null,
         confidence_limited: true,
       },
+      question_results: [
+        {
+          item_id: 41,
+          prompt: 'Mis on kaks pluss kaks?',
+          stimulus: 'Arvuta enne vastamist.',
+          student_answer: 'Neli',
+          correct_answer: 'Neli',
+          is_correct: true,
+        },
+      ],
     }
     const fetcher = vi
       .fn()
@@ -173,6 +183,37 @@ describe('player API client', () => {
     await expect(
       api.start(testId, new AbortController().signal),
     ).rejects.toMatchObject({ kind: 'malformed', requestId: 'malformed-1' })
+  })
+
+  it('rejects malformed completed question results', async () => {
+    const api = createPlayerApi({
+      fetcher: vi.fn().mockResolvedValue(
+        jsonResponse({
+          status: 'completed',
+          feedback: {
+            already_mastered: [],
+            learn_next: [],
+            review: [],
+            summary: null,
+            confidence_limited: false,
+          },
+          question_results: [
+            {
+              item_id: 41,
+              prompt: 'Küsimus',
+              stimulus: null,
+              student_answer: 'A',
+              correct_answer: 'B',
+              is_correct: 'false',
+            },
+          ],
+        }),
+      ),
+    })
+
+    await expect(
+      api.start(testId, new AbortController().signal),
+    ).rejects.toMatchObject({ kind: 'malformed' })
   })
 
   it('keeps definitive HTTP meaning when an error body is not JSON', async () => {

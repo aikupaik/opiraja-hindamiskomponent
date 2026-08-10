@@ -43,6 +43,7 @@ const completed: CompletedResult = {
     summary: 'Test on lõpetatud.',
     confidence_limited: false,
   },
+  question_results: [],
 }
 
 function mockApi(
@@ -375,6 +376,7 @@ describe('completion and reload recovery', () => {
         summary: null,
         confidence_limited: true,
       },
+      question_results: [],
     }
     render(<App api={mockApi(vi.fn().mockResolvedValue(feedback))} pathname={path} />)
     beginTest()
@@ -416,5 +418,69 @@ describe('completion and reload recovery', () => {
 
     expect(start).toHaveBeenCalledTimes(3)
     expect(document.body).not.toHaveTextContent('forbidden-browser-state')
+  })
+
+  it('reveals bordered answer rows and expands compact long questions', async () => {
+    const longStimulus = `Pikk stiimul ${'selgitus '.repeat(20)}`
+    const longPrompt = `Pikk küsimus ${'küsimuse osa '.repeat(20)}`
+    const result: CompletedResult = {
+      ...completed,
+      question_results: [
+        {
+          item_id: 41,
+          prompt: longPrompt,
+          stimulus: longStimulus,
+          student_answer: 'Õige',
+          correct_answer: 'Õige',
+          is_correct: true,
+        },
+        {
+          item_id: 42,
+          prompt: 'Milline vastus on õige?',
+          stimulus: null,
+          student_answer: 'Vale',
+          correct_answer: 'Õige',
+          is_correct: false,
+        },
+      ],
+    }
+    const user = userEvent.setup()
+    render(
+      <App api={mockApi(vi.fn().mockResolvedValue(result))} pathname={path} />,
+    )
+    beginTest()
+
+    const disclosure = await screen.findByText('Näita küsimusi ja vastuseid')
+    const table = screen.getByRole('table', { hidden: true })
+    expect(table).not.toBeVisible()
+
+    await user.click(disclosure)
+    expect(table).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: 'Küsimus' })).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: 'Sinu vastus' })).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: 'Õige vastus' })).toBeVisible()
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(rows[0]).toHaveClass('correct')
+    expect(rows[1]).toHaveClass('incorrect')
+    expect(screen.queryByText(longPrompt)).not.toBeInTheDocument()
+
+    const expand = screen.getByRole('button', { name: 'Näita kogu küsimust' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await user.click(expand)
+    expect(expand).toHaveAttribute('aria-expanded', 'true')
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.classList.contains('result-question-prompt') === true &&
+          element.textContent === longPrompt,
+      ),
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.classList.contains('result-question-stimulus') === true &&
+          element.textContent === longStimulus,
+      ),
+    ).toBeVisible()
   })
 })

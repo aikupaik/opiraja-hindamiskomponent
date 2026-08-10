@@ -11,6 +11,7 @@ from app.services.assessment import (
     AssessmentConflict,
     AssessmentService,
     CreateAssessmentCommand,
+    QuestionResult,
     feedback_from_profile,
 )
 from tests.factories import TEST_ID, make_item, make_model, make_profile
@@ -225,6 +226,62 @@ async def test_withdrawn_pool_item_is_not_supplied_to_r() -> None:
     advance_call = next(call for call in engine.calls if call.method == "advance")
     remaining = cast(tuple[ItemCandidate, ...], advance_call.arguments[5])
     assert ItemId(2) not in {candidate.item_id for candidate in remaining}
+
+
+@pytest.mark.asyncio
+async def test_completed_question_results_join_history_answers_and_items() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_items(*_items("A", 1, 3), *_items("B", 20, 3))
+    engine = FakeKstEngine(
+        model_results=(_built(),),
+        advance_results=(AdvanceCompleted((0.1, 0.3, 0.6), make_profile()),),
+    )
+    service = _service(repository, engine)
+    created = await service.create_assessment(_command())
+    test_id = TestId(created.test_id)
+    session = repository.session_snapshot[test_id]
+    state = cast(PlayerState, session.player_state)
+    question = state.current_question
+    assert question is not None
+    wrong_option = next(
+        option for option in question.options if option.option_id != question.correct_option_id
+    )
+
+    await service.submit_answer(test_id, question.submission_id, wrong_option.option_id)
+    results = await service.get_question_results(test_id)
+
+    assert results == (
+        QuestionResult(
+            item_id=question.item_id,
+            prompt=question.prompt,
+            stimulus=question.stimulus,
+            student_answer=wrong_option.text,
+            correct_answer="Correct",
+            is_correct=False,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_legacy_completed_session_has_no_question_results() -> None:
+    repository = InMemoryAssessmentRepository()
+    session = AssessmentSession(
+        test_id=TEST_ID,
+        user_id="user",
+        learning_path_id=LearningPathId("path"),
+        graph_hash="legacy",
+        status=SessionStatus.COMPLETED,
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        method=AssessmentMethod.KST,
+        player_state=LegacyPlayerState(posterior=(1.0,), answered_items=()),
+        model=None,
+        final_profile=make_profile(),
+    )
+    await repository.seed_session(session)
+
+    assert await _service(
+        repository, FakeKstEngine()
+    ).get_question_results(TEST_ID) == ()
 
 
 def test_inventory_exhaustion_is_publicly_confidence_limited() -> None:

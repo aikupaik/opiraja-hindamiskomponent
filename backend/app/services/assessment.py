@@ -67,6 +67,16 @@ class Feedback:
 
 
 @dataclass(frozen=True, slots=True)
+class QuestionResult:
+    item_id: ItemId
+    prompt: str
+    stimulus: str | None
+    student_answer: str
+    correct_answer: str
+    is_correct: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AssessmentView:
     status: SessionStatus
     question: QuestionOutput | None = None
@@ -233,6 +243,50 @@ class AssessmentService:
         if session.is_legacy and session.status is not SessionStatus.COMPLETED:
             raise AssessmentConflict("v1 assessment cannot be resumed")
         return self._view(session)
+
+    async def get_question_results(
+        self, test_id: TestId
+    ) -> tuple[QuestionResult, ...]:
+        session = await self._require_session(test_id)
+        if session.status is not SessionStatus.COMPLETED:
+            raise AssessmentConflict("question results require a completed assessment")
+        if session.is_legacy:
+            return ()
+        state = self._player_state(session)
+        answers = await self._repository.list_answers_for_test(test_id)
+        answers_by_submission = {
+            answer.submission_id: answer for answer in answers
+        }
+        if len(answers_by_submission) != len(answers):
+            raise RepositoryDataError("assessment has duplicate answer submissions")
+
+        results: list[QuestionResult] = []
+        for answered in state.answered_items:
+            answer = answers_by_submission.get(answered.submission_id)
+            if answer is None:
+                raise RepositoryDataError("completed assessment answer is missing")
+            if answer.test_id != test_id or answer.item_id != answered.item_id:
+                raise RepositoryDataError("completed assessment answer does not match history")
+            if answer.score != int(answered.response_correct):
+                raise RepositoryDataError("completed assessment score does not match history")
+            item = await self._repository.get_item(answered.item_id)
+            if item is None:
+                raise RepositoryDataError("completed assessment item is missing")
+            if (answer.selected_answer == item.answer_key) != answered.response_correct:
+                raise RepositoryDataError(
+                    "completed assessment answer key does not match history"
+                )
+            results.append(
+                QuestionResult(
+                    item_id=answered.item_id,
+                    prompt=item.prompt,
+                    stimulus=item.stimulus,
+                    student_answer=answer.selected_answer,
+                    correct_answer=item.answer_key,
+                    is_correct=answered.response_correct,
+                )
+            )
+        return tuple(results)
 
     async def start_assessment(self, test_id: TestId) -> AssessmentView:
         async with self._start_locks[test_id]:
