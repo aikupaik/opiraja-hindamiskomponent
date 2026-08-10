@@ -56,11 +56,11 @@ describe('admin shell', () => {
     const user = userEvent.setup()
 
     render(<App />)
-    await user.type(screen.getByLabelText('Admin access key'), 'operator-key')
-    await user.click(screen.getByRole('button', { name: 'Enter console' }))
+    await user.type(screen.getByLabelText('Administraatori ligipääsuvõti'), 'operator-key')
+    await user.click(screen.getByRole('button', { name: 'Sisene' }))
 
     expect(
-      await screen.findByRole('heading', { name: 'Course materials' }),
+      await screen.findByRole('heading', { name: 'Kursuse materjalid' }),
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('assessment-admin-jwt')).toBe(
       'signed-admin-jwt',
@@ -70,10 +70,10 @@ describe('admin shell', () => {
     expect(loginUrl).toBe('/api/v1/admin/login')
     expect(loginInit.body).toBe(JSON.stringify({ access_key: 'operator-key' }))
     expect(loginInit.headers.get('Authorization')).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Lock' }))
+    await user.click(screen.getByRole('button', { name: 'Lukusta' }))
     expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
     expect(
-      screen.getByRole('heading', { name: 'Unlock Assessment Lab' }),
+      screen.getByRole('heading', { name: 'Ava hindamislabor' }),
     ).toBeInTheDocument()
   })
 
@@ -95,11 +95,11 @@ describe('admin shell', () => {
     const user = userEvent.setup()
 
     render(<App />)
-    await user.type(screen.getByLabelText('Admin access key'), 'wrong')
-    await user.click(screen.getByRole('button', { name: 'Enter console' }))
+    await user.type(screen.getByLabelText('Administraatori ligipääsuvõti'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Sisene' }))
 
     expect(
-      await screen.findByText('The credentials were not accepted.'),
+      await screen.findByText('Ligipääsuandmed ei sobi.'),
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
   })
@@ -131,11 +131,11 @@ describe('admin shell', () => {
 
     expect(
       await screen.findByText(
-        'Your session expired. Enter your credentials again.',
+        'Seans aegus. Sisesta ligipääsuvõti uuesti.',
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Unlock Assessment Lab' }),
+      screen.getByRole('heading', { name: 'Ava hindamislabor' }),
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('assessment-admin-jwt')).toBeNull()
   })
@@ -153,9 +153,9 @@ describe('admin shell', () => {
     render(<App />)
 
     expect(
-      await screen.findByRole('heading', { name: 'Test player demo' }),
+      await screen.findByRole('heading', { name: 'Testimängija' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Player demo' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Testimängija' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -174,13 +174,13 @@ it('validates rule JSON before sending a write', async () => {
     />,
   )
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-  await user.type(screen.getByLabelText('Rule description'), 'Use SI units')
-  const editor = screen.getByLabelText('Valid JSON example')
+  await user.type(screen.getByLabelText('Reegli kirjeldus'), 'Use SI units')
+  const editor = screen.getByLabelText('Korrektne JSON-näide')
   fireEvent.change(editor, { target: { value: '{broken' } })
-  await user.click(screen.getByRole('button', { name: 'Save rule' }))
+  await user.click(screen.getByRole('button', { name: 'Salvesta reegel' }))
 
   expect(
-    screen.getByText('Rule example must be valid, non-null JSON.'),
+    screen.getByText('Reegli näide peab olema korrektne ja mitte-null JSON.'),
   ).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledTimes(2)
 })
@@ -225,15 +225,15 @@ it('opens item editing in safe copy mode with complete measurements', async () =
   const user = userEvent.setup()
   render(<ItemsPage courses={[]} />)
 
-  await user.type(screen.getByLabelText('Exact course code'), 'FÜS101')
-  await user.click(screen.getByRole('button', { name: 'Search item bank' }))
-  await user.click(await screen.findByRole('button', { name: 'Inspect' }))
-  await user.click(screen.getByRole('button', { name: 'Open editor' }))
+  await user.type(screen.getByLabelText('Täpne kursuse kood'), 'FÜS101')
+  await user.click(screen.getByRole('button', { name: 'Otsi küsimusi' }))
+  await user.click(await screen.findByRole('button', { name: 'Vaata' }))
+  await user.click(screen.getByRole('button', { name: 'Ava muutmine' }))
 
-  expect(screen.getByLabelText(/Create revised copy/)).toBeChecked()
-  expect(screen.getByLabelText('BLIM β error')).toHaveValue(0.05)
+  expect(screen.getByLabelText(/Loo muudetud koopia/)).toBeChecked()
+  expect(screen.getByLabelText('BLIM-i β-viga')).toHaveValue(0.05)
   expect(
-    screen.getByText(/Usage telemetry resets to zero/),
+    screen.getByText(/Kasutusandmed lähtestatakse/),
   ).toBeInTheDocument()
 })
 
@@ -247,20 +247,20 @@ it('adds an unselected relation with explicit prerequisite roles', async () => {
     />,
   )
 
-  const firstNode = screen.getByPlaceholderText('Learning outcome / graph node')
+  const firstNode = screen.getByPlaceholderText('Õpitulemus / teadmiste sõlm')
   await user.type(firstNode, 'Motion')
-  await user.click(screen.getByRole('button', { name: '+ Add node' }))
+  await user.click(screen.getByRole('button', { name: '+ Lisa sõlm' }))
   const nodeInputs = screen.getAllByPlaceholderText(
-    'Learning outcome / graph node',
+    'Õpitulemus / teadmiste sõlm',
   )
   await user.type(nodeInputs[1], 'Force')
-  await user.click(screen.getByRole('button', { name: '+ Add relation' }))
+  await user.click(screen.getByRole('button', { name: '+ Lisa seos' }))
 
-  expect(screen.getByLabelText('Prerequisite node (parent)')).toHaveValue('')
-  expect(screen.getByLabelText('Dependent node (child)')).toHaveValue('')
+  expect(screen.getByLabelText('Eeltingimuse sõlm (vanem)')).toHaveValue('')
+  expect(screen.getByLabelText('Sõltuv sõlm (laps)')).toHaveValue('')
   expect(
     screen.getByText(
-      'The parent prerequisite must be learned before the child.',
+      'Eeltingimuse sõlm (vanem)',
     ),
   ).toBeInTheDocument()
 })
@@ -348,23 +348,23 @@ it('preserves a cancelled experiment and automatically loads its partial report'
     />,
   )
   await user.type(
-    screen.getByPlaceholderText('Learning outcome / graph node'),
+    screen.getByPlaceholderText('Õpitulemus / teadmiste sõlm'),
     'Motion',
   )
-  await user.click(screen.getByRole('button', { name: 'Run experiment' }))
-  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await user.click(screen.getByRole('button', { name: 'Käivita katse' }))
+  await user.click(screen.getByRole('button', { name: 'Tühista' }))
 
   expect(
-    await screen.findByRole('heading', { name: 'Simulation report' }),
+    await screen.findByRole('heading', { name: 'Simulatsiooniaruanne' }),
   ).toBeInTheDocument()
   expect(
-    await screen.findByRole('button', { name: 'Retry report' }),
+    await screen.findByRole('button', { name: 'Proovi uuesti' }),
   ).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Retry report' }))
-  expect(await screen.findByText('partial')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Proovi uuesti' }))
+  expect(await screen.findByText('Osaline')).toBeInTheDocument()
   expect(screen.getByText(experimentId)).toBeInTheDocument()
   expect(
-    screen.getByRole('button', { name: 'Download HTML report' }),
+    screen.getByRole('button', { name: 'Laadi HTML-aruanne alla' }),
   ).toBeInTheDocument()
   expect(
     fetchMock.mock.calls.some(([input]) => String(input).endsWith('/report')),
@@ -439,16 +439,16 @@ it('automatically loads a completed report after the final answer', async () => 
     />,
   )
   await user.type(
-    screen.getByPlaceholderText('Learning outcome / graph node'),
+    screen.getByPlaceholderText('Õpitulemus / teadmiste sõlm'),
     'Motion',
   )
-  await user.click(screen.getByRole('button', { name: 'Run experiment' }))
+  await user.click(screen.getByRole('button', { name: 'Käivita katse' }))
   await user.click(
     await screen.findByRole('button', { name: /Correct/ }),
   )
 
-  expect((await screen.findAllByText('completed')).length).toBeGreaterThan(0)
+  expect((await screen.findAllByText('Lõpetatud')).length).toBeGreaterThan(0)
   expect(
-    screen.getByRole('button', { name: 'Download JSON data' }),
+    screen.getByRole('button', { name: 'Laadi JSON-andmed alla' }),
   ).toBeInTheDocument()
 })

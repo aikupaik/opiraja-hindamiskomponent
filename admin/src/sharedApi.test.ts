@@ -65,7 +65,7 @@ describe('shared frontend transport', () => {
       requestId: 'request-42',
     })
     expect(errorMessage(error)).toBe(
-      'The request could not be completed. Reference: request-42.',
+      'Päringut ei saanud täita. Viitenumber: request-42.',
     )
     expect(errorMessage(error)).not.toContain('Backend detail')
   })

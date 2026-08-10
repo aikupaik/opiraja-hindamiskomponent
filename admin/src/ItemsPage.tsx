@@ -13,6 +13,12 @@ import {
 
 const PAGE_SIZE = 20
 const statuses: ItemStatus[] = ['draft', 'usable', 'review', 'archived']
+const statusLabels: Record<ItemStatus, string> = {
+  draft: 'Mustand',
+  usable: 'Kasutatav',
+  review: 'Ülevaatamisel',
+  archived: 'Arhiveeritud',
+}
 
 type Props = {
   courses: CourseChoice[]
@@ -51,7 +57,7 @@ export function ItemsPage({ courses }: Props) {
     event.preventDefault()
     const course = courseInput.trim()
     if (!course) {
-      setError('Enter an exact course code.')
+      setError('Sisesta täpne kursuse kood.')
       return
     }
     setOffset(0)
@@ -83,7 +89,7 @@ export function ItemsPage({ courses }: Props) {
       !draft.prompt.trim() ||
       !draft.answer_key.trim()
     ) {
-      setError('Instruction, question stem, and answer key are required.')
+      setError('Juhis, küsimus ja õige vastus on kohustuslikud.')
       return
     }
     if (
@@ -96,7 +102,7 @@ export function ItemsPage({ courses }: Props) {
       draft.guess_probability < 0 ||
       draft.guess_probability > 1
     ) {
-      setError('Measurement values must be finite; BLIM probabilities use 0–1.')
+      setError('Mõõteparameetrid peavad olema lõplikud; BLIM-i tõenäosused on vahemikus 0–1.')
       return
     }
     if (mode === 'update_existing') {
@@ -108,8 +114,8 @@ export function ItemsPage({ courses }: Props) {
         editing.guess_probability !== draft.guess_probability
       const accepted = window.confirm(
         stronger
-          ? 'High-impact change: status or measurement parameters changed. Updating this ID may affect active assessment sessions. Continue?'
-          : 'Update this item ID in place? Content changes may affect active assessment sessions.',
+          ? 'Muutusid olek või mõõteparameetrid. Selle ID uuendamine võib mõjutada aktiivseid testiseansse. Jätkata?'
+          : 'Kas uuendada seda küsimust sama ID-ga? Sisu muutmine võib mõjutada aktiivseid testiseansse.',
       )
       if (!accepted) return
     }
@@ -138,20 +144,19 @@ export function ItemsPage({ courses }: Props) {
     <main className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Item-bank governance</p>
-          <h1>Audit & revision</h1>
-          <p>Inspect exact-course inventory without changing player semantics.</p>
+          <p className="eyebrow">Küsimuste haldus</p>
+          <h1>Küsimuste kontroll ja muutmine</h1>
         </div>
       </div>
 
       <form className="search-bar panel" onSubmit={search}>
         <label>
-          <span>Exact course code</span>
+          <span>Täpne kursuse kood</span>
           <input
             list="audit-course-codes"
             value={courseInput}
             onChange={(event) => setCourseInput(event.target.value)}
-            placeholder="Enter a course code"
+            placeholder="Sisesta kursuse kood"
           />
           <datalist id="audit-course-codes">
             {courses.map((course) => (
@@ -161,31 +166,29 @@ export function ItemsPage({ courses }: Props) {
             ))}
           </datalist>
         </label>
-        <button className="primary">Search item bank</button>
+        <button className="primary">Otsi küsimusi</button>
       </form>
       {error && <div className="notice error">{error}</div>}
       {newItemId !== null && (
         <div className="notice success">
-          Revised copy created as <strong>yp_id {newItemId}</strong>. The source
-          item remains unchanged.
+          Uus versioon loodi ID-ga <strong>{newItemId}</strong>. Algne küsimus jäi muutmata.
         </div>
       )}
 
       <section className="panel audit-table-panel">
         <div className="section-heading">
           <div>
-            <h2>{searchedCourse || 'Item inventory'}</h2>
-            <p>Ordered by stable item ID</p>
+            <h2>{searchedCourse || 'Küsimuste kogu'}</h2>
           </div>
-          <span className="count">{page?.total ?? 0} items</span>
+          <span className="count">{page?.total ?? 0} küsimust</span>
         </div>
         {loading ? (
-          <div className="empty">Loading items…</div>
+          <div className="empty">Laadin küsimusi…</div>
         ) : !page || page.items.length === 0 ? (
           <div className="empty">
             {searchedCourse
-              ? 'No items found for this exact course code.'
-              : 'Search for a course to begin the audit.'}
+              ? 'Selle kursuse koodiga küsimusi ei leitud.'
+              : 'Kontrolli alustamiseks otsi kursuse koodi.'}
           </div>
         ) : (
           <div className="table-scroll">
@@ -193,12 +196,12 @@ export function ItemsPage({ courses }: Props) {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Node</th>
-                  <th>Cognitive</th>
-                  <th>Question stem</th>
-                  <th>Status</th>
-                  <th>Uses</th>
-                  <th>Last used</th>
+                  <th>Teadmiste sõlm</th>
+                  <th>Kognitiivne tase</th>
+                  <th>Küsimus</th>
+                  <th>Olek</th>
+                  <th>Kasutuskorrad</th>
+                  <th>Viimati kasutatud</th>
                   <th />
                 </tr>
               </thead>
@@ -228,10 +231,10 @@ export function ItemsPage({ courses }: Props) {
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             >
-              Previous
+              Eelmine
             </button>
             <span>
-              {offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} of{' '}
+              {offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} /{' '}
               {page.total}
             </span>
             <button
@@ -239,7 +242,7 @@ export function ItemsPage({ courses }: Props) {
               disabled={offset + PAGE_SIZE >= page.total}
               onClick={() => setOffset(offset + PAGE_SIZE)}
             >
-              Next
+              Järgmine
             </button>
           </div>
         )}
@@ -250,20 +253,20 @@ export function ItemsPage({ courses }: Props) {
           <form className="editor" onSubmit={save}>
             <div className="editor-header">
               <div>
-                <p className="eyebrow">Editing source yp_id {editing.yp_id}</p>
-                <h2>Controlled revision</h2>
+                <p className="eyebrow">Muudan küsimust ID-ga {editing.yp_id}</p>
+                <h2>Kontrollitud muudatus</h2>
               </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="Close editor"
+                aria-label="Sulge muutmine"
                 onClick={() => setEditing(null)}
               >
                 ×
               </button>
             </div>
             <fieldset className="mode-choice">
-              <legend>Save mode</legend>
+              <legend>Salvestusviis</legend>
               <label className={mode === 'create_copy' ? 'selected' : ''}>
                 <input
                   type="radio"
@@ -272,9 +275,9 @@ export function ItemsPage({ courses }: Props) {
                   onChange={() => setMode('create_copy')}
                 />
                 <span>
-                  <strong>Create revised copy</strong>
+                  <strong>Loo muudetud koopia</strong>
                   <small>
-                    Preserve graph/course metadata; reset use count and last use.
+                    Säilita kursuse ja teadmiste sõlme andmed; lähtesta kasutusandmed.
                   </small>
                 </span>
               </label>
@@ -286,16 +289,16 @@ export function ItemsPage({ courses }: Props) {
                   onChange={() => setMode('update_existing')}
                 />
                 <span>
-                  <strong>Update current item</strong>
+                  <strong>Uuenda praegust küsimust</strong>
                   <small>
-                    Keep this ID and telemetry. Active sessions may be affected.
+                    Säilita ID ja kasutusandmed. Aktiivsed seansid võivad muutuda.
                   </small>
                 </span>
               </label>
             </fieldset>
             <div className="editor-grid">
               <label>
-                <span>Instruction</span>
+                <span>Juhis</span>
                 <input
                   value={draft.instruction}
                   onChange={(event) =>
@@ -304,7 +307,7 @@ export function ItemsPage({ courses }: Props) {
                 />
               </label>
               <label>
-                <span>Status</span>
+                <span>Olek</span>
                 <select
                   value={draft.status}
                   onChange={(event) =>
@@ -315,12 +318,12 @@ export function ItemsPage({ courses }: Props) {
                   }
                 >
                   {statuses.map((status) => (
-                    <option key={status}>{status}</option>
+                    <option key={status} value={status}>{statusLabels[status]}</option>
                   ))}
                 </select>
               </label>
               <label className="wide">
-                <span>Question stem</span>
+                <span>Küsimus</span>
                 <textarea
                   rows={3}
                   value={draft.prompt}
@@ -330,7 +333,7 @@ export function ItemsPage({ courses }: Props) {
                 />
               </label>
               <label className="wide">
-                <span>Stimulus · optional</span>
+                <span>Lähteinfo · valikuline</span>
                 <textarea
                   rows={3}
                   value={draft.stimulus ?? ''}
@@ -344,10 +347,10 @@ export function ItemsPage({ courses }: Props) {
               </label>
               {(
                 [
-                  ['answer_key', 'Answer key'],
-                  ['distractor_1', 'Distractor 1'],
-                  ['distractor_2', 'Distractor 2'],
-                  ['distractor_3', 'Distractor 3'],
+                  ['answer_key', 'Õige vastus'],
+                  ['distractor_1', 'Segaja 1'],
+                  ['distractor_2', 'Segaja 2'],
+                  ['distractor_3', 'Segaja 3'],
                 ] as const
               ).map(([field, label]) => (
                 <label key={field}>
@@ -367,8 +370,8 @@ export function ItemsPage({ courses }: Props) {
                 [
                   ['irt_a', 'IRT a'],
                   ['irt_b', 'IRT b'],
-                  ['beta_error', 'BLIM β error'],
-                  ['guess_probability', 'BLIM guess'],
+                  ['beta_error', 'BLIM-i β-viga'],
+                  ['guess_probability', 'BLIM-i äraarvamine'],
                 ] as const
               ).map(([field, label]) => (
                 <label key={field}>
@@ -389,8 +392,8 @@ export function ItemsPage({ courses }: Props) {
             </div>
             <div className="editor-note">
               {mode === 'create_copy'
-                ? 'Course, node, parent, cognitive level, score, and other metadata are copied. Usage telemetry resets to zero.'
-                : 'All non-editable metadata and existing usage telemetry remain attached to this item ID.'}
+                ? 'Kursuse, sõlme, vanema, kognitiivse taseme ja muud andmed kopeeritakse. Kasutusandmed lähtestatakse.'
+                : 'Kõik muud andmed ja olemasolevad kasutusandmed jäävad selle ID-ga seotuks.'}
             </div>
             <div className="editor-actions">
               <button
@@ -398,14 +401,14 @@ export function ItemsPage({ courses }: Props) {
                 className="quiet"
                 onClick={() => setEditing(null)}
               >
-                Cancel
+                Tühista
               </button>
               <button className="primary" disabled={saving}>
                 {saving
-                  ? 'Saving…'
+                  ? 'Salvestan…'
                   : mode === 'create_copy'
-                    ? 'Create revised copy'
-                    : 'Update current item'}
+                    ? 'Loo muudetud koopia'
+                    : 'Uuenda küsimust'}
               </button>
             </div>
           </form>
@@ -436,13 +439,13 @@ function ItemRows({
         <td>{item.cognitive_level}</td>
         <td className="stem">{item.prompt}</td>
         <td>
-          <span className={`status status-${item.status}`}>{item.status}</span>
+          <span className={`status status-${item.status}`}>{statusLabels[item.status]}</span>
         </td>
         <td>{item.usage_count}</td>
         <td>{item.last_used_at ? new Date(item.last_used_at).toLocaleString() : '—'}</td>
         <td>
           <button className="quiet small" type="button" onClick={onToggle}>
-            {expanded ? 'Close' : 'Inspect'}
+            {expanded ? 'Sulge' : 'Vaata'}
           </button>
         </td>
       </tr>
@@ -450,11 +453,11 @@ function ItemRows({
         <tr className="details-row">
           <td colSpan={8}>
             <div className="item-details">
-              <Detail label="Instruction" value={item.instruction} />
-              <Detail label="Stimulus" value={item.stimulus ?? '—'} />
-              <Detail label="Answer key" value={item.answer_key} />
+              <Detail label="Juhis" value={item.instruction} />
+              <Detail label="Lähteinfo" value={item.stimulus ?? '—'} />
+              <Detail label="Õige vastus" value={item.answer_key} />
               <Detail
-                label="Distractors"
+                label="Segajad"
                 value={[
                   item.distractor_1,
                   item.distractor_2,
@@ -463,14 +466,14 @@ function ItemRows({
                   .filter(Boolean)
                   .join(' · ')}
               />
-              <Detail label="Parent node" value={item.parent_graph_node ?? '—'} />
-              <Detail label="Score" value={String(item.score)} />
+              <Detail label="Ülemine sõlm" value={item.parent_graph_node ?? '—'} />
+              <Detail label="Punktid" value={String(item.score)} />
               <Detail
                 label="IRT / BLIM"
                 value={`a ${item.irt_a} · b ${item.irt_b} · β ${item.beta_error} · g ${item.guess_probability}`}
               />
               <button className="secondary" type="button" onClick={onEdit}>
-                Open editor
+                Ava muutmine
               </button>
             </div>
           </td>

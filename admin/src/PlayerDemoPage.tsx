@@ -26,6 +26,21 @@ type Props = {
 }
 
 const POLL_INTERVAL_MS = 3000
+const demoStateLabels: Record<DemoState, string> = {
+  idle: 'Ootel',
+  creating: 'Loon testi',
+  monitoring: 'Jälgin',
+  completed: 'Lõpetatud',
+  failed: 'Ebaõnnestus',
+  paused: 'Peatatud',
+  poll_error: 'Jälgimine ebaõnnestus',
+}
+const testStatusLabels = {
+  preparing: 'Ettevalmistamisel',
+  active: 'Aktiivne',
+  completed: 'Lõpetatud',
+  failed: 'Ebaõnnestus',
+} as const
 
 export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
   const [state, setState] = useState<DemoState>('idle')
@@ -133,25 +148,26 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
     if (!playerUrl) return
     try {
       await navigator.clipboard.writeText(playerUrl)
-      setCopyMessage('Player URL copied.')
+      setCopyMessage('Testimängija URL on kopeeritud.')
     } catch {
-      setCopyMessage('Could not copy the URL. Select and copy it manually.')
+      setCopyMessage('URL-i ei saanud kopeerida. Vali ja kopeeri see käsitsi.')
     }
   }
 
   const stateLabel =
-    state === 'monitoring' ? status?.status ?? 'monitoring' : state
+    state === 'monitoring'
+      ? status
+        ? testStatusLabels[status.status]
+        : demoStateLabels.monitoring
+      : demoStateLabels[state]
+  const stateClass = state === 'monitoring' ? status?.status ?? state : state
 
   return (
     <main className="page player-demo-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">External OR request preview</p>
-          <h1>Test player demo</h1>
-          <p>
-            Create a test, open the real learner player in another tab, and
-            watch the OR status endpoint for completion.
-          </p>
+          <p className="eyebrow">Testimängija eelvaade</p>
+          <h1>Testimängija</h1>
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}
@@ -160,15 +176,15 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
         courses={courses}
         maxGraphNodes={maxGraphNodes}
         disabled={formDisabled}
-        submitLabel={state === 'creating' ? 'Creating…' : 'Create player test'}
-        status={<span className={`run-state state-${stateLabel}`}>{stateLabel}</span>}
+        submitLabel={state === 'creating' ? 'Loon…' : 'Loo testimängija test'}
+        status={<span className={`run-state state-${stateClass}`}>{stateLabel}</span>}
         onSubmit={createTest}
         actions={
           created ? (
             <>
               {state === 'monitoring' && (
                 <button type="button" className="quiet" onClick={pauseMonitoring}>
-                  Stop monitoring
+                  Peata jälgimine
                 </button>
               )}
               {(state === 'paused' || state === 'poll_error') && (
@@ -177,11 +193,11 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
                   className="quiet"
                   onClick={() => startMonitoring(created.test_id)}
                 >
-                  Retry monitoring
+                  Proovi jälgimist uuesti
                 </button>
               )}
               <button type="button" className="quiet" onClick={reset}>
-                Create another test
+                Loo uus test
               </button>
             </>
           ) : undefined
@@ -192,20 +208,20 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
         <section className="panel player-launch-card" aria-labelledby="player-link-heading">
           <div className="section-heading">
             <div>
-              <h2 id="player-link-heading">Player link</h2>
+              <h2 id="player-link-heading">Testimängija link</h2>
               <p>test_id {created.test_id}</p>
             </div>
-            <span className={`run-state state-${stateLabel}`}>{stateLabel}</span>
+            <span className={`run-state state-${stateClass}`}>{stateLabel}</span>
           </div>
           <div className="player-link-row">
             <a href={playerUrl} target="_blank" rel="noopener noreferrer">
               {playerUrl}
             </a>
             <button type="button" className="quiet" onClick={() => void copyPlayerUrl()}>
-              Copy
+              Kopeeri
             </button>
             <a className="button-link primary" href={playerUrl} target="_blank" rel="noopener noreferrer">
-              Open in new tab
+              Ava uuel vahelehel
             </a>
           </div>
           {copyMessage && <p className="copy-status" aria-live="polite">{copyMessage}</p>}
@@ -213,16 +229,15 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
             <div className="preparing-indicator" aria-live="polite">
               <span />
               <div>
-                <strong>Waiting for the player</strong>
-                <p>Checking OR status every three seconds while this page is open.</p>
+                <strong>Ootan testimängijat</strong>
               </div>
             </div>
           )}
           {state === 'paused' && (
-            <div className="notice">Monitoring is paused. The player test remains available.</div>
+            <div className="notice">Jälgimine on peatatud. Test on endiselt saadaval.</div>
           )}
           {status?.status === 'failed' && (
-            <div className="notice error">The assessment ended in a failed state.</div>
+            <div className="notice error">Test lõppes ebaõnnestunult.</div>
           )}
           {status?.status === 'completed' && <CompletionFeedback feedback={status.feedback} />}
         </section>
@@ -234,14 +249,14 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
 function CompletionFeedback({ feedback }: { feedback: Feedback }) {
   return (
     <div className="feedback player-demo-feedback">
-      <p className="eyebrow">Final OR response</p>
-      <h3>{feedback.summary ?? 'Assessment completed.'}</h3>
-      <FeedbackList label="Already mastered" values={feedback.already_mastered} />
-      <FeedbackList label="Learn next" values={feedback.learn_next} />
-      <FeedbackList label="Review" values={feedback.review} />
+      <p className="eyebrow">Lõplik tagasiside</p>
+      <h3>{feedback.summary ?? 'Test on lõpetatud.'}</h3>
+      <FeedbackList label="Juba oskad" values={feedback.already_mastered} />
+      <FeedbackList label="Õpi järgmisena" values={feedback.learn_next} />
+      <FeedbackList label="Korda üle" values={feedback.review} />
       {feedback.confidence_limited && (
         <p className="confidence-note">
-          Result confidence was limited by the stopping condition.
+          Tulemuse usaldusväärsust piiras peatumise tingimus.
         </p>
       )}
     </div>
@@ -255,7 +270,7 @@ function FeedbackList({ label, values }: { label: string; values: string[] }) {
       {values.length ? (
         <ul>{values.map((value) => <li key={value}>{value}</li>)}</ul>
       ) : (
-        <p>None.</p>
+        <p>Puudub.</p>
       )}
     </section>
   )

@@ -40,7 +40,7 @@ function App() {
         setSession(null)
         setCourses([])
         setUnlocking(false)
-        setUnlockError('Your session expired. Enter your credentials again.')
+        setUnlockError('Seans aegus. Sisesta ligipääsuvõti uuesti.')
       }),
     [],
   )
@@ -133,25 +133,25 @@ function App() {
         <a className="brand" href="#/materials">
           <span className="brand-mark">OR</span>
           <span>
-            <strong>Assessment Lab</strong>
-            <small>Operator console</small>
+            <strong>Hindamislabor</strong>
+            <small>Operaatori vaade</small>
           </span>
         </a>
-        <nav aria-label="Admin sections">
+        <nav aria-label="Administraatori jaotised">
           <NavLink page="materials" current={page}>
-            Sources
+            Materjalid
           </NavLink>
           <NavLink page="items" current={page}>
-            Item bank
+            Küsimused
           </NavLink>
           <NavLink page="simulation" current={page}>
-            Simulation
+            Simulatsioon
           </NavLink>
           <NavLink page="kst-parameters" current={page}>
-            KST parameters
+            KST parameetrid
           </NavLink>
           <NavLink page="player-demo" current={page}>
-            Player demo
+            Testimängija
           </NavLink>
         </nav>
         <div className="operator">
@@ -160,7 +160,7 @@ function App() {
             {session.subject}
           </span>
           <button type="button" className="lock-button" onClick={lock}>
-            Lock
+            Lukusta
           </button>
         </div>
       </header>
@@ -215,17 +215,12 @@ function UnlockScreen({
         <span className="orbit orbit-one" />
         <span className="orbit orbit-two" />
         <div className="unlock-monogram">OR</div>
-        <p>curate · audit · experiment</p>
       </div>
       <form className="unlock-card" onSubmit={submit}>
-        <p className="eyebrow">Restricted operator surface</p>
-        <h1>Unlock Assessment Lab</h1>
-        <p>
-          Enter the development admin access key. It is exchanged for a
-          browser-tab session and is not stored.
-        </p>
+        <p className="eyebrow">Piiratud ligipääsuga operaatorivaade</p>
+        <h1>Ava hindamislabor</h1>
         <label>
-          <span>Admin access key</span>
+          <span>Administraatori ligipääsuvõti</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -236,12 +231,8 @@ function UnlockScreen({
         </label>
         {error && <div className="notice error">{error}</div>}
         <button className="primary" disabled={loading || !key}>
-          {loading ? 'Validating…' : 'Enter console'}
+          {loading ? 'Kontrollin…' : 'Sisene'}
         </button>
-        <small>
-          The key is validated by FastAPI and only the signed session token is
-          retained in this tab.
-        </small>
       </form>
     </main>
   )

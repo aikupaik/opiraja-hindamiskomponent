@@ -91,11 +91,11 @@ export function MaterialsPage({
     event.preventDefault()
     setError('')
     if (!courseCode.trim() || !courseTitle.trim()) {
-      setError('Course code and course title are required.')
+      setError('Kursuse kood ja nimetus on kohustuslikud.')
       return
     }
     if (!sourceUrl.trim() && !file) {
-      setError('Choose a file or enter a public source URL.')
+      setError('Vali fail või sisesta avaliku allika URL.')
       return
     }
     const form = new FormData()
@@ -130,11 +130,11 @@ export function MaterialsPage({
       example = JSON.parse(ruleExample)
       if (example === null) throw new Error()
     } catch {
-      setError('Rule example must be valid, non-null JSON.')
+      setError('Reegli näide peab olema korrektne ja mitte-null JSON.')
       return
     }
     if (!ruleCourse.trim() || !ruleDescription.trim()) {
-      setError('Rule course and description are required.')
+      setError('Reegli kursus ja kirjeldus on kohustuslikud.')
       return
     }
     setSavingRule(true)
@@ -188,17 +188,16 @@ export function MaterialsPage({
     <main className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Knowledge source control</p>
-          <h1>Course materials</h1>
-          <p>Curate source text and future-facing YG authoring rules.</p>
+          <p className="eyebrow">Õppematerjalide haldus</p>
+          <h1>Kursuse materjalid</h1>
         </div>
         <label className="compact-field">
-          <span>Viewing course</span>
+          <span>Valitud kursus</span>
           <select
             value={selectedCourse}
             onChange={(event) => setSelectedCourse(event.target.value)}
           >
-            <option value="">Select a course</option>
+            <option value="">Vali kursus</option>
             {courses.map((course) => (
               <option key={course.value} value={course.value}>
                 {course.label}
@@ -214,18 +213,17 @@ export function MaterialsPage({
           <div className="panel-title">
             <span className="step">01</span>
             <div>
-              <h2>Add source material</h2>
-              <p>Upload takes precedence when a URL is also supplied.</p>
+              <h2>Lisa lähtematerjal</h2>
             </div>
           </div>
           <div className="field-row">
             <label>
-              <span>Course code</span>
+              <span>Kursuse kood</span>
               <input
                 list="course-codes"
                 value={courseCode}
                 onChange={(event) => chooseKnownCourse(event.target.value)}
-                placeholder="e.g. FÜS101"
+                placeholder="nt FÜS101"
               />
               <datalist id="course-codes">
                 {courses.map((course) => (
@@ -236,16 +234,16 @@ export function MaterialsPage({
               </datalist>
             </label>
             <label>
-              <span>Course title</span>
+              <span>Kursuse nimetus</span>
               <input
                 value={courseTitle}
                 onChange={(event) => setCourseTitle(event.target.value)}
-                placeholder="Human-readable course title"
+                placeholder="Kursuse nimetus"
               />
             </label>
           </div>
           <label>
-            <span>Public source URL · optional</span>
+            <span>Avaliku allika URL · valikuline</span>
             <input
               type="url"
               value={sourceUrl}
@@ -254,22 +252,22 @@ export function MaterialsPage({
             />
           </label>
           <label className="file-drop">
-            <span>PDF, TXT, or Markdown · optional</span>
+            <span>PDF-, TXT- või Markdown-fail · valikuline</span>
             <input
               ref={fileInput}
               type="file"
               accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
-            <strong>{file ? file.name : 'Choose a source file'}</strong>
-            <small>Binaries are parsed, never stored.</small>
+            <strong>{file ? file.name : 'Vali lähtematerjali fail'}</strong>
+            <small>Faili sisu loetakse sisse, faili ennast ei salvestata.</small>
           </label>
           <button className="primary" disabled={savingMaterial}>
-            {savingMaterial ? 'Extracting…' : 'Extract and save'}
+            {savingMaterial ? 'Loen sisse…' : 'Loe sisse ja salvesta'}
           </button>
           {savedPreview && (
             <div className="saved-preview">
-              <strong>Saved #{savedPreview.id}</strong>
+              <strong>Salvestatud #{savedPreview.id}</strong>
               <p>{savedPreview.content_preview}</p>
             </div>
           )}
@@ -279,17 +277,16 @@ export function MaterialsPage({
           <div className="panel-title">
             <span className="step">02</span>
             <div>
-              <h2>Add YG rule</h2>
-              <p>Stored for inspection; execution is outside this phase.</p>
+              <h2>Lisa YG-reegel</h2>
             </div>
           </div>
           <label>
-            <span>Course</span>
+            <span>Kursus</span>
             <input
               list="rule-course-codes"
               value={ruleCourse}
               onChange={(event) => setRuleCourse(event.target.value)}
-              placeholder="Course code"
+              placeholder="Kursuse kood"
             />
             <datalist id="rule-course-codes">
               {courses.map((course) => (
@@ -298,16 +295,16 @@ export function MaterialsPage({
             </datalist>
           </label>
           <label>
-            <span>Rule description</span>
+            <span>Reegli kirjeldus</span>
             <textarea
               value={ruleDescription}
               onChange={(event) => setRuleDescription(event.target.value)}
               rows={5}
-              placeholder="Describe the authoring constraint…"
+              placeholder="Kirjelda koostamisreeglit…"
             />
           </label>
           <label>
-            <span>Valid JSON example</span>
+            <span>Korrektne JSON-näide</span>
             <textarea
               className="mono"
               value={ruleExample}
@@ -316,7 +313,7 @@ export function MaterialsPage({
             />
           </label>
           <button className="secondary" disabled={savingRule}>
-            {savingRule ? 'Saving…' : 'Save rule'}
+            {savingRule ? 'Salvestan…' : 'Salvesta reegel'}
           </button>
         </form>
       </section>
@@ -324,15 +321,15 @@ export function MaterialsPage({
       <section className="panel collection">
         <div className="section-heading">
           <div>
-            <h2>Source inventory</h2>
-            <p>{selectedCourse || 'No course selected'}</p>
+            <h2>Lähtematerjalid</h2>
+            <p>{selectedCourse || 'Kursust pole valitud'}</p>
           </div>
-          <span className="count">{materials.length} sources</span>
+          <span className="count">{materials.length} materjali</span>
         </div>
         {loading ? (
-          <div className="empty">Loading course data…</div>
+          <div className="empty">Laadin kursuse andmeid…</div>
         ) : materials.length === 0 ? (
-          <div className="empty">No source materials for this course.</div>
+          <div className="empty">Selle kursuse lähtematerjale pole.</div>
         ) : (
           <div className="material-list">
             {materials.map((material) => (
@@ -345,7 +342,7 @@ export function MaterialsPage({
                   <span className="material-id">#{material.id}</span>
                   <span>
                     <strong>{material.title}</strong>
-                    <small>{material.source_url ?? 'No provenance'}</small>
+                    <small>{material.source_url ?? 'Allikas puudub'}</small>
                   </span>
                   <span className="material-date">
                     {formatDate(material.added_at)}
@@ -367,13 +364,12 @@ export function MaterialsPage({
       <section className="panel collection">
         <div className="section-heading">
           <div>
-            <h2>YG rules</h2>
-            <p>Visible configuration only</p>
+            <h2>YG-reeglid</h2>
           </div>
-          <span className="count">{rules.length} rules</span>
+          <span className="count">{rules.length} reeglit</span>
         </div>
         {rules.length === 0 ? (
-          <div className="empty">No rules for this course.</div>
+          <div className="empty">Selle kursuse reegleid pole.</div>
         ) : (
           <div className="rule-list">
             {rules.map((rule) => (

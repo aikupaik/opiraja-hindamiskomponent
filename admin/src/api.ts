@@ -238,20 +238,20 @@ export function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.kind === 'aborted') return ''
   const reference =
     error instanceof ApiError && error.requestId
-      ? ` Reference: ${error.requestId}.`
+      ? ` Viitenumber: ${error.requestId}.`
       : ''
   return error instanceof ApiError && error.kind === 'network'
-    ? `The service could not be reached.${reference}`
-    : `The request could not be completed.${reference}`
+    ? `Teenusega ei saanud ühendust.${reference}`
+    : `Päringut ei saanud täita.${reference}`
 }
 
 export function loginErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.kind === 'aborted') return ''
   const reference =
     error instanceof ApiError && error.requestId
-      ? ` Reference: ${error.requestId}.`
+      ? ` Viitenumber: ${error.requestId}.`
       : ''
-  return `The credentials were not accepted.${reference}`
+  return `Ligipääsuandmed ei sobi.${reference}`
 }
 
 export async function streamDiagnostics(

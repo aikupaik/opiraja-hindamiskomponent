@@ -68,7 +68,7 @@ export function TestDefinitionForm({
     setValidationError('')
     const normalizedNodes = nodes.map((node) => node.trim()).filter(Boolean)
     if (!userId.trim() || !learningPathId.trim() || !course) {
-      setValidationError('User, learning path, and course are required.')
+      setValidationError('Kasutaja, õpitee ja kursus on kohustuslikud.')
       return
     }
     if (
@@ -77,7 +77,7 @@ export function TestDefinitionForm({
       new Set(normalizedNodes).size !== normalizedNodes.length
     ) {
       setValidationError(
-        `Enter 1–${maxGraphNodes} unique, nonblank graph nodes.`,
+        `Sisesta 1–${maxGraphNodes} erinevat ja tühikuteta teadmiste sõlme.`,
       )
       return
     }
@@ -89,7 +89,7 @@ export function TestDefinitionForm({
           relation.from === relation.to,
       )
     ) {
-      setValidationError('Every relation needs two different entered nodes.')
+      setValidationError('Iga seos vajab kaht erinevat sisestatud sõlme.')
       return
     }
 
@@ -109,15 +109,15 @@ export function TestDefinitionForm({
     <form className="panel simulation-form" onSubmit={submit}>
       <div className="section-heading">
         <div>
-          <h2>Test definition</h2>
-          <p>Method kst · cognitive level mõistab</p>
+          <h2>Testi määratlus</h2>
+          <p>Meetod: KST · kognitiivne tase: mõistab</p>
         </div>
         {status}
       </div>
       {validationError && <div className="notice error">{validationError}</div>}
       <div className="field-row">
         <label>
-          <span>User ID</span>
+          <span>Kasutaja ID</span>
           <input
             value={userId}
             onChange={(event) => setUserId(event.target.value)}
@@ -125,7 +125,7 @@ export function TestDefinitionForm({
           />
         </label>
         <label>
-          <span>Learning path ID</span>
+          <span>Õpitee ID</span>
           <input
             value={learningPathId}
             onChange={(event) => setLearningPathId(event.target.value)}
@@ -135,13 +135,13 @@ export function TestDefinitionForm({
       </div>
       <div className="field-row">
         <label>
-          <span>Course</span>
+          <span>Kursus</span>
           <select
             value={course}
             onChange={(event) => setCourse(event.target.value)}
             disabled={disabled}
           >
-            <option value="">Select course</option>
+            <option value="">Vali kursus</option>
             {courses.map((choice) => (
               <option key={choice.value} value={choice.value}>
                 {choice.label}
@@ -150,7 +150,7 @@ export function TestDefinitionForm({
           </select>
         </label>
         <label>
-          <span>Goal</span>
+          <span>Eesmärk</span>
           <select
             value={goal}
             onChange={(event) =>
@@ -158,8 +158,8 @@ export function TestDefinitionForm({
             }
             disabled={disabled}
           >
-            <option value="real_test">Real test</option>
-            <option value="trial_run">Trial run</option>
+            <option value="real_test">Päris test</option>
+            <option value="trial_run">Proovikäik</option>
           </select>
         </label>
       </div>
@@ -167,8 +167,8 @@ export function TestDefinitionForm({
       <div className="dynamic-section">
         <div className="dynamic-heading">
           <div>
-            <h3>Graph nodes</h3>
-            <p>{enteredNodes.length}/{maxGraphNodes} entered</p>
+            <h3>Teadmiste sõlmed</h3>
+            <p>{enteredNodes.length}/{maxGraphNodes} sisestatud</p>
           </div>
           <button
             type="button"
@@ -176,7 +176,7 @@ export function TestDefinitionForm({
             disabled={disabled || nodes.length >= maxGraphNodes}
             onClick={() => setNodes([...nodes, ''])}
           >
-            + Add node
+            + Lisa sõlm
           </button>
         </div>
         {nodes.map((node, index) => (
@@ -185,7 +185,7 @@ export function TestDefinitionForm({
             <input
               value={node}
               onChange={(event) => updateNode(index, event.target.value)}
-              placeholder="Learning outcome / graph node"
+              placeholder="Õpitulemus / teadmiste sõlm"
               disabled={disabled}
             />
             <button
@@ -193,7 +193,7 @@ export function TestDefinitionForm({
               className="icon-button"
               onClick={() => removeNode(index)}
               disabled={disabled || nodes.length === 1}
-              aria-label={`Remove node ${index + 1}`}
+              aria-label={`Eemalda sõlm ${index + 1}`}
             >
               ×
             </button>
@@ -204,8 +204,7 @@ export function TestDefinitionForm({
       <div className="dynamic-section">
         <div className="dynamic-heading">
           <div>
-            <h3>Prerequisite relations</h3>
-            <p>The parent prerequisite must be learned before the child.</p>
+            <h3>Eeltingimuste seosed</h3>
           </div>
           <button
             type="button"
@@ -213,16 +212,16 @@ export function TestDefinitionForm({
             disabled={disabled || enteredNodes.length < 2}
             onClick={() => setRelations([...relations, { from: '', to: '' }])}
           >
-            + Add relation
+            + Lisa seos
           </button>
         </div>
         {relations.length === 0 ? (
-          <div className="inline-empty">No relations defined.</div>
+          <div className="inline-empty">Seoseid pole määratud.</div>
         ) : (
           relations.map((relation, index) => (
             <div className="relation-row" key={index}>
               <label>
-                <span>Prerequisite node (parent)</span>
+                <span>Eeltingimuse sõlm (vanem)</span>
                 <select
                   value={relation.from}
                   disabled={disabled}
@@ -236,13 +235,13 @@ export function TestDefinitionForm({
                     )
                   }
                 >
-                  <option value="">Select prerequisite</option>
+                  <option value="">Vali eeltingimus</option>
                   {enteredNodes.map((node) => <option key={node}>{node}</option>)}
                 </select>
               </label>
-              <span>precedes →</span>
+              <span>eelneb →</span>
               <label>
-                <span>Dependent node (child)</span>
+                <span>Sõltuv sõlm (laps)</span>
                 <select
                   value={relation.to}
                   disabled={disabled}
@@ -256,7 +255,7 @@ export function TestDefinitionForm({
                     )
                   }
                 >
-                  <option value="">Select dependent node</option>
+                  <option value="">Vali sõltuv sõlm</option>
                   {enteredNodes.map((node) => <option key={node}>{node}</option>)}
                 </select>
               </label>
@@ -269,7 +268,7 @@ export function TestDefinitionForm({
                     relations.filter((_, relationIndex) => relationIndex !== index),
                   )
                 }
-                aria-label={`Remove relation ${index + 1}`}
+                aria-label={`Eemalda seos ${index + 1}`}
               >
                 ×
               </button>

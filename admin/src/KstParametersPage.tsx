@@ -72,19 +72,19 @@ export function KstParametersPage({ maxGraphNodes }: Props) {
     setSaving(true)
     try {
       await api('/api/v1/admin/kst-configurations', { method: 'POST', json: draft })
-      setNotice('Draft saved. It is not active until you activate it.')
+      setNotice('Mustand on salvestatud. See jõustub aktiveerimisel.')
       await refresh()
     } catch (caught) { setError(errorMessage(caught)) } finally { setSaving(false) }
   }
 
   async function activate(id: string) {
-    if (!window.confirm('Activate this configuration? Only assessments created afterward are affected.')) return
+    if (!window.confirm('Kas aktiveerida see seadistus? See mõjutab ainult pärast aktiveerimist loodud teste.')) return
     setError('')
     setNotice('')
     setActivating(id)
     try {
       await api(`/api/v1/admin/kst-configurations/${encodeURIComponent(id)}/activate`, { method: 'POST' })
-      setNotice('Configuration activated. Existing assessments remain unchanged.')
+      setNotice('Seadistus on aktiveeritud. Olemasolevad testid ei muutu.')
       await refresh()
     } catch (caught) { setError(errorMessage(caught)) } finally { setActivating(null) }
   }
@@ -92,41 +92,41 @@ export function KstParametersPage({ maxGraphNodes }: Props) {
   return (
     <main className="page">
       <div className="page-heading">
-        <div><p className="eyebrow">Runtime policy</p><h1>KST parameters</h1><p>Immutable drafts, explicit activation, and rollback for newly created assessments.</p></div>
+        <div><p className="eyebrow">Käitusseaded</p><h1>KST parameetrid</h1></div>
       </div>
       {error && <div className="notice error">{error}</div>}
       {notice && <div className="notice success">{notice}</div>}
-      {loading && <div className="panel" style={{ padding: 24 }}>Loading configuration history…</div>}
+      {loading && <div className="panel" style={{ padding: 24 }}>Laadin seadistuste ajalugu…</div>}
       {!loading && <div className="form-grid">
         <section className="panel" style={{ padding: 27 }}>
-          <div className="panel-title"><div><h2>Draft editor</h2><p>R validates and canonicalizes every save.</p></div></div>
+          <div className="panel-title"><div><h2>Mustandi muutmine</h2></div></div>
           <div className="field-row">
-            <label><span>Stop confidence</span><input type="number" min="0.0001" max="1" step="0.01" value={draft.stop_confidence} onChange={(event) => number('stop_confidence', event.target.value)} /></label>
-            <label><span>Feedback credible mass</span><input type="number" min="0.0001" max="1" step="0.01" value={draft.feedback_credible_mass} onChange={(event) => number('feedback_credible_mass', event.target.value)} /></label>
+            <label><span>Peatumise usaldus</span><input type="number" min="0.0001" max="1" step="0.01" value={draft.stop_confidence} onChange={(event) => number('stop_confidence', event.target.value)} /></label>
+            <label><span>Tagasiside usaldusväärne mass</span><input type="number" min="0.0001" max="1" step="0.01" value={draft.feedback_credible_mass} onChange={(event) => number('feedback_credible_mass', event.target.value)} /></label>
           </div>
-          <h3>Reliability floor</h3>
+          <h3>Usaldusväärsuse alampiir</h3>
           <div className="field-row">
             <label><span>Minimum</span><input type="number" min="0" step="1" value={draft.reliability_floor.minimum} onChange={(event) => number('floor-minimum', event.target.value)} /></label>
             <label><span>Multiplier</span><input type="number" min="0.0001" step="0.1" value={draft.reliability_floor.multiplier} onChange={(event) => number('floor-multiplier', event.target.value)} /></label>
             <label><span>Maximum</span><input type="number" min="0" step="1" value={draft.reliability_floor.maximum} onChange={(event) => number('floor-maximum', event.target.value)} /></label>
           </div>
-          <h3>Safety cap</h3>
+          <h3>Turvapiir</h3>
           <div className="field-row">
-            <label><span>Minimum above floor</span><input type="number" min="0" step="1" value={draft.safety_cap.minimum_above_floor} onChange={(event) => number('cap-minimum', event.target.value)} /></label>
-            <label><span>Node multiplier</span><input type="number" min="0.0001" step="0.1" value={draft.safety_cap.node_multiplier} onChange={(event) => number('cap-multiplier', event.target.value)} /></label>
+            <label><span>Miinimum üle alampiiri</span><input type="number" min="0" step="1" value={draft.safety_cap.minimum_above_floor} onChange={(event) => number('cap-minimum', event.target.value)} /></label>
+            <label><span>Sõlme kordaja</span><input type="number" min="0.0001" step="0.1" value={draft.safety_cap.node_multiplier} onChange={(event) => number('cap-multiplier', event.target.value)} /></label>
           </div>
-          <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save draft'}</button>
+          <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? 'Salvestan…' : 'Salvesta mustand'}</button>
         </section>
         <section className="panel" style={{ padding: 27 }}>
-          <div className="panel-title"><div><h2>Derived limits</h2><p>Preview for 1–{maxGraphNodes} graph nodes.</p></div></div>
-          <table><thead><tr><th>Nodes</th><th>Reliability floor</th><th>Safety cap</th></tr></thead><tbody>{preview.map((row) => <tr key={row.nodes}><td>{row.nodes}</td><td>{row.floor}</td><td>{row.cap}</td></tr>)}</tbody></table>
+          <div className="panel-title"><div><h2>Arvutatud piirid</h2></div></div>
+          <table><thead><tr><th>Sõlmi</th><th>Usaldusväärsuse alampiir</th><th>Turvapiir</th></tr></thead><tbody>{preview.map((row) => <tr key={row.nodes}><td>{row.nodes}</td><td>{row.floor}</td><td>{row.cap}</td></tr>)}</tbody></table>
         </section>
       </div>}
       {!loading && history && <section className="panel" style={{ padding: 27 }}>
-        <div className="panel-title"><div><h2>Version history</h2><p>Stored versions and activation audit events are append-only.</p></div></div>
+        <div className="panel-title"><div><h2>Versioonide ajalugu</h2></div></div>
         {history.versions.map((version) => <article key={version.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, padding: '18px 0', borderBottom: '1px solid var(--line)' }}>
-          <div><strong>{version.is_active ? 'Active version' : 'Historical version'}</strong><p className="mono">{version.configuration_hash}</p><small>Created by {version.created_by} · {new Date(version.created_at).toLocaleString()}</small>{version.last_activated_at && <small> · Activated by {version.last_activated_by} · {new Date(version.last_activated_at).toLocaleString()}</small>}</div>
-          {!version.is_active && <button className="secondary" disabled={activating !== null} onClick={() => void activate(version.id)}>{activating === version.id ? 'Activating…' : 'Reactivate'}</button>}
+          <div><strong>{version.is_active ? 'Aktiivne versioon' : 'Ajalooline versioon'}</strong><p className="mono">{version.configuration_hash}</p><small>Looja: {version.created_by} · {new Date(version.created_at).toLocaleString()}</small>{version.last_activated_at && <small> · Aktiveerija: {version.last_activated_by} · {new Date(version.last_activated_at).toLocaleString()}</small>}</div>
+          {!version.is_active && <button className="secondary" disabled={activating !== null} onClick={() => void activate(version.id)}>{activating === version.id ? 'Aktiveerin…' : 'Taasta aktiivseks'}</button>}
         </article>)}
       </section>}
     </main>

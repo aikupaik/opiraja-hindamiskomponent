@@ -15,6 +15,7 @@ import { TestDefinitionForm } from './TestDefinitionForm'
 import {
   downloadReportHtml,
   downloadReportJson,
+  reportStatusLabels,
   type ExperimentReport,
 } from './report'
 import { createUuid } from './uuid'
@@ -37,6 +38,17 @@ type Props = {
   courses: CourseChoice[]
   maxGraphNodes: number
 }
+
+const runStateLabels: Record<RunState, string> = {
+  idle: 'Ootel',
+  creating: 'Loon testi',
+  preparing: 'Ettevalmistamisel',
+  active: 'Aktiivne',
+  completed: 'Lõpetatud',
+  failed: 'Ebaõnnestus',
+  cancelled: 'Tühistatud',
+}
+const completionStateLabels = { completed: 'Lõpetatud', partial: 'Osaline' } as const
 
 export function SimulationPage({
   courses,
@@ -221,16 +233,12 @@ export function SimulationPage({
     <main className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Manual end-to-end laboratory</p>
-          <h1>Assessment simulation</h1>
-          <p>
-            Drive the real OR and player boundaries with experiment-scoped
-            diagnostics.
-          </p>
+          <p className="eyebrow">Käsitsi käivitatav simulatsioon</p>
+          <h1>Testi simulatsioon</h1>
         </div>
         {experimentId && (
           <div className="experiment-badge">
-            <span>Experiment</span>
+            <span>Katse</span>
             <code>{experimentId}</code>
           </div>
         )}
@@ -243,16 +251,16 @@ export function SimulationPage({
             courses={courses}
             maxGraphNodes={maxGraphNodes}
             disabled={running}
-            submitLabel={runState === 'idle' ? 'Run experiment' : 'Run again'}
-            status={<span className={`run-state state-${runState}`}>{runState}</span>}
+            submitLabel={runState === 'idle' ? 'Käivita katse' : 'Käivita uuesti'}
+            status={<span className={`run-state state-${runState}`}>{runStateLabels[runState]}</span>}
             onSubmit={runExperiment}
             actions={
               <>
               <button type="button" className="quiet" onClick={cancel} disabled={!running}>
-                Cancel
+                Tühista
               </button>
               <button type="button" className="quiet" onClick={reset}>
-                Reset
+                Lähtesta
               </button>
               </>
             }
@@ -262,19 +270,18 @@ export function SimulationPage({
             <section className="panel player-card">
               <div className="section-heading">
                 <div>
-                  <h2>Simulated player</h2>
-                  <p>{testId ? `test_id ${testId}` : 'Creating test…'}</p>
+                  <h2>Simuleeritud testimängija</h2>
+                  <p>{testId ? `test_id ${testId}` : 'Loon testi…'}</p>
                 </div>
               </div>
               {runState === 'creating' && (
-                <div className="empty">Creating assessment through the OR API…</div>
+                <div className="empty">Loon testi…</div>
               )}
               {runState === 'preparing' && (
                 <div className="preparing-indicator">
                   <span />
                   <div>
-                    <strong>Inventory is preparing</strong>
-                    <p>Polling at the backend-provided Retry-After cadence.</p>
+                    <strong>Küsimuste kogu valmistub</strong>
                   </div>
                 </div>
               )}
@@ -302,20 +309,20 @@ export function SimulationPage({
               )}
               {view?.status === 'completed' && (
                 <div className="feedback">
-                  <p className="eyebrow">Final feedback</p>
-                  <h3>{view.feedback.summary ?? 'Assessment completed.'}</h3>
+                  <p className="eyebrow">Lõplik tagasiside</p>
+                  <h3>{view.feedback.summary ?? 'Test on lõpetatud.'}</h3>
                   <FeedbackGroup
-                    label="Already mastered"
+                    label="Juba oskad"
                     values={view.feedback.already_mastered}
                   />
                   <FeedbackGroup
-                    label="Learn next"
+                    label="Õpi järgmisena"
                     values={view.feedback.learn_next}
                   />
-                  <FeedbackGroup label="Review" values={view.feedback.review} />
+                  <FeedbackGroup label="Korda üle" values={view.feedback.review} />
                   {view.feedback.confidence_limited && (
                     <p className="confidence-note">
-                      Result confidence was limited by the stopping condition.
+                      Tulemuse usaldusväärsust piiras peatumise tingimus.
                     </p>
                   )}
                 </div>
@@ -350,14 +357,14 @@ export function SimulationPage({
           <div className="terminal-header">
             <div>
               <span className="terminal-lights">● ● ●</span>
-              <strong>Experiment terminal</strong>
+              <strong>Katse sündmused</strong>
             </div>
-            <span>{visibleEvents.length} events</span>
+            <span>{visibleEvents.length} sündmust</span>
           </div>
           <div className="terminal-body" ref={terminalRef}>
             {visibleEvents.length === 0 ? (
               <p className="terminal-empty">
-                Diagnostics will appear here after an experiment begins.
+                Sündmused ilmuvad siia pärast katse käivitamist.
               </p>
             ) : (
               visibleEvents.map((event) => (
@@ -375,9 +382,6 @@ export function SimulationPage({
               ))
             )}
           </div>
-          <footer>
-            Process-local · expires after inactivity · no persistence
-          </footer>
         </aside>
       </div>
     </main>
@@ -395,14 +399,13 @@ function ReportPanel({
     <section className="panel report-panel" aria-labelledby="report-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Ephemeral export</p>
-          <h2 id="report-heading">Simulation report</h2>
-          <p>Research evidence and developer performance diagnostics.</p>
+          <p className="eyebrow">Aruanne</p>
+          <h2 id="report-heading">Simulatsiooniaruanne</h2>
         </div>
         {state.status === 'loaded' && (
           <div className="report-badges">
             <span className={`report-badge ${state.report.completion_state}`}>
-              {state.report.completion_state}
+              {completionStateLabels[state.report.completion_state]}
             </span>
             <span
               className={`report-badge ${
@@ -410,20 +413,20 @@ function ReportPanel({
               }`}
             >
               {state.report.data_quality_warnings.length
-                ? `${state.report.data_quality_warnings.length} warnings`
-                : 'data complete'}
+                ? `${state.report.data_quality_warnings.length} hoiatust`
+                : 'andmed on täielikud'}
             </span>
           </div>
         )}
       </div>
       {state.status === 'loading' && (
-        <div className="report-loading">Compiling retained diagnostics…</div>
+        <div className="report-loading">Koostan aruannet…</div>
       )}
       {state.status === 'failed' && (
         <div className="report-error">
-          <p>{state.message || 'The report could not be generated.'}</p>
+          <p>{state.message || 'Aruannet ei saanud koostada.'}</p>
           <button type="button" className="quiet" onClick={retry}>
-            Retry report
+            Proovi uuesti
           </button>
         </div>
       )}
@@ -443,13 +446,16 @@ function ReportPreview({ report }: { report: ExperimentReport }) {
         {report.research.interpretation}
       </p>
       <div className="report-summary-grid">
-        <ReportMetric label="Run status" value={report.run_status} />
         <ReportMetric
-          label="Responses"
+          label="Katse olek"
+          value={reportStatusLabels[report.run_status] ?? report.run_status}
+        />
+        <ReportMetric
+          label="Vastuseid"
           value={String(summary.response_count)}
         />
         <ReportMetric
-          label="Accuracy"
+          label="Täpsus"
           value={
             summary.overall_accuracy === null
               ? '—'
@@ -457,11 +463,11 @@ function ReportPreview({ report }: { report: ExperimentReport }) {
           }
         />
         <ReportMetric
-          label="Stop reason"
-          value={summary.stopping_reason ?? 'Incomplete'}
+          label="Peatumise põhjus"
+          value={summary.stopping_reason ?? 'Puudulik'}
         />
         <ReportMetric
-          label="API median"
+          label="API mediaan"
           value={
             latency.median_ms === null
               ? '—'
@@ -469,13 +475,13 @@ function ReportPreview({ report }: { report: ExperimentReport }) {
           }
         />
         <ReportMetric
-          label="Last stage"
+          label="Viimane etapp"
           value={report.developer.last_successful_stage}
         />
       </div>
       {summary.node_path.length > 0 && (
         <div className="report-path">
-          <span>Adaptive path</span>
+          <span>Kohanduv rada</span>
           <p>{summary.node_path.join(' → ')}</p>
         </div>
       )}
@@ -492,20 +498,16 @@ function ReportPreview({ report }: { report: ExperimentReport }) {
           className="primary"
           onClick={() => downloadReportHtml(report)}
         >
-          Download HTML report
+          Laadi HTML-aruanne alla
         </button>
         <button
           type="button"
           className="quiet"
           onClick={() => downloadReportJson(report)}
         >
-          Download JSON data
+          Laadi JSON-andmed alla
         </button>
       </div>
-      <p className="report-retention">
-        Generated from process-local diagnostics. Download to retain this
-        report beyond the diagnostic TTL or a backend restart.
-      </p>
     </div>
   )
 }

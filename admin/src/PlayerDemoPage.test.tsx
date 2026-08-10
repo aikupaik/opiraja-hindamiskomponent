@@ -25,10 +25,10 @@ function created(status: 'active' | 'preparing' = 'active') {
 
 function submitDefinition() {
   fireEvent.change(
-    screen.getByPlaceholderText('Learning outcome / graph node'),
+    screen.getByPlaceholderText('Õpitulemus / teadmiste sõlm'),
     { target: { value: 'Motion' } },
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Create player test' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Loo testimängija test' }))
 }
 
 afterEach(() => {
@@ -67,18 +67,18 @@ describe('player demo', () => {
     )
     submitDefinition()
 
-    const openLink = await screen.findByRole('link', { name: 'Open in new tab' })
+    const openLink = await screen.findByRole('link', { name: 'Ava uuel vahelehel' })
     expect(openLink).toHaveAttribute('href', `http://localhost:3000/test/${testId}`)
     expect(openLink).toHaveAttribute('target', '_blank')
     expect(await screen.findByText('Demo complete')).toBeInTheDocument()
     expect(screen.getByText('Motion')).toBeInTheDocument()
     expect(screen.getByText('Force')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kopeeri' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(
       `http://localhost:3000/test/${testId}`,
     ))
-    expect(await screen.findByText('Player URL copied.')).toBeInTheDocument()
+    expect(await screen.findByText('Testimängija URL on kopeeritud.')).toBeInTheDocument()
 
     const createCall = fetchMock.mock.calls.find(([input]) => String(input) === '/api/v1/tests')
     expect(JSON.parse(String(createCall?.[1]?.body))).toEqual({
