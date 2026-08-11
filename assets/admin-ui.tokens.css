@@ -1,0 +1,67 @@
+:root {
+  /* Assessment Lab admin UI tokens; source: HK_disain.png */
+  --al-color-forest-950: #0e2d24;
+  --al-color-forest-800: #16533c;
+  --al-color-forest-600: #2e7d5b;
+  --al-color-forest-200: #cfe6da;
+  --al-color-forest-50: #f2f7f4;
+  --al-color-paper-50: #fafbf8;
+  --al-color-paper-100: #f1eee8;
+  --al-color-surface: #ffffff;
+  --al-color-text-primary: #1a1f1d;
+  --al-color-text-muted: #66746e;
+  --al-color-orange-600: #e96d2a;
+  --al-color-amber-600: #d97706;
+  --al-color-blue-600: #2563eb;
+  --al-color-green-600: #16a34a;
+  --al-color-red-600: #dc2626;
+  --al-color-border: #e5e9e6;
+  --al-color-focus-ring: #2e7d5b;
+
+  --al-font-display: "Recoleta", Georgia, serif;
+  --al-font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --al-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --al-font-size-display: 48px;
+  --al-font-size-heading-2: 32px;
+  --al-font-size-heading-3: 20px;
+  --al-font-size-body: 14px;
+  --al-font-size-caption: 12px;
+  --al-font-size-eyebrow: 11px;
+
+  --al-line-height-display: 56px;
+  --al-line-height-heading-2: 40px;
+  --al-line-height-heading-3: 28px;
+  --al-line-height-body: 20px;
+  --al-line-height-caption: 16px;
+
+  --al-space-1: 4px;
+  --al-space-2: 8px;
+  --al-space-3: 12px;
+  --al-space-4: 16px;
+  --al-space-5: 20px;
+  --al-space-6: 24px;
+  --al-space-8: 32px;
+  --al-space-10: 40px;
+  --al-space-12: 48px;
+
+  --al-radius-control: 8px;
+  --al-radius-card: 12px;
+  --al-radius-pill: 999px;
+  --al-control-min-height: 40px;
+  --al-focus-ring-width: 2px;
+}
+
+/* Semantic status aliases keep component CSS independent of raw palette names. */
+:root {
+  --al-status-idle-text: var(--al-color-text-muted);
+  --al-status-idle-background: var(--al-color-paper-100);
+  --al-status-running-text: var(--al-color-blue-600);
+  --al-status-running-background: #eff6ff;
+  --al-status-completed-text: var(--al-color-green-600);
+  --al-status-completed-background: var(--al-color-forest-50);
+  --al-status-warning-text: var(--al-color-amber-600);
+  --al-status-warning-background: #fff7ed;
+  --al-status-error-text: var(--al-color-red-600);
+  --al-status-error-background: #fef2f2;
+}

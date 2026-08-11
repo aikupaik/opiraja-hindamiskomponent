@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "name": "Assessment Lab admin UI",
+    "source": "assets/HK_disain.png",
+    "referenceDimensions": {
+      "width": 1536,
+      "height": 1024
+    }
+  },
+  "color": {
+    "forest-950": "#0E2D24",
+    "forest-800": "#16533C",
+    "forest-600": "#2E7D5B",
+    "forest-200": "#CFE6DA",
+    "forest-50": "#F2F7F4",
+    "paper-50": "#FAFBF8",
+    "paper-100": "#F1EEE8",
+    "surface": "#FFFFFF",
+    "text-primary": "#1A1F1D",
+    "text-muted": "#66746E",
+    "orange-600": "#E96D2A",
+    "amber-600": "#D97706",
+    "blue-600": "#2563EB",
+    "green-600": "#16A34A",
+    "red-600": "#DC2626",
+    "border": "#E5E9E6",
+    "focus-ring": "#2E7D5B"
+  },
+  "typography": {
+    "display": {
+      "family": "Recoleta, Georgia, serif",
+      "weight": 700,
+      "fontSize": "48px",
+      "lineHeight": "56px",
+      "letterSpacing": "normal"
+    },
+    "heading-2": {
+      "family": "Recoleta, Georgia, serif",
+      "weight": 600,
+      "fontSize": "32px",
+      "lineHeight": "40px",
+      "letterSpacing": "normal"
+    },
+    "heading-3": {
+      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "weight": 600,
+      "fontSize": "20px",
+      "lineHeight": "28px",
+      "letterSpacing": "normal"
+    },
+    "label": {
+      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "weight": 500,
+      "fontSize": "14px",
+      "lineHeight": "20px",
+      "letterSpacing": "normal"
+    },
+    "body": {
+      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "weight": 400,
+      "fontSize": "14px",
+      "lineHeight": "20px",
+      "letterSpacing": "normal"
+    },
+    "caption": {
+      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "weight": 400,
+      "fontSize": "12px",
+      "lineHeight": "16px",
+      "letterSpacing": "normal"
+    },
+    "code": {
+      "family": "IBM Plex Mono, ui-monospace, SFMono-Regular, monospace",
+      "weight": 400,
+      "fontSize": "14px",
+      "lineHeight": "20px",
+      "letterSpacing": "normal"
+    },
+    "eyebrow": {
+      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "weight": 600,
+      "fontSize": "11px",
+      "lineHeight": "16px",
+      "letterSpacing": "0.12em",
+      "textTransform": "uppercase"
+    }
+  },
+  "space": {
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px"
+  },
+  "radius": {
+    "control": "8px",
+    "card": "12px",
+    "pill": "999px"
+  },
+  "size": {
+    "controlMinHeight": "40px",
+    "iconSmall": "16px",
+    "icon": "20px",
+    "focusRingWidth": "2px"
+  },
+  "status": {
+    "idle": {
+      "text": "#66746E",
+      "background": "#F1EEE8"
+    },
+    "running": {
+      "text": "#2563EB",
+      "background": "#EFF6FF"
+    },
+    "completed": {
+      "text": "#16A34A",
+      "background": "#F2F7F4"
+    },
+    "warning": {
+      "text": "#D97706",
+      "background": "#FFF7ED"
+    },
+    "error": {
+      "text": "#DC2626",
+      "background": "#FEF2F2"
+    }
+  }
+}
