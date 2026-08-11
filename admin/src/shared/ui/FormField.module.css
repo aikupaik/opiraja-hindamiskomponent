@@ -1,0 +1,3 @@
+.field { color: var(--al-color-text-primary); display: grid; font: 500 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); gap: var(--al-space-2); }
+.field small { color: var(--al-color-text-muted); font: 400 var(--al-font-size-caption)/var(--al-line-height-caption) var(--al-font-sans); }.field .error { color: var(--al-color-red-600); }
+.control { background: var(--al-color-surface); border: 1px solid var(--al-color-border); border-radius: var(--al-radius-control); color: var(--al-color-text-primary); min-height: var(--al-control-min-height); padding: 9px var(--al-space-3); width: 100%; }

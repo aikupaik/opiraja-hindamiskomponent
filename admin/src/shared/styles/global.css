@@ -1,0 +1,12 @@
+@import "../../../../assets/admin-ui.tokens.css";
+
+:root { color: var(--al-color-text-primary); background: var(--al-color-paper-50); font-family: var(--al-font-sans); font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a, button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: var(--al-focus-ring-width) solid var(--al-color-focus-ring); outline-offset: 2px; }
+::selection { background: var(--al-color-forest-800); color: white; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }

@@ -1,4 +1,4 @@
-import type { ExperimentReport } from '../report'
+import type { ExperimentReport } from './report'
 
 export const exampleReport: ExperimentReport = {
   schema_version: '1.0',

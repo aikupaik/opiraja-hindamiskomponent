@@ -8,8 +8,8 @@ import {
   type CreateTestResult,
   type Feedback,
   type TestStatus,
-} from './api'
-import { TestDefinitionForm } from './TestDefinitionForm'
+} from '../../../shared/api/adminApi'
+import { TestDefinitionForm } from '../shared/TestDefinitionForm'
 
 type DemoState =
   | 'idle'

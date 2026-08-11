@@ -7,7 +7,7 @@ import {
 import {
   adminCredentialSource,
   expireAdminCredential,
-} from './credential'
+} from '../../features/auth/credential'
 
 export type AdminSession = {
   subject: string

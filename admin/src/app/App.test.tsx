@@ -2,12 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { isVisibleDiagnostic } from './api'
-import { ItemsPage } from './ItemsPage'
-import { MaterialsPage } from './MaterialsPage'
-import { SimulationPage } from './SimulationPage'
-import { exampleReport } from './test/reportFixture'
-import { createUuid } from './uuid'
+import { isVisibleDiagnostic } from '../shared/api/adminApi'
+import { ItemsPage } from '../features/items/ItemsPage'
+import { MaterialsPage } from '../features/materials/MaterialsPage'
+import { SimulationPage } from '../features/experiments/simulation/SimulationPage'
+import { exampleReport } from '../features/experiments/shared/reportFixture'
+import { createUuid } from '../shared/lib/uuid'
 
 const session = {
   subject: 'development-admin',
@@ -160,6 +160,22 @@ describe('admin shell', () => {
       'page',
     )
   })
+
+  it('shows the honest Observe placeholder without requesting metrics', async () => {
+    sessionStorage.setItem('assessment-admin-jwt', 'signed-admin-jwt')
+    window.location.hash = '#/observe'
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => response(session))
+      .mockImplementationOnce(() => response([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Süsteem ja kvaliteet' })).toBeInTheDocument()
+    expect(screen.getByText(/Praegu ei koguta ega kuvata/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Jälgi/ })).toHaveAttribute('aria-current', 'page')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })
 
 it('validates rule JSON before sending a write', async () => {
@@ -235,6 +251,8 @@ it('opens item editing in safe copy mode with complete measurements', async () =
   expect(
     screen.getByText(/Kasutusandmed lähtestatakse/),
   ).toBeInTheDocument()
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 })
 
 it('adds an unselected relation with explicit prerequisite roles', async () => {

@@ -1,0 +1,8 @@
+.button { align-items: center; border-radius: var(--al-radius-control); border: 1px solid transparent; display: inline-flex; gap: var(--al-space-2); justify-content: center; min-height: var(--al-control-min-height); padding: 8px 14px; font: 600 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); text-decoration: none; }
+.primary { background: var(--al-color-forest-800); border-color: var(--al-color-forest-800); color: white; }
+.secondary { background: var(--al-color-surface); border-color: var(--al-color-border); color: var(--al-color-text-primary); }
+.tertiary { background: transparent; color: var(--al-color-forest-800); }
+.icon { background: transparent; border-color: var(--al-color-border); color: var(--al-color-text-primary); padding: 8px; }
+.button:hover:not(:disabled) { background-color: var(--al-color-forest-950); color: white; }
+.tertiary:hover:not(:disabled), .icon:hover:not(:disabled) { background-color: var(--al-color-forest-50); color: var(--al-color-forest-800); }
+.button:disabled { cursor: not-allowed; opacity: .55; }

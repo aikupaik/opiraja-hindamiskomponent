@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, createApiClient } from '@opiraja/frontend-api'
-import { errorMessage } from './api'
+import { errorMessage } from './adminApi'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

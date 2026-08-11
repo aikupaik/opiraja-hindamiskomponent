@@ -6,7 +6,7 @@ import {
   type CourseChoice,
   type SourceMaterial,
   type YgRule,
-} from './api'
+} from '../../shared/api/adminApi'
 
 type Props = {
   courses: CourseChoice[]

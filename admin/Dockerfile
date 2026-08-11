@@ -3,6 +3,7 @@ FROM node:24.13.1-alpine3.23 AS build
 WORKDIR /build/admin
 
 COPY shared/frontend-api /build/shared/frontend-api
+COPY assets/admin-ui.tokens.css /build/assets/admin-ui.tokens.css
 COPY admin/package.json admin/package-lock.json ./
 RUN npm ci
 

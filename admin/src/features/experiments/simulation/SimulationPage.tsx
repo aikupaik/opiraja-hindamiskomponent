@@ -10,15 +10,15 @@ import {
   type CreateTestResult,
   type DiagnosticEvent,
   type PlayerView,
-} from './api'
-import { TestDefinitionForm } from './TestDefinitionForm'
+} from '../../../shared/api/adminApi'
+import { TestDefinitionForm } from '../shared/TestDefinitionForm'
 import {
   downloadReportHtml,
   downloadReportJson,
   reportStatusLabels,
   type ExperimentReport,
-} from './report'
-import { createUuid } from './uuid'
+} from '../shared/report'
+import { createUuid } from '../../../shared/lib/uuid'
 
 type RunState =
   | 'idle'

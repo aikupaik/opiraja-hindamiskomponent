@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api, errorMessage, type KstConfiguration, type KstConfigurationHistory } from './api'
+import { api, errorMessage, type KstConfiguration, type KstConfigurationHistory } from '../../shared/api/adminApi'
+import { calculateLimits } from './calculateLimits'
 
 const initialConfiguration: KstConfiguration = {
   feedback_credible_mass: 0.9,
@@ -71,21 +72,7 @@ export function KstParametersPage({ maxGraphNodes }: Props) {
 
   useEffect(() => { void refresh() }, [])
 
-  const preview = useMemo(() => {
-    const values: { nodes: number; floor: number; cap: number }[] = []
-    for (let nodes = 1; nodes <= maxGraphNodes; nodes += 1) {
-      const floor = Math.min(
-        Math.max(draft.reliability_floor.minimum, Math.ceil(draft.reliability_floor.multiplier * nodes)),
-        draft.reliability_floor.maximum,
-      )
-      values.push({
-        nodes,
-        floor,
-        cap: Math.ceil(Math.max(draft.safety_cap.node_multiplier * nodes, floor + draft.safety_cap.minimum_above_floor)),
-      })
-    }
-    return values
-  }, [draft, maxGraphNodes])
+  const preview = useMemo(() => calculateLimits(draft, maxGraphNodes), [draft, maxGraphNodes])
 
   function number(path: 'feedback_credible_mass' | 'stop_confidence' | 'floor-minimum' | 'floor-multiplier' | 'floor-maximum' | 'cap-minimum' | 'cap-multiplier', value: string) {
     const parsed = Number(value)

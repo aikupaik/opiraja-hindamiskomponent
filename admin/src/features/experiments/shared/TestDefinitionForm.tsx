@@ -4,7 +4,7 @@ import type {
   CourseChoice,
   CreateTestPayload,
   TestRelation,
-} from './api'
+} from '../../../shared/api/adminApi'
 
 type Props = {
   courses: CourseChoice[]

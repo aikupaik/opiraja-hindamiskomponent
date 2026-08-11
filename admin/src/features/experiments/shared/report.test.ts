@@ -5,7 +5,7 @@ import {
   downloadReportJson,
   reportFilename,
 } from './report'
-import { exampleReport } from './test/reportFixture'
+import { exampleReport } from './reportFixture'
 
 afterEach(() => {
   vi.unstubAllGlobals()

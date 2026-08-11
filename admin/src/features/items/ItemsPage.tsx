@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Dialog } from '../../shared/ui/Dialog'
+import { StatusChip, type StatusTone } from '../../shared/ui/Alert'
+import { CloseIcon } from '../../shared/ui/icons'
+import { TableContainer } from '../../shared/ui/TableContainer'
 import {
   api,
   errorMessage,
@@ -9,7 +13,7 @@ import {
   type ItemPage,
   type ItemStatus,
   type SaveMode,
-} from './api'
+} from '../../shared/api/adminApi'
 
 const PAGE_SIZE = 20
 const statuses: ItemStatus[] = ['draft', 'usable', 'review', 'archived']
@@ -18,6 +22,13 @@ const statusLabels: Record<ItemStatus, string> = {
   usable: 'Kasutatav',
   review: 'Ülevaatamisel',
   archived: 'Arhiveeritud',
+}
+
+const statusTones: Record<ItemStatus, StatusTone> = {
+  draft: 'neutral',
+  usable: 'success',
+  review: 'warning',
+  archived: 'error',
 }
 
 type Props = {
@@ -79,6 +90,11 @@ export function ItemsPage({ courses }: Props) {
     setDraft(itemToEditable(item))
     setMode('create_copy')
     setError('')
+  }
+
+  function closeEditor() {
+    setEditing(null)
+    setDraft(null)
   }
 
   async function save(event: FormEvent) {
@@ -191,7 +207,7 @@ export function ItemsPage({ courses }: Props) {
               : 'Kontrolli alustamiseks otsi kursuse koodi.'}
           </div>
         ) : (
-          <div className="table-scroll">
+          <TableContainer className="table-scroll">
             <table className="audit-table">
               <thead>
                 <tr>
@@ -222,7 +238,7 @@ export function ItemsPage({ courses }: Props) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableContainer>
         )}
         {page && page.total > PAGE_SIZE && (
           <div className="pagination">
@@ -249,7 +265,7 @@ export function ItemsPage({ courses }: Props) {
       </section>
 
       {editing && draft && (
-        <div className="editor-backdrop" role="presentation">
+        <Dialog open title="Kontrollitud muudatus" onClose={closeEditor}>
           <form className="editor" onSubmit={save}>
             <div className="editor-header">
               <div>
@@ -260,9 +276,9 @@ export function ItemsPage({ courses }: Props) {
                 type="button"
                 className="icon-button"
                 aria-label="Sulge muutmine"
-                onClick={() => setEditing(null)}
+                onClick={closeEditor}
               >
-                ×
+                <CloseIcon />
               </button>
             </div>
             <fieldset className="mode-choice">
@@ -399,7 +415,7 @@ export function ItemsPage({ courses }: Props) {
               <button
                 type="button"
                 className="quiet"
-                onClick={() => setEditing(null)}
+                onClick={closeEditor}
               >
                 Tühista
               </button>
@@ -412,7 +428,7 @@ export function ItemsPage({ courses }: Props) {
               </button>
             </div>
           </form>
-        </div>
+        </Dialog>
       )}
     </main>
   )
@@ -439,7 +455,7 @@ function ItemRows({
         <td>{item.cognitive_level}</td>
         <td className="stem">{item.prompt}</td>
         <td>
-          <span className={`status status-${item.status}`}>{statusLabels[item.status]}</span>
+          <StatusChip tone={statusTones[item.status]}>{statusLabels[item.status]}</StatusChip>
         </td>
         <td>{item.usage_count}</td>
         <td>{item.last_used_at ? new Date(item.last_used_at).toLocaleString() : '—'}</td>
