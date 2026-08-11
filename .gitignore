@@ -7,4 +7,3 @@ __pycache__/
 R/library/
 .pytest_cache/
 reports/
-.tmp/
