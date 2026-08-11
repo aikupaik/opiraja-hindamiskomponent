@@ -654,3 +654,53 @@ no connection-limit warning and no error-level Nginx entry.
 Result: **the shared issuance and shared player request-limit zones enforce
 correctly after dry-run disablement.** The authenticated three-stream SSE
 connection-limit probe and normal-workflow acceptance check remain.
+
+### Post-enforcement three-stream SSE connection-limit probe — 2026-08-11
+
+From one approved VPN client, the operator held the admin UI diagnostics
+stream open for a live simulation and ran two additional authenticated SSE
+connections from that same client IP. No JWT, response body, diagnostic event
+payload, request ID, client address, or query value was recorded.
+
+- Probe window: `2026-08-11T07:27:41Z` to `2026-08-11T07:28:41Z`.
+- The browser stream remained incremental. The accepted additional curl stream
+  returned `200`, increased from 36 to 54 SSE data frames after a UI action,
+  and reached 87 frames before its intentional 60-second curl timeout (exit
+  status `28`).
+- The third stream returned `429`, contained no SSE data frame, had the exact
+  `rate_limited` envelope, and contained exactly one `X-Request-ID` header.
+- Sanitized host correlation, extended only to allow completed SSE requests to
+  be written to the access log, recorded two `200` responses with
+  `limit_conn_status=PASSED` and one `429` with
+  `limit_conn_status=REJECTED`. The error log had one matching
+  connection-limit warning, no request-limit warning, and no error-level
+  entry.
+
+Result: **the enforced three-stream SSE probe passed.** Two concurrent streams
+remained incremental; the third was edge-rejected without interrupting either
+established stream.
+
+### Post-enforcement normal authenticated workflow and upload check — 2026-08-11
+
+The operator reported completing a normal authenticated administrative
+workflow after enforcement. One valid source upload succeeded, and two
+deliberately over-limit source uploads were rejected as intended. No
+client-visible rate- or connection-limit false positive was reported. This
+entry records the operator-supplied outcome only; a later final acceptance
+review must retain the corresponding sanitized status/log correlation without
+recording source content or credentials.
+
+Result: **post-enforcement normal workflow and upload-boundary behavior passed
+on the operator report.**
+
+### OpenStack exact-port security-group re-confirmation — 2026-08-11
+
+The operator confirmed the OpenStack/Neutron security groups attached to the
+exact VM port continue to match the Phase 1 required policy: TCP 80 and 443
+are restricted to `172.20.0.0/16` and `193.40.0.0/16`, SSH retains its approved
+restrictions, and neither `0.0.0.0/0` nor `::/0` ingress is present. No cloud
+network rule was changed for this confirmation.
+
+Result: **the OpenStack security-group portion of the external Phase 1 gate is
+reconfirmed.** The approved-client repeat checks and the independent
+non-approved-source denial check remain separate acceptance evidence.
