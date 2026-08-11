@@ -11,6 +11,41 @@ const initialConfiguration: KstConfiguration = {
 
 type Props = { maxGraphNodes: number }
 
+function ParameterValue({ label, value }: { label: string; value: number }) {
+  return <div className="kst-parameter"><dt>{label}</dt><dd>{value}</dd></div>
+}
+
+function ConfigurationSummary({ configuration }: { configuration: KstConfiguration }) {
+  return (
+    <div className="kst-parameter-summary">
+      <p className="kst-summary-label">Parameetrid</p>
+      <dl className="kst-parameter-grid">
+        <ParameterValue label="Peatumise usaldus" value={configuration.stop_confidence} />
+        <ParameterValue label="Tagasiside usaldusväärne mass" value={configuration.feedback_credible_mass} />
+        <div className="kst-parameter-group">
+          <dt>Usaldusväärsuse alampiir</dt>
+          <dd>
+            <dl className="kst-parameter-grid kst-nested-parameter-grid">
+              <ParameterValue label="Minimum" value={configuration.reliability_floor.minimum} />
+              <ParameterValue label="Kordaja" value={configuration.reliability_floor.multiplier} />
+              <ParameterValue label="Maximum" value={configuration.reliability_floor.maximum} />
+            </dl>
+          </dd>
+        </div>
+        <div className="kst-parameter-group">
+          <dt>Turvapiir</dt>
+          <dd>
+            <dl className="kst-parameter-grid kst-nested-parameter-grid">
+              <ParameterValue label="Miinimum üle alampiiri" value={configuration.safety_cap.minimum_above_floor} />
+              <ParameterValue label="Sõlme kordaja" value={configuration.safety_cap.node_multiplier} />
+            </dl>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
 export function KstParametersPage({ maxGraphNodes }: Props) {
   const [history, setHistory] = useState<KstConfigurationHistory | null>(null)
   const [draft, setDraft] = useState<KstConfiguration>(initialConfiguration)
@@ -96,7 +131,7 @@ export function KstParametersPage({ maxGraphNodes }: Props) {
       </div>
       {error && <div className="notice error">{error}</div>}
       {notice && <div className="notice success">{notice}</div>}
-      {loading && <div className="panel" style={{ padding: 24 }}>Laadin seadistuste ajalugu…</div>}
+      {loading && <div className="panel" style={{ padding: 24 }}>Laadin seadistusi…</div>}
       {!loading && <div className="form-grid">
         <section className="panel" style={{ padding: 27 }}>
           <div className="panel-title"><div><h2>Mustandi muutmine</h2></div></div>
@@ -123,11 +158,23 @@ export function KstParametersPage({ maxGraphNodes }: Props) {
         </section>
       </div>}
       {!loading && history && <section className="panel" style={{ padding: 27 }}>
-        <div className="panel-title"><div><h2>Versioonide ajalugu</h2></div></div>
-        {history.versions.map((version) => <article key={version.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, padding: '18px 0', borderBottom: '1px solid var(--line)' }}>
-          <div><strong>{version.is_active ? 'Aktiivne versioon' : 'Ajalooline versioon'}</strong><p className="mono">{version.configuration_hash}</p><small>Looja: {version.created_by} · {new Date(version.created_at).toLocaleString()}</small>{version.last_activated_at && <small> · Aktiveerija: {version.last_activated_by} · {new Date(version.last_activated_at).toLocaleString()}</small>}</div>
-          {!version.is_active && <button className="secondary" disabled={activating !== null} onClick={() => void activate(version.id)}>{activating === version.id ? 'Aktiveerin…' : 'Taasta aktiivseks'}</button>}
-        </article>)}
+        <div className="panel-title"><div><h2>Aktiveeritavad seadistused</h2><p>Vaata parameetreid ja aktiveeri soovitud KST seadistus.</p></div></div>
+        <div className="kst-configuration-list">
+          {history.versions.map((version) => <article className="kst-configuration-card" key={version.id}>
+            <div className="kst-configuration-card-header">
+              <div>
+                <strong className={`kst-status ${version.is_active ? 'kst-status-active' : ''}`}>{version.is_active ? 'Aktiivne seadistus' : 'Saadaval aktiveerimiseks'}</strong>
+                <ConfigurationSummary configuration={version.configuration} />
+              </div>
+              {!version.is_active && <button className="secondary" disabled={activating !== null} onClick={() => void activate(version.id)}>{activating === version.id ? 'Aktiveerin…' : 'Aktiveeri seadistus'}</button>}
+            </div>
+            <div className="kst-metadata">
+              <span>Loodud: {version.created_by} · {new Date(version.created_at).toLocaleString()}</span>
+              {version.last_activated_at && <span>Viimati aktiveeris: {version.last_activated_by} · {new Date(version.last_activated_at).toLocaleString()}</span>}
+              <span className="mono">{version.configuration_hash}</span>
+            </div>
+          </article>)}
+        </div>
       </section>}
     </main>
   )

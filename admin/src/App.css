@@ -300,6 +300,109 @@
   line-height: 1.55;
 }
 
+.kst-configuration-list {
+  margin-top: 2px;
+}
+
+.kst-configuration-card {
+  padding: 21px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.kst-configuration-card:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.kst-configuration-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.kst-status {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.kst-status-active {
+  color: var(--green);
+}
+
+.kst-parameter-summary {
+  margin-top: 12px;
+  padding: 15px 17px;
+  border: 1px solid #e0e4dc;
+  border-radius: 9px;
+  background: #f5f5ef;
+}
+
+.kst-summary-label {
+  margin-bottom: 11px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kst-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+}
+
+.kst-parameter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kst-parameter dt,
+.kst-parameter-group > dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.kst-parameter dd,
+.kst-parameter-group > dd {
+  margin: 0;
+  color: var(--ink);
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.kst-parameter-group {
+  grid-column: span 2;
+  display: grid;
+  gap: 8px;
+}
+
+.kst-nested-parameter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.kst-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.kst-metadata .mono {
+  overflow-wrap: anywhere;
+}
+
 .notice,
 .global-error {
   border-radius: 8px;
@@ -1510,6 +1613,14 @@
     grid-template-columns: 1fr;
   }
 
+  .kst-configuration-card-header {
+    flex-direction: column;
+  }
+
+  .kst-configuration-card-header .secondary {
+    width: 100%;
+  }
+
   .player-link-row {
     align-items: stretch;
     flex-direction: column;
@@ -1552,6 +1663,15 @@
 
   .item-details {
     grid-template-columns: 1fr;
+  }
+
+  .kst-parameter-grid,
+  .kst-nested-parameter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kst-parameter-group {
+    grid-column: auto;
   }
 
   .relation-row {
