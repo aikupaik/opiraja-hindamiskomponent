@@ -718,3 +718,27 @@ value was recorded.
 
 Result: **the post-enforcement independent non-approved-source denial check
 passed for all four required ports.**
+
+### Post-enforcement approved-client external revalidation — 2026-08-11
+
+From an approved VPN client, the operator repeated the external browser, TLS,
+redirect, and forwarded-header checks without using credentials. No response
+body, request ID, certificate fingerprint, query value, or client identifier
+was recorded.
+
+- Probe window: `2026-08-11T08:05:20Z` to `2026-08-11T08:05:22Z`.
+- The exact-path HTTP check returned `308` and preserved its path and query.
+  The HTTPS root returned `200` with one CSP header, `Referrer-Policy:
+  no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  no HSTS header, and exactly one `X-Request-ID` header.
+- The served certificate metadata matched both the expected IP subject/SAN and
+  the recorded fingerprint. The clean browser check passed with no reported
+  mixed-content, CORS, asset-load, or CSP error.
+- A request containing forged forwarding and request-ID headers returned a
+  replacement `X-Request-ID`; the established host edge configuration replaces
+  all supplied forwarding metadata with the public-edge values.
+- Sanitized host correlation recorded three related requests: two `200`, one
+  `308`, and a generated request ID on each; the host error log had no entry
+  or error-level event in the window.
+
+Result: **the post-enforcement approved-client external revalidation passed.**
