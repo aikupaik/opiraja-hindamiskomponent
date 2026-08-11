@@ -704,3 +704,17 @@ network rule was changed for this confirmation.
 Result: **the OpenStack security-group portion of the external Phase 1 gate is
 reconfirmed.** The approved-client repeat checks and the independent
 non-approved-source denial check remain separate acceptance evidence.
+
+### Post-enforcement independent non-approved-source denial check — 2026-08-11
+
+From an independent non-approved source with the VPN disconnected, the
+operator tested the public VM IP without changing any OpenStack, firewall, or
+host configuration. No client identifier, response body, credential, or query
+value was recorded.
+
+- Probe window: `2026-08-11T08:01:17Z` to `2026-08-11T08:01:37Z`.
+- TCP ports 80, 443, 8080, and 8000 each produced no HTTP response and were
+  classified as denied by the client-side probe.
+
+Result: **the post-enforcement independent non-approved-source denial check
+passed for all four required ports.**

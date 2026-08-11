@@ -60,7 +60,6 @@ https_curl_exit=$?
 curl --disable --insecure --http1.1 --silent --show-error --connect-timeout "$CONNECT_TIMEOUT_SECONDS" --max-time "$CONNECT_TIMEOUT_SECONDS" --dump-header "$forged_headers" --output /dev/null --header 'X-Forwarded-For: 198.51.100.7' --header 'X-Forwarded-Proto: http' --header 'X-Real-IP: 198.51.100.7' --header 'X-Request-ID: phase2-forged-request-id' "https://${TARGET_HOST}/"
 forged_curl_exit=$?
 timeout "${CONNECT_TIMEOUT_SECONDS}s" openssl s_client -connect "${TARGET_HOST}:443" -servername "$TARGET_HOST" </dev/null 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName -fingerprint -sha256 >"$certificate_info" 2>/dev/null
-certificate_exit=$?
 set -e
 
 redirect_status="$(last_http_status "$redirect_headers")"
@@ -83,8 +82,13 @@ if [[ "$(header_count "$https_headers" Strict-Transport-Security)" == 0 ]]; then
 if [[ "$(header_count "$https_headers" X-Request-ID)" == 1 ]]; then x_request_id_single=yes; fi
 certificate_subject_san_match=no
 certificate_fingerprint_match=no
-if [[ "$certificate_exit" == 0 ]] && grep -q "CN = ${TARGET_HOST}" "$certificate_info" && grep -q "IP Address:${TARGET_HOST}" "$certificate_info"; then certificate_subject_san_match=yes; fi
-if [[ "$certificate_exit" == 0 ]] && grep -q "SHA256 Fingerprint=${EXPECTED_CERT_FINGERPRINT}" "$certificate_info"; then certificate_fingerprint_match=yes; fi
+certificate_metadata_readable=no
+if [[ -s "$certificate_info" ]]; then certificate_metadata_readable=yes; fi
+# s_client can return non-zero solely because the deliberately self-signed
+# certificate is untrusted. The parsed certificate data, not that exit code,
+# is authoritative for these comparisons.
+if [[ "$certificate_metadata_readable" == yes ]] && grep -Eq "subject=.*CN[[:space:]]*=[[:space:]]*${TARGET_HOST}" "$certificate_info" && grep -Fqi "IP Address:${TARGET_HOST}" "$certificate_info"; then certificate_subject_san_match=yes; fi
+if [[ "$certificate_metadata_readable" == yes ]] && grep -Fqi "sha256 fingerprint=${EXPECTED_CERT_FINGERPRINT}" "$certificate_info"; then certificate_fingerprint_match=yes; fi
 forged_request_id_replaced=no
 if [[ "$forged_status" == 200 && "$(header_count "$forged_headers" X-Request-ID)" == 1 ]] && ! grep -qi '^X-Request-ID: phase2-forged-request-id' "$forged_headers"; then forged_request_id_replaced=yes; fi
 
@@ -113,7 +117,7 @@ result: ${result}
 window_utc: ${utc_started} to ${utc_finished}
 http_redirect: curl_exit=${redirect_curl_exit}; status=${redirect_status:-none}; exact_path_and_query_preserved=${redirect_preserved}
 https_root: curl_exit=${https_curl_exit}; status=${https_status:-none}; csp_headers=$(header_count "$https_headers" Content-Security-Policy); referrer_policy_no_referrer=${referrer_policy}; x_content_type_options_nosniff=${x_content_type_options}; x_frame_options_deny=${x_frame_options}; hsts_absent=${hsts_absent}; x_request_id_headers_exactly_one=${x_request_id_single}
-certificate: subject_and_ip_san_match=${certificate_subject_san_match}; recorded_fingerprint_match=${certificate_fingerprint_match}
+certificate: metadata_readable=${certificate_metadata_readable}; subject_and_ip_san_match=${certificate_subject_san_match}; recorded_fingerprint_match=${certificate_fingerprint_match}
 forged_headers: curl_exit=${forged_curl_exit}; status=${forged_status:-none}; x_request_id_replaced=${forged_request_id_replaced}; vm_log_confirmation_of_forwarded_header_replacement=required
 clean_browser: ${browser_check}
 remaining_manual_gate: independently repeat the denial test from a non-approved source on ports 80, 443, 8080, and 8000; do not weaken any ingress rule.
