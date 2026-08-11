@@ -525,3 +525,132 @@ operating-day dry-run observation after this workflow. During that interval,
 use the restricted application normally and record only sanitized traffic,
 limiter, error, health, storage, and certificate findings; do not run further
 artificial burst probes.
+
+### One-normal-operating-day dry-run observation — 2026-08-09 to 2026-08-11
+
+The operator reported no user-visible issue during the restricted dry-run
+observation from `2026-08-09T13:17:56Z` through
+`2026-08-11T05:32:47Z`, a duration of 40 hours, 14 minutes, and 51 seconds.
+No artificial burst probe was run during the recorded window.
+
+Sanitized host access evidence for the corresponding local-time window
+recorded 214 requests: 185 `200`, six `201`, two `202`, six `304`, six `308`,
+five `401`, and four `413`. It recorded 177
+`limit_req_status=PASSED` values and no `REJECTED_DRY_RUN` request or
+connection result; 37 requests and 212 connections did not traverse a
+request/connection-limited location, while the two completed SSE connections
+were `limit_conn_status=PASSED`.
+
+The host error log recorded no request- or connection-limit warning, upstream
+timeout, premature upstream close, upstream connection failure, no-live-
+upstream condition, or error-level event. Ten ordinary-response buffering
+warnings recurred: four API responses, five static-asset responses, and one
+player-SPA response. The exact SSE location was not represented in those
+warnings and remains configured with proxy buffering disabled. This is a
+documented non-limiter observation; investigate if the warning frequency or
+temporary-disk use grows.
+
+Current post-observation checks passed: Nginx syntax validation and service
+status were healthy; all four Compose services were healthy with restart count
+zero; listeners remained limited to host IPv4 80/443 plus loopback 8080 and
+the approved SSH/resolver listeners; root disk use was 30%, inode use 4%, and
+Docker build cache was 37.89 GB with 20.22 GB reclaimable. NTP remained
+synchronized, no reboot marker was present, and the IP-SAN certificate expires
+on `2026-10-29T13:43:59Z`, more than 30 days after this review.
+
+Follow-up required before marking this observation completely clean: all four
+window `413` responses were source-material requests with upstream status
+`413`, meaning they were application-limit rejections rather than host-edge
+rejections. The operator must confirm they were intentional expected
+over-limit upload attempts; otherwise investigate the affected normal upload
+workflow before enforcement.
+
+### Observation `413` disposition — 2026-08-11
+
+The operator confirmed that the four application-side source-material `413`
+responses were expected. They resulted from intentionally attempting to upload
+a PDF with 111 pages while the deployment configuration sets the maximum PDF
+page count to 100. The file was below both the 10,000,000-byte application
+source-size limit and the 11 MiB host-Nginx request-body limit.
+
+Result: **the four observation-window `413` responses are expected configured
+PDF-page-limit rejections, not upload-size failures or limiter false positives.**
+The 40-hour normal-operating-day dry-run observation is accepted. The dry-run
+gate is complete; retain both dry-run directives until the reviewed enforcement
+revision is deliberately deployed.
+
+### Phase 2 limiter-enforcement deployment — 2026-08-11
+
+After review of the completed dry-run gate, the enforcement revision was
+created as Git commit `61670c0` (`Enable Nginx rate-limit enforcement`). It
+changes only the two reviewed host-Nginx directives from dry-run `on` to `off`:
+`limit_req_dry_run` and `limit_conn_dry_run`. Existing zones, rates, bursts,
+the edge `429` handler, and SSE settings were not changed. The pre-enforcement
+active site configuration was copied to the privileged VM backup area before
+installation.
+
+The reviewed repository file was installed through the root-owned active-site
+path. `nginx -t` passed and Nginx was gracefully reloaded. The repository and
+active-site SHA-256 checksums both equal
+`bee6c7b2bb1fdbc26baa72e7ccc3f789071da90547782f79adfdcf12b8269ae5`.
+Read-only verification confirmed both dry-run directives are `off`, the Nginx
+service is active, and all four Compose services are healthy. Nginx continues
+to listen on host IPv4 ports 80 and 443.
+
+Result: **Step 6 deployment items 1–4 passed.** The immediate post-enforcement
+limiter and normal-workflow acceptance probes remain required before the
+enforcement step can be accepted.
+
+### Post-enforcement request-limiter evidence and edge-header correction — 2026-08-11
+
+The first approved-client enforcement burst confirmed that the general API
+zone returned 21 `404` and 39 `429` responses, and the strict JWT-login zone
+returned six `401` and two `429` responses. That established that dry-run was
+disabled and excess requests were actively rejected. The initial response
+inspection also identified a configuration defect: edge-generated `429`
+responses lacked the required host-generated `X-Request-ID` header. The
+client-side body-inspection helper had a shell-quoting error, so its initial
+body result was not used as evidence.
+
+The defect was corrected in Git commit `d590d84` (`Preserve edge headers on
+rate limits`). The named rate-limit handler now explicitly includes the
+public-edge headers, because Nginx does not inherit server-level `add_header`
+directives into a location that defines its own header. The preceding active
+site was backed up in the privileged VM backup area, the reviewed file was
+installed, `nginx -t` passed, and Nginx was gracefully reloaded. The repository
+and active-site SHA-256 checksums both equal
+`cb10f4c7d316e3c707432d9892f071755945728d94220811bab58f516b14264c`.
+All four Compose services remained healthy.
+
+The corrected approved-client retry produced 21 `404` and 39 `429` responses
+for the general API burst, and six `401` and two `429` responses for the JWT
+login burst. Its sanitized inspection of one edge `429` confirmed the exact
+`rate_limited` JSON envelope, exactly one `X-Request-ID` header, and
+`Cache-Control: no-store`. Sanitized host evidence for the corresponding
+local-time review window recorded 21 `404`, six `401`, and 41 `429` responses;
+27 `limit_req_status=PASSED` and 41 `limit_req_status=REJECTED`; 41 matching
+request-limit warnings; no connection-limit warning; and no error-level Nginx
+entry.
+
+Result: **general API and strict JWT-login post-enforcement acceptance passed.**
+The shared issuance/player request-limit probes, authenticated three-stream
+SSE connection-limit probe, and normal-workflow acceptance check remain.
+
+### Post-enforcement shared JWT-zone evidence — 2026-08-11
+
+The approved VPN client ran harmless unauthenticated probes against the two
+shared request-limit zones. The issuance-zone probe at
+`2026-08-11T05:57:35Z` produced 11 `401` and 13 `429` responses across test
+creation and player-token issuance. The shared-player-zone probe at
+`2026-08-11T05:58:07Z` produced 124 `401` and 36 `429` responses across player
+start and answer requests. No valid resource identifier or credential was used
+or recorded.
+
+Sanitized host evidence for the corresponding local-time window recorded 135
+`401` and 49 `429` responses: 135 `limit_req_status=PASSED`, 49
+`limit_req_status=REJECTED`, and 49 matching request-limit warnings. There was
+no connection-limit warning and no error-level Nginx entry.
+
+Result: **the shared issuance and shared player request-limit zones enforce
+correctly after dry-run disablement.** The authenticated three-stream SSE
+connection-limit probe and normal-workflow acceptance check remain.
