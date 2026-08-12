@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   api,
   apiResponse,
@@ -48,6 +49,7 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
   const [status, setStatus] = useState<TestStatus | null>(null)
   const [error, setError] = useState('')
   const [copyMessage, setCopyMessage] = useState('')
+  const [showQrCode, setShowQrCode] = useState(false)
   const controllerRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -76,6 +78,7 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
     setStatus(null)
     setError('')
     setCopyMessage('')
+    setShowQrCode(false)
     try {
       const response = await apiResponse<CreateTestResult>('/api/v1/tests', {
         method: 'POST',
@@ -141,6 +144,7 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
     setStatus(null)
     setError('')
     setCopyMessage('')
+    setShowQrCode(false)
     setState('idle')
   }
 
@@ -223,6 +227,27 @@ export function PlayerDemoPage({ courses, maxGraphNodes }: Props) {
             <a className="button-link primary" href={playerUrl} target="_blank" rel="noopener noreferrer">
               Ava uuel vahelehel
             </a>
+          </div>
+          <div className="player-qr-code">
+            <button
+              type="button"
+              className="quiet"
+              aria-expanded={showQrCode}
+              onClick={() => setShowQrCode((visible) => !visible)}
+            >
+              {showQrCode ? 'Peida QR-kood' : 'Loo QR-kood telefoniga avamiseks'}
+            </button>
+            {showQrCode && (
+              <div className="player-qr-code-preview">
+                <QRCodeSVG
+                  value={playerUrl}
+                  size={192}
+                  marginSize={4}
+                  title="Testimängija QR-kood"
+                />
+                <p>Skanni kood telefoniga, et avada testimängija.</p>
+              </div>
+            )}
           </div>
           {copyMessage && <p className="copy-status" aria-live="polite">{copyMessage}</p>}
           {state === 'monitoring' && (

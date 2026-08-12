@@ -1062,6 +1062,31 @@
   font-size: 0.72rem;
 }
 
+.player-qr-code {
+  padding: 0 24px 24px;
+}
+
+.player-qr-code-preview {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.player-qr-code-preview svg {
+  flex: 0 0 auto;
+  border: 1px solid var(--al-color-border);
+  border-radius: 4px;
+  background: white;
+  padding: 8px;
+}
+
+.player-qr-code-preview p {
+  margin: 0;
+  color: var(--al-color-text-muted);
+  font-size: 0.78rem;
+}
+
 .player-launch-card > .notice {
   margin: 0 24px 24px;
 }
@@ -1669,6 +1694,11 @@
 
   .player-link-row {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .player-qr-code-preview {
+    align-items: flex-start;
     flex-direction: column;
   }
 
