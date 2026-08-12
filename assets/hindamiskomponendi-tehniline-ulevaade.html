@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="et" data-visualize-standalone>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hindamiskomponendi tehniline ülevaade</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #102a43;
+      --muted: #526778;
+      --line: #d9e5ec;
+      --surface: #ffffff;
+      --paper: #f5f9fb;
+      --blue: #1769aa;
+      --blue-soft: #e8f3fb;
+      --teal: #007d78;
+      --teal-soft: #e7f6f3;
+      --violet: #6656b9;
+      --violet-soft: #f0edfb;
+      --orange: #bd6414;
+      --orange-soft: #fff3e5;
+      --shadow: 0 16px 40px rgba(37, 67, 92, .10);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      padding: clamp(16px, 2.2vw, 34px);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 92% 2%, rgba(36, 159, 184, .16), transparent 25rem),
+        radial-gradient(circle at 2% 94%, rgba(97, 86, 185, .10), transparent 30rem),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .slide {
+      width: min(1500px, 100%);
+      min-height: min(900px, calc(100vh - clamp(32px, 4.4vw, 68px)));
+      margin: 0 auto;
+      padding: clamp(24px, 3.1vw, 48px);
+      overflow: hidden;
+      border: 1px solid rgba(144, 174, 193, .33);
+      border-radius: 28px;
+      background: rgba(255,255,255,.92);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 10px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .095em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--teal);
+      content: "";
+      box-shadow: 0 0 0 5px var(--teal-soft);
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 26px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      max-width: 860px;
+      margin: 0;
+      color: #102f4b;
+      font-size: clamp(30px, 3.4vw, 55px);
+      letter-spacing: -.045em;
+      line-height: 1.04;
+    }
+
+    .intro {
+      max-width: 370px;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(14px, 1.15vw, 18px);
+      line-height: 1.48;
+    }
+
+    .intro strong { color: var(--blue); }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: minmax(150px, .68fr) 42px minmax(190px, .85fr) 42px minmax(220px, 1fr) 42px minmax(300px, 1.26fr);
+      align-items: center;
+      gap: 0;
+      padding: clamp(24px, 3vw, 42px) 0 26px;
+    }
+
+    .cluster {
+      display: grid;
+      gap: 12px;
+    }
+
+    .cluster-title {
+      margin: 0 0 2px 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .node {
+      position: relative;
+      min-height: 100px;
+      padding: 18px 18px 17px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: var(--surface);
+      box-shadow: 0 5px 16px rgba(37, 67, 92, .055);
+    }
+
+    .node h2 {
+      margin: 0 0 4px;
+      font-size: clamp(15px, 1.25vw, 19px);
+      letter-spacing: -.015em;
+      line-height: 1.1;
+    }
+
+    .node p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(12px, .9vw, 14px);
+      line-height: 1.35;
+    }
+
+    .ui .node { min-height: 104px; }
+    .ui h2::after {
+      display: block;
+      margin-top: 5px;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .02em;
+    }
+
+    .gateway { border-color: #b9d9ec; background: linear-gradient(145deg, #f8fcff, #eaf6fd); }
+    .model { border-color: #c9c2f0; background: linear-gradient(145deg, #fcfbff, #f1effc); }
+    .data { border-color: #bce1d8; background: linear-gradient(145deg, #fbfffe, #ebf8f5); }
+    .items { border-color: #f1d1ac; background: linear-gradient(145deg, #fffdfa, #fff4e8); }
+    .generator { border-color: #f0c89a; background: linear-gradient(145deg, #fffdfa, #fff0df); }
+
+    .arrow {
+      position: relative;
+      height: 70px;
+      margin: 0 8px;
+    }
+
+    .arrow::before {
+      position: absolute;
+      top: 34px;
+      right: 12px;
+      left: 10px;
+      height: 2px;
+      background: #95b6c8;
+      content: "";
+    }
+
+    .arrow::after {
+      position: absolute;
+      top: 28px;
+      right: 8px;
+      width: 12px;
+      height: 12px;
+      border-top: 2px solid #95b6c8;
+      border-right: 2px solid #95b6c8;
+      content: "";
+      transform: rotate(45deg);
+    }
+
+    .arrow span {
+      position: absolute;
+      top: 1px;
+      left: 50%;
+      width: 120px;
+      color: #608197;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.18;
+      text-align: center;
+      transform: translateX(-50%);
+    }
+
+    .engine-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .engine-grid .node:first-child { grid-column: 1 / -1; }
+    .engine-grid .generator { grid-column: 1 / -1; }
+
+    .engine-caption {
+      margin: 9px 5px 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .engine-caption strong { color: var(--violet); }
+
+    .assurances {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+    }
+
+    .assurance-card {
+      min-height: 142px;
+      padding: 18px 20px;
+      border-radius: 17px;
+    }
+
+    .assurance-card h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      letter-spacing: -.012em;
+    }
+
+    .assurance-card p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    .access { background: var(--blue-soft); }
+    .access h2 { color: var(--blue); }
+    .access p { color: #315c79; }
+    .reliable { background: var(--teal-soft); }
+    .reliable h2 { color: var(--teal); }
+    .reliable p { color: #316a65; }
+    .isolated { background: var(--orange-soft); }
+    .isolated h2 { color: var(--orange); }
+    .isolated p { color: #805127; }
+    .traceable { background: var(--violet-soft); }
+    .traceable h2 { color: var(--violet); }
+    .traceable p { color: #574f7a; }
+
+    .technology {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .technology strong {
+      margin-right: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .075em;
+      text-transform: uppercase;
+    }
+
+    .chip {
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: #38536a;
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .chip b { color: var(--ink); }
+
+    @media (max-width: 980px) {
+      .architecture { grid-template-columns: 1fr; gap: 14px; }
+      .arrow { width: 70px; height: 45px; margin: 0 auto; transform: rotate(90deg); }
+      .arrow span { transform: translateX(-50%) rotate(-90deg); }
+      .assurances { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      header { align-items: start; flex-direction: column; }
+      .intro { max-width: 680px; }
+    }
+
+    @media (max-width: 560px) {
+      body { padding: 10px; }
+      .slide { padding: 22px 18px; border-radius: 20px; }
+      .engine-grid { grid-template-columns: 1fr; }
+      .engine-grid .node:first-child { grid-column: auto; }
+      .assurances { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="slide" aria-labelledby="slide-title">
+    <header>
+      <div>
+        <p class="eyebrow">Hindamiskomponent · töötav piloot</p>
+        <h1 id="slide-title">Kuidas süsteem hindamist läbi viib?</h1>
+      </div>
+      <p class="intro"><strong>Lihtne põhimõte:</strong> õppija vastab küsimustele; süsteem ühendab vastused teadmiste mudeliga ja annab selge tagasiside.</p>
+    </header>
+
+    <section class="architecture" aria-label="Hindamiskomponendi arhitektuur">
+      <div class="cluster">
+        <p class="cluster-title">Inimene ja õppekeskkond</p>
+        <article class="node person">
+          <h2>Õppija</h2>
+          <p>Algatab testi õpiraja kaudu, vastab küsimustele ja näeb personaalset tagasisidet.</p>
+        </article>
+        <article class="node person">
+          <h2>Õppejõud</h2>
+          <p>Lisab alusmaterjali ning ülesannete genereerimise reeglid.</p>
+        </article>
+      </div>
+
+      <div class="arrow" aria-hidden="true"></div>
+
+      <div class="cluster ui">
+        <p class="cluster-title">Kasutajaliidesed</p>
+        <article class="node person">
+          <h2>Testimängija UI</h2>
+          <p>Kuvab õppijale testiküsimused ning tagasiside.</p>
+        </article>
+        <article class="node person">
+          <h2>Administraatori UI</h2>
+          <p>Süsteemi haldamine, simulatsioonide käivitamine.</p>
+        </article>
+      </div>
+
+      <div class="arrow" aria-hidden="true"></div>
+
+      <div class="cluster">
+        <p class="cluster-title">Koordineeriv teenus</p>
+        <article class="node gateway">
+          <h2>Hindamiskomponendi API</h2>
+          <p>Süsteemi „liikluskorraldaja”: kontrollib õigusi, hoiab testi järge ning ühendab kasutajaliidese, andmed ja arvutusmudeli.</p>
+        </article>
+      </div>
+
+      <div class="arrow" aria-hidden="true"></div>
+
+      <div class="cluster">
+        <p class="cluster-title">Süsteemi sisemised mudelid ja andmed</p>
+        <div class="engine-grid">
+          <article class="node model">
+            <h2>KST teadmiste ja adaptiivse testimise mudel</h2>
+            <p>Seob õpitavad oskused eeldusseostega, valib järgmise küsimuse ja arvutab tagasiside.</p>
+          </article>
+          <article class="node data">
+            <h2>Andmebaas</h2>
+            <p>Hoiab testiseisu, graafistruktuure, tulemusi, alusmaterjali.</p>
+          </article>
+          <article class="node items">
+            <h2>Ülesandepank</h2>
+            <p>Toob vajalikud küsimused õige oskuse kontrollimiseks.</p>
+          </article>
+          <article class="node generator">
+            <h2>Testigeneraator (LLM)</h2>
+            <p>Supabase Edge Function: kui ülesandepangas on lünk, käivitab tellimus uute testiülesannete genereerimise ja lisab need ülesandepanka.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="assurances" aria-label="Tehnilised põhimõtted">
+      <article class="assurance-card access">
+        <h2>Ligipääs on rollipõhine</h2>
+        <p>Hindamiskomponendile saab päringuid teha ainult õpiraja teenus kindla võtme abil. Igale õppijale luuakse personaalne testisessioon unikaalse URL-iga.</p>
+      </article>
+      <article class="assurance-card reliable">
+        <h2>Vastus salvestub vaid korra</h2>
+        <p>Igal vastusel on oma tunnus. Katkenud ühenduse korral võib sama vastuse turvaliselt uuesti saata, ilma tulemust dubleerimata.</p>
+      </article>
+      <article class="assurance-card isolated">
+        <h2>Moodulid on eraldatud</h2>
+        <p>Internetist on nähtav ainult API ja kasutajaliidesed. Andmebaas ja KST arvutusmudel suhtlevad vaid süsteemi sisemises võrgus.</p>
+      </article>
+      <article class="assurance-card traceable">
+        <h2>Hindamine on jälgitav</h2>
+        <p>Iga testi juurde talletatakse kasutatud mudeli seadistus ning süsteem kontrollib teenuste valmisolekut.</p>
+      </article>
+    </section>
+
+    <footer class="technology" aria-label="Kasutatud tehnoloogiad">
+      <strong>Tehniline teostus</strong>
+      <span class="chip"><b>React + TypeScript</b> · kasutajaliidesed</span>
+      <span class="chip"><b>Nginx</b> · turvaline veebivärav</span>
+      <span class="chip"><b>FastAPI + Python</b> · töövoo juhtimine</span>
+      <span class="chip"><b>R + Plumber</b> · KST arvutusmudel</span>
+      <span class="chip"><b>Supabase / PostgreSQL</b> · andmed</span>
+      <span class="chip"><b>Docker Compose</b> · eraldatud teenused</span>
+      <span class="chip"><b>JWT</b> · ligipääsu kontroll</span>
+      <span class="chip"><b>TalTech Arvutuskeskus</b> · teenuse majutamine</span>
+      <span class="chip"><b>TalTech Azure AI</b> · ülesannete genereerimine</span>
+    </footer>
+  </main>
+</body>
+</html>
