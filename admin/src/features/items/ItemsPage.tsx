@@ -425,7 +425,7 @@ export function ItemsPage({ courses }: Props) {
                 <span>
                   <strong>Paranda olemasolevat ülesannet</strong>
                   <small>
-                    ID ja kasutusajalugu säilivad. Sobib näiteks kirjavea või kokku- ja lahkukirjutuse parandamiseks.
+                    ID ja kasutusajalugu säilivad.
                   </small>
                 </span>
               </label>
