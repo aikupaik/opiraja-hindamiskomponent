@@ -178,6 +178,31 @@ describe('admin shell', () => {
   })
 })
 
+it('leaves material forms empty until a course is selected', async () => {
+  const fetchMock = vi.fn(() => response([]))
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+
+  render(
+    <MaterialsPage
+      courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
+      refreshCourses={() => Promise.resolve()}
+    />,
+  )
+
+  expect(screen.getByPlaceholderText('nt FÜS101')).toHaveValue('')
+  expect(screen.getByPlaceholderText('Kursuse nimetus')).toHaveValue('')
+  expect(screen.getByPlaceholderText('Kursuse kood')).toHaveValue('')
+  expect(fetchMock).not.toHaveBeenCalled()
+
+  await user.selectOptions(screen.getByLabelText('Valitud kursus'), 'FÜS101')
+
+  expect(screen.getByPlaceholderText('nt FÜS101')).toHaveValue('FÜS101')
+  expect(screen.getByPlaceholderText('Kursuse nimetus')).toHaveValue('Physics')
+  expect(screen.getByPlaceholderText('Kursuse kood')).toHaveValue('FÜS101')
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+})
+
 it('validates rule JSON before sending a write', async () => {
   const fetchMock = vi.fn(() => response([]))
   vi.stubGlobal('fetch', fetchMock)
@@ -189,7 +214,6 @@ it('validates rule JSON before sending a write', async () => {
       refreshCourses={() => Promise.resolve()}
     />,
   )
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   await user.type(screen.getByLabelText('Reegli kirjeldus'), 'Use SI units')
   const editor = screen.getByLabelText('Korrektne JSON-näide')
   fireEvent.change(editor, { target: { value: '{broken' } })
@@ -198,7 +222,7 @@ it('validates rule JSON before sending a write', async () => {
   expect(
     screen.getByText('Reegli näide peab olema korrektne ja mitte-null JSON.'),
   ).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(fetchMock).not.toHaveBeenCalled()
 })
 
 it('explains source size limits when material ingestion returns source_too_large', async () => {
@@ -226,6 +250,7 @@ it('explains source size limits when material ingestion returns source_too_large
       refreshCourses={() => Promise.resolve()}
     />,
   )
+  await user.selectOptions(screen.getByLabelText('Valitud kursus'), 'FÜS101')
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   await user.type(screen.getByLabelText('Avaliku allika URL · valikuline'), 'https://example.com/large.pdf')
   await user.click(screen.getByRole('button', { name: 'Lisa' }))

@@ -37,15 +37,6 @@ export function MaterialsPage({
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!selectedCourse && courses[0]) setSelectedCourse(courses[0].value)
-    if (!courseCode && courses[0]) {
-      setCourseCode(courses[0].value)
-      setCourseTitle(courses[0].title)
-    }
-    if (!ruleCourse && courses[0]) setRuleCourse(courses[0].value)
-  }, [courses, courseCode, ruleCourse, selectedCourse])
-
-  useEffect(() => {
     if (!selectedCourse) {
       setMaterials([])
       setRules([])
@@ -182,7 +173,20 @@ export function MaterialsPage({
   function chooseKnownCourse(value: string) {
     setCourseCode(value)
     const course = courses.find((choice) => choice.value === value)
-    if (course) setCourseTitle(course.title)
+    if (course) {
+      setCourseTitle(course.title)
+      setSelectedCourse(course.value)
+      setRuleCourse(course.value)
+    }
+  }
+
+  function selectCourse(value: string) {
+    setSelectedCourse(value)
+    const course = courses.find((choice) => choice.value === value)
+    if (!course) return
+    setCourseCode(course.value)
+    setCourseTitle(course.title)
+    setRuleCourse(course.value)
   }
 
   return (
@@ -196,7 +200,7 @@ export function MaterialsPage({
           <span>Valitud kursus</span>
           <select
             value={selectedCourse}
-            onChange={(event) => setSelectedCourse(event.target.value)}
+            onChange={(event) => selectCourse(event.target.value)}
           >
             <option value="">Vali kursus</option>
             {courses.map((course) => (
@@ -218,9 +222,10 @@ export function MaterialsPage({
             </div>
           </div>
           <div className="field-row">
-            <label>
+            <label htmlFor="material-course-code">
               <span>Kursuse kood</span>
               <input
+                id="material-course-code"
                 list="course-codes"
                 value={courseCode}
                 onChange={(event) => chooseKnownCourse(event.target.value)}
@@ -234,9 +239,10 @@ export function MaterialsPage({
                 ))}
               </datalist>
             </label>
-            <label>
+            <label htmlFor="material-course-title">
               <span>Kursuse nimetus</span>
               <input
+                id="material-course-title"
                 value={courseTitle}
                 onChange={(event) => setCourseTitle(event.target.value)}
                 placeholder="Kursuse nimetus"
@@ -281,9 +287,10 @@ export function MaterialsPage({
               <h2>Lisa YG-reegel</h2>
             </div>
           </div>
-          <label>
+          <label htmlFor="rule-course-code">
             <span>Kursus</span>
             <input
+              id="rule-course-code"
               list="rule-course-codes"
               value={ruleCourse}
               onChange={(event) => setRuleCourse(event.target.value)}
