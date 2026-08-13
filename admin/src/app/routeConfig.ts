@@ -25,7 +25,7 @@ export type AdminArea = {
 
 export const routes: Record<AdminRouteId, AdminRoute> = {
   materials: { id: 'materials', area: 'build', hash: '/materials', label: 'Materjalid', description: 'Materjalid ja reeglid' },
-  items: { id: 'items', area: 'build', hash: '/items', label: 'Küsimused', description: 'Materjalid ja reeglid' },
+  items: { id: 'items', area: 'build', hash: '/items', label: 'Ülesanded', description: 'Materjalid ja reeglid' },
   observe: { id: 'observe', area: 'observe', hash: '/observe', label: 'Süsteem ja kvaliteet', description: 'Süsteem ja kvaliteet' },
   simulation: { id: 'simulation', area: 'test', hash: '/simulation', label: 'Simulatsioon', description: 'Katsed' },
   'player-demo': { id: 'player-demo', area: 'test', hash: '/player-demo', label: 'Testimängija', description: 'Katsed' },

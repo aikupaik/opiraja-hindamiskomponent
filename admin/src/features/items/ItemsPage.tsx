@@ -131,7 +131,7 @@ export function ItemsPage({ courses }: Props) {
       const accepted = window.confirm(
         stronger
           ? 'Muutusid olek või mõõteparameetrid. Selle ID uuendamine võib mõjutada aktiivseid testiseansse. Jätkata?'
-          : 'Kas uuendada seda küsimust sama ID-ga? Sisu muutmine võib mõjutada aktiivseid testiseansse.',
+          : 'Kas uuendada seda ülesannet sama ID-ga? Sisu muutmine võib mõjutada aktiivseid testiseansse.',
       )
       if (!accepted) return
     }
@@ -160,8 +160,8 @@ export function ItemsPage({ courses }: Props) {
     <main className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Küsimuste haldus</p>
-          <h1>Küsimuste kontroll ja muutmine</h1>
+          <p className="eyebrow">Ülesannete haldus</p>
+          <h1>Ülesannete vaatamine ja muutmine</h1>
         </div>
       </div>
 
@@ -182,28 +182,28 @@ export function ItemsPage({ courses }: Props) {
             ))}
           </datalist>
         </label>
-        <button className="primary">Otsi küsimusi</button>
+        <button className="primary">Otsi ülesandeid</button>
       </form>
       {error && <div className="notice error">{error}</div>}
       {newItemId !== null && (
         <div className="notice success">
-          Uus versioon loodi ID-ga <strong>{newItemId}</strong>. Algne küsimus jäi muutmata.
+          Uus versioon loodi ID-ga <strong>{newItemId}</strong>. Algne ülesanne jäi muutmata.
         </div>
       )}
 
       <section className="panel audit-table-panel">
         <div className="section-heading">
           <div>
-            <h2>{searchedCourse || 'Küsimuste kogu'}</h2>
+            <h2>{searchedCourse || 'Ülesannete kogu'}</h2>
           </div>
-          <span className="count">{page?.total ?? 0} küsimust</span>
+          <span className="count">{page?.total ?? 0} ülesannet</span>
         </div>
         {loading ? (
-          <div className="empty">Laadin küsimusi…</div>
+          <div className="empty">Laadin ülesandeid…</div>
         ) : !page || page.items.length === 0 ? (
           <div className="empty">
             {searchedCourse
-              ? 'Selle kursuse koodiga küsimusi ei leitud.'
+              ? 'Selle kursuse koodiga ülesandeid ei leitud.'
               : 'Kontrolli alustamiseks otsi kursuse koodi.'}
           </div>
         ) : (
@@ -269,7 +269,7 @@ export function ItemsPage({ courses }: Props) {
           <form className="editor" onSubmit={save}>
             <div className="editor-header">
               <div>
-                <p className="eyebrow">Muudan küsimust ID-ga {editing.yp_id}</p>
+                <p className="eyebrow">Muudan ülesannet ID-ga {editing.yp_id}</p>
                 <h2>Kontrollitud muudatus</h2>
               </div>
               <button
@@ -305,7 +305,7 @@ export function ItemsPage({ courses }: Props) {
                   onChange={() => setMode('update_existing')}
                 />
                 <span>
-                  <strong>Uuenda praegust küsimust</strong>
+                  <strong>Uuenda praegust ülesannet</strong>
                   <small>
                     Säilita ID ja kasutusandmed. Aktiivsed seansid võivad muutuda.
                   </small>
@@ -424,7 +424,7 @@ export function ItemsPage({ courses }: Props) {
                   ? 'Salvestan…'
                   : mode === 'create_copy'
                     ? 'Loo muudetud koopia'
-                    : 'Uuenda küsimust'}
+                    : 'Uuenda ülesannet'}
               </button>
             </div>
           </form>
