@@ -235,7 +235,7 @@ it('explains source size limits when material ingestion returns source_too_large
   ).toBeInTheDocument()
 })
 
-it('opens item editing in safe copy mode with complete measurements', async () => {
+it('opens item editing with a deliberate save choice and readable distractors', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(() =>
@@ -276,15 +276,17 @@ it('opens item editing in safe copy mode with complete measurements', async () =
   render(<ItemsPage courses={[]} />)
 
   await user.type(screen.getByLabelText('Täpne kursuse kood'), 'FÜS101')
-  await user.click(screen.getByRole('button', { name: 'Otsi küsimusi' }))
+  await user.click(screen.getByRole('button', { name: 'Otsi ülesandeid' }))
   await user.click(await screen.findByRole('button', { name: 'Vaata' }))
-  await user.click(screen.getByRole('button', { name: 'Ava muutmine' }))
+  expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('B')
+  expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('C')
+  expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('D')
+  await user.click(screen.getByRole('button', { name: 'Muuda ülesannet' }))
 
-  expect(screen.getByLabelText(/Loo muudetud koopia/)).toBeChecked()
+  expect(screen.getByLabelText(/Loo uus ülesanne/)).not.toBeChecked()
+  expect(screen.getByRole('button', { name: 'Vali salvestusviis' })).toBeDisabled()
   expect(screen.getByLabelText('BLIM-i β-viga')).toHaveValue(0.05)
-  expect(
-    screen.getByText(/Kasutusandmed lähtestatakse/),
-  ).toBeInTheDocument()
+  expect(screen.getByText(/kasutusajalugu algab nullist/)).toBeInTheDocument()
   fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 })

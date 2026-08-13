@@ -43,7 +43,7 @@ export function ItemsPage({ courses }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [editing, setEditing] = useState<AdminItem | null>(null)
   const [draft, setDraft] = useState<EditableItem | null>(null)
-  const [mode, setMode] = useState<SaveMode>('create_copy')
+  const [mode, setMode] = useState<SaveMode | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -88,18 +88,33 @@ export function ItemsPage({ courses }: Props) {
   function startEditing(item: AdminItem) {
     setEditing(item)
     setDraft(itemToEditable(item))
-    setMode('create_copy')
+    setMode(null)
     setError('')
   }
 
   function closeEditor() {
+    if (saving) return
+    if (
+      editing &&
+      draft &&
+      itemHasChanged(editing, draft) &&
+      !window.confirm('Kas loobuda muudatustest? Salvestamata muudatused lähevad kaotsi.')
+    ) {
+      return
+    }
     setEditing(null)
     setDraft(null)
+    setMode(null)
+    setError('')
   }
 
   async function save(event: FormEvent) {
     event.preventDefault()
     if (!editing || !draft) return
+    if (!mode) {
+      setError('Vali, kuidas soovid muudatuse salvestada.')
+      return
+    }
     if (
       !draft.instruction.trim() ||
       !draft.prompt.trim() ||
@@ -130,8 +145,8 @@ export function ItemsPage({ courses }: Props) {
         editing.guess_probability !== draft.guess_probability
       const accepted = window.confirm(
         stronger
-          ? 'Muutusid olek või mõõteparameetrid. Selle ID uuendamine võib mõjutada aktiivseid testiseansse. Jätkata?'
-          : 'Kas uuendada seda ülesannet sama ID-ga? Sisu muutmine võib mõjutada aktiivseid testiseansse.',
+          ? 'Olek või hindamisparameetrid muutusid. Olemasoleva ülesande muutmine võib mõjutada aktiivseid testiseansse. Kas jätkata?'
+          : 'Kas soovid olemasolevat ülesannet muuta? Sisu muutmine võib mõjutada aktiivseid testiseansse.',
       )
       if (!accepted) return
     }
@@ -184,7 +199,7 @@ export function ItemsPage({ courses }: Props) {
         </label>
         <button className="primary">Otsi ülesandeid</button>
       </form>
-      {error && <div className="notice error">{error}</div>}
+      {error && !editing && <div className="notice error">{error}</div>}
       {newItemId !== null && (
         <div className="notice success">
           Uus versioon loodi ID-ga <strong>{newItemId}</strong>. Algne ülesanne jäi muutmata.
@@ -204,7 +219,7 @@ export function ItemsPage({ courses }: Props) {
           <div className="empty">
             {searchedCourse
               ? 'Selle kursuse koodiga ülesandeid ei leitud.'
-              : 'Kontrolli alustamiseks otsi kursuse koodi.'}
+              : 'Ülesannete vaatamiseks otsi kursuse koodi.'}
           </div>
         ) : (
           <TableContainer className="table-scroll">
@@ -265,12 +280,16 @@ export function ItemsPage({ courses }: Props) {
       </section>
 
       {editing && draft && (
-        <Dialog open title="Kontrollitud muudatus" onClose={closeEditor}>
+        <Dialog open title="Muuda ülesannet" onClose={closeEditor}>
           <form className="editor" onSubmit={save}>
             <div className="editor-header">
               <div>
-                <p className="eyebrow">Muudan ülesannet ID-ga {editing.yp_id}</p>
-                <h2>Kontrollitud muudatus</h2>
+                <p className="eyebrow">Ülesanne ID {editing.yp_id}</p>
+                <h2>Muuda ülesannet</h2>
+                <p className="editor-intro">
+                  Tee vajalikud parandused. Kui muudatusi ei ole vaja, vali
+                  „Loobu muudatustest“.
+                </p>
               </div>
               <button
                 type="button"
@@ -281,39 +300,9 @@ export function ItemsPage({ courses }: Props) {
                 <CloseIcon />
               </button>
             </div>
-            <fieldset className="mode-choice">
-              <legend>Salvestusviis</legend>
-              <label className={mode === 'create_copy' ? 'selected' : ''}>
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === 'create_copy'}
-                  onChange={() => setMode('create_copy')}
-                />
-                <span>
-                  <strong>Loo muudetud koopia</strong>
-                  <small>
-                    Säilita kursuse ja teadmiste sõlme andmed; lähtesta kasutusandmed.
-                  </small>
-                </span>
-              </label>
-              <label className={mode === 'update_existing' ? 'selected' : ''}>
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === 'update_existing'}
-                  onChange={() => setMode('update_existing')}
-                />
-                <span>
-                  <strong>Uuenda praegust ülesannet</strong>
-                  <small>
-                    Säilita ID ja kasutusandmed. Aktiivsed seansid võivad muutuda.
-                  </small>
-                </span>
-              </label>
-            </fieldset>
+            {error && <div className="notice error" role="alert">{error}</div>}
             <div className="editor-grid">
-              <label>
+              <label className="wide">
                 <span>Juhis</span>
                 <input
                   value={draft.instruction}
@@ -321,22 +310,6 @@ export function ItemsPage({ courses }: Props) {
                     setDraft({ ...draft, instruction: event.target.value })
                   }
                 />
-              </label>
-              <label>
-                <span>Olek</span>
-                <select
-                  value={draft.status}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      status: event.target.value as ItemStatus,
-                    })
-                  }
-                >
-                  {statuses.map((status) => (
-                    <option key={status} value={status}>{statusLabels[status]}</option>
-                  ))}
-                </select>
               </label>
               <label className="wide">
                 <span>Küsimus</span>
@@ -382,49 +355,98 @@ export function ItemsPage({ courses }: Props) {
                   />
                 </label>
               ))}
-              {(
-                [
-                  ['irt_a', 'IRT a'],
-                  ['irt_b', 'IRT b'],
-                  ['beta_error', 'BLIM-i β-viga'],
-                  ['guess_probability', 'BLIM-i äraarvamine'],
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field}>
-                  <span>{label}</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={draft[field]}
+            </div>
+            <details className="editor-advanced">
+              <summary>Täiendavad seaded</summary>
+              <div className="editor-grid editor-settings-grid">
+                <label>
+                  <span>Olek</span>
+                  <select
+                    value={draft.status}
                     onChange={(event) =>
                       setDraft({
                         ...draft,
-                        [field]: event.target.valueAsNumber,
+                        status: event.target.value as ItemStatus,
                       })
                     }
-                  />
+                  >
+                    {statuses.map((status) => (
+                      <option key={status} value={status}>{statusLabels[status]}</option>
+                    ))}
+                  </select>
                 </label>
-              ))}
-            </div>
-            <div className="editor-note">
-              {mode === 'create_copy'
-                ? 'Kursuse, sõlme, vanema, kognitiivse taseme ja muud andmed kopeeritakse. Kasutusandmed lähtestatakse.'
-                : 'Kõik muud andmed ja olemasolevad kasutusandmed jäävad selle ID-ga seotuks.'}
-            </div>
+                {(
+                  [
+                    ['irt_a', 'IRT a'],
+                    ['irt_b', 'IRT b'],
+                    ['beta_error', 'BLIM-i β-viga'],
+                    ['guess_probability', 'BLIM-i äraarvamine'],
+                  ] as const
+                ).map(([field, label]) => (
+                  <label key={field}>
+                    <span>{label}</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={draft[field]}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          [field]: event.target.valueAsNumber,
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
+            <fieldset className="mode-choice">
+              <legend>Kuidas soovid muudatuse salvestada?</legend>
+              <label className={mode === 'create_copy' ? 'selected' : ''}>
+                <input
+                  type="radio"
+                  name="mode"
+                  checked={mode === 'create_copy'}
+                  onChange={() => setMode('create_copy')}
+                />
+                <span>
+                  <strong>Loo uus ülesanne</strong>
+                  <small>
+                    Algne ülesanne jääb alles. Uuel ülesandel on uus ID ja kasutusajalugu algab nullist.
+                  </small>
+                </span>
+              </label>
+              <label className={mode === 'update_existing' ? 'selected' : ''}>
+                <input
+                  type="radio"
+                  name="mode"
+                  checked={mode === 'update_existing'}
+                  onChange={() => setMode('update_existing')}
+                />
+                <span>
+                  <strong>Paranda olemasolevat ülesannet</strong>
+                  <small>
+                    ID ja kasutusajalugu säilivad. Sobib näiteks kirjavea või kokku- ja lahkukirjutuse parandamiseks.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
             <div className="editor-actions">
               <button
                 type="button"
                 className="quiet"
                 onClick={closeEditor}
               >
-                Tühista
+                Loobu muudatustest
               </button>
-              <button className="primary" disabled={saving}>
+              <button className="primary" disabled={saving || !mode}>
                 {saving
                   ? 'Salvestan…'
                   : mode === 'create_copy'
-                    ? 'Loo muudetud koopia'
-                    : 'Uuenda ülesannet'}
+                    ? 'Loo uus ülesanne'
+                    : mode === 'update_existing'
+                      ? 'Paranda olemasolevat ülesannet'
+                      : 'Vali salvestusviis'}
               </button>
             </div>
           </form>
@@ -469,28 +491,44 @@ function ItemRows({
         <tr className="details-row">
           <td colSpan={8}>
             <div className="item-details">
-              <Detail label="Juhis" value={item.instruction} />
-              <Detail label="Lähteinfo" value={item.stimulus ?? '—'} />
-              <Detail label="Õige vastus" value={item.answer_key} />
-              <Detail
-                label="Segajad"
-                value={[
-                  item.distractor_1,
-                  item.distractor_2,
-                  item.distractor_3,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              />
-              <Detail label="Ülemine sõlm" value={item.parent_graph_node ?? '—'} />
-              <Detail label="Punktid" value={String(item.score)} />
-              <Detail
-                label="IRT / BLIM"
-                value={`a ${item.irt_a} · b ${item.irt_b} · β ${item.beta_error} · g ${item.guess_probability}`}
-              />
-              <button className="secondary" type="button" onClick={onEdit}>
-                Ava muutmine
-              </button>
+              <section className="item-preview" aria-labelledby={`item-${item.yp_id}-title`}>
+                <h3 id={`item-${item.yp_id}-title`}>Ülesanne</h3>
+                <p className="item-instruction">{item.instruction}</p>
+                {item.stimulus && (
+                  <div className="item-stimulus">
+                    <span>Lähteinfo</span>
+                    <p>{item.stimulus}</p>
+                  </div>
+                )}
+                <p className="item-prompt">{item.prompt}</p>
+                <div className="item-answer-options">
+                  <div>
+                    <span>Õige vastus</span>
+                    <p>{item.answer_key}</p>
+                  </div>
+                  <div>
+                    <span>Segajad</span>
+                    <ul aria-label="Segajad" className="distractor-list">
+                      {[item.distractor_1, item.distractor_2, item.distractor_3]
+                        .filter((distractor): distractor is string => Boolean(distractor))
+                        .map((distractor, index) => (
+                          <li key={`${index}-${distractor}`}>{distractor}</li>
+                        ))}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <div className="item-metadata">
+                <Detail label="Ülemine sõlm" value={item.parent_graph_node ?? '—'} />
+                <Detail label="Punktid" value={String(item.score)} />
+                <Detail
+                  label="IRT / BLIM"
+                  value={`a ${item.irt_a} · b ${item.irt_b} · β ${item.beta_error} · g ${item.guess_probability}`}
+                />
+                <button className="secondary" type="button" onClick={onEdit}>
+                  Muuda ülesannet
+                </button>
+              </div>
             </div>
           </td>
         </tr>
@@ -523,4 +561,21 @@ function itemToEditable(item: AdminItem): EditableItem {
     beta_error: item.beta_error,
     guess_probability: item.guess_probability,
   }
+}
+
+function itemHasChanged(item: AdminItem, draft: EditableItem) {
+  return (
+    item.instruction !== draft.instruction ||
+    item.prompt !== draft.prompt ||
+    item.stimulus !== draft.stimulus ||
+    item.answer_key !== draft.answer_key ||
+    item.distractor_1 !== draft.distractor_1 ||
+    item.distractor_2 !== draft.distractor_2 ||
+    item.distractor_3 !== draft.distractor_3 ||
+    item.status !== draft.status ||
+    item.irt_a !== draft.irt_a ||
+    item.irt_b !== draft.irt_b ||
+    item.beta_error !== draft.beta_error ||
+    item.guess_probability !== draft.guess_probability
+  )
 }

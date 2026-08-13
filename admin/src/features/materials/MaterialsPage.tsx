@@ -264,7 +264,7 @@ export function MaterialsPage({
             <small>Faili sisu loetakse sisse, faili ennast ei salvestata.</small>
           </label>
           <button className="primary" disabled={savingMaterial}>
-            {savingMaterial ? 'Loen sisse…' : 'Loe sisse ja salvesta'}
+            {savingMaterial ? 'Salvestan…' : 'Lisa'}
           </button>
           {savedPreview && (
             <div className="saved-preview">
