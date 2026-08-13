@@ -287,8 +287,7 @@ export function ItemsPage({ courses }: Props) {
                 <p className="eyebrow">Ülesanne ID {editing.yp_id}</p>
                 <h2>Muuda ülesannet</h2>
                 <p className="editor-intro">
-                  Tee vajalikud parandused. Kui muudatusi ei ole vaja, vali
-                  „Loobu muudatustest“.
+                  Tee vajalikud parandused.
                 </p>
               </div>
               <button

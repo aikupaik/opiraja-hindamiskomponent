@@ -839,7 +839,8 @@
 }
 
 .editor {
-  width: min(880px, 100%);
+  box-sizing: border-box;
+  width: 100%;
   max-height: calc(100vh - 48px);
   padding: 28px;
   overflow: auto;

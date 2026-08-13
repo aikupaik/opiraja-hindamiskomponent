@@ -228,7 +228,7 @@ it('explains source size limits when material ingestion returns source_too_large
   )
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   await user.type(screen.getByLabelText('Avaliku allika URL · valikuline'), 'https://example.com/large.pdf')
-  await user.click(screen.getByRole('button', { name: 'Loe sisse ja salvesta' }))
+  await user.click(screen.getByRole('button', { name: 'Lisa' }))
 
   expect(
     await screen.findByText(/Lähtematerjal on liiga suur \(413: source_too_large\)/),
