@@ -201,6 +201,40 @@ it('validates rule JSON before sending a write', async () => {
   expect(fetchMock).toHaveBeenCalledTimes(2)
 })
 
+it('explains source size limits when material ingestion returns source_too_large', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockImplementationOnce(() => response([]))
+    .mockImplementationOnce(() => response([]))
+    .mockImplementationOnce(() =>
+      response(
+        {
+          error: {
+            code: 'source_too_large',
+            message: 'Source exceeds configured limits.',
+          },
+        },
+        413,
+      ),
+    )
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+
+  render(
+    <MaterialsPage
+      courses={[{ value: 'FÜS101', title: 'Physics', label: 'Physics (FÜS101)' }]}
+      refreshCourses={() => Promise.resolve()}
+    />,
+  )
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  await user.type(screen.getByLabelText('Avaliku allika URL · valikuline'), 'https://example.com/large.pdf')
+  await user.click(screen.getByRole('button', { name: 'Loe sisse ja salvesta' }))
+
+  expect(
+    await screen.findByText(/Lähtematerjal on liiga suur \(413: source_too_large\)/),
+  ).toBeInTheDocument()
+})
+
 it('opens item editing in safe copy mode with complete measurements', async () => {
   vi.stubGlobal(
     'fetch',

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  ApiError,
   api,
   errorMessage,
   type CourseChoice,
@@ -116,7 +117,7 @@ export function MaterialsPage({
       if (fileInput.current) fileInput.current.value = ''
       await Promise.all([refreshCourses(), refreshLists(saved.course)])
     } catch (caught) {
-      setError(errorMessage(caught))
+      setError(materialErrorMessage(caught))
     } finally {
       setSavingMaterial(false)
     }
@@ -388,4 +389,11 @@ export function MaterialsPage({
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : '—'
+}
+
+function materialErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.code === 'source_too_large') {
+    return 'Lähtematerjal on liiga suur (413: source_too_large). Vali väiksem fail või allikas: faili maht, PDF-i lehekülgede arv või väljaloetava teksti pikkus ületab lubatud piiri.'
+  }
+  return errorMessage(error)
 }
