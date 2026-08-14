@@ -155,6 +155,11 @@ Internet-wide firewall rule is introduced:
 
 ## Phase 4: Domain, Publicly Trusted Certificate, and Public Cutover
 
+Use the operational procedures in
+[`public-vpn-access-runbook.md`](../../public-vpn-access-runbook.md) for the
+temporary public-IP exercise, reversible ingress switch, final domain cutover,
+validation, and network-first rollback.
+
 ### Domain and certificate tasks
 
 - Obtain the final FQDN and point its A/AAAA records only after confirming the
