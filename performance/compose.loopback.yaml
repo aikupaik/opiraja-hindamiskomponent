@@ -1,0 +1,15 @@
+# Compose overlay for internal component tests on the pilot VM.
+#
+# Use only together with the repository root compose.yaml and only during an
+# approved test window. Docker publishes these ports on VM loopback, never on
+# the public interface. A remote generator reaches them through explicitly
+# created SSH tunnels. Stop the overlay and verify the listeners are gone after
+# each component test.
+services:
+  api:
+    ports:
+      - "127.0.0.1:${PERF_API_LOOPBACK_PORT:-18000}:8000"
+
+  r-service:
+    ports:
+      - "127.0.0.1:${PERF_R_LOOPBACK_PORT:-18001}:8000"

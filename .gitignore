@@ -7,5 +7,7 @@ __pycache__/
 R/library/
 .pytest_cache/
 reports/
+performance/results/*
+!performance/results/.gitkeep
 assets/oppeprorektori-kohtumise-kava.html
 .DS_Store

@@ -1,7 +1,7 @@
 # OR service API handover
 
 This guide is for the external õpiraja (OR) service. The API base URL is the
-deployed backend origin, for example `https://assessment.example`. Keep the
+deployed backend origin, for example `https://193.40.157.124`. Keep the
 OR signing secret private and share it with the backend operator out of band.
 
 ## 1. Create an OR bearer token
@@ -31,16 +31,6 @@ Send the compact token on every OR request:
 Authorization: Bearer <or-jwt>
 ```
 
-The repository contains a runnable example at
-`.tmp/generate_or_jwt.py`. It reads `OR_JWT_SECRET`, `OR_JWT_ISSUER`, and the
-optional lifetime setting from the repository `.env` file and prints only the
-token:
-
-```sh
-backend/.venv/bin/python .tmp/generate_or_jwt.py
-```
-
-Do not commit the generated token or put it in logs, URLs, or shell history.
 
 ## 2. Create an assessment
 
@@ -51,12 +41,12 @@ curl --fail-with-body -X POST "$API_BASE_URL/api/v1/tests" \
   -H "Authorization: Bearer $OR_ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-    "user_id": "user-123",
-    "learning_path_id": "path-456",
-    "nodes": ["Liitmine", "Lahutamine"],
-    "relations": [{"from": "Liitmine", "to": "Lahutamine"}],
-    "course": "Matemaatika",
-    "goal": "Check prerequisite knowledge",
+    "user_id": "or-test-user",
+    "learning_path_id": "or-experiment",
+    "nodes": ["projekti mõiste", "piirangute teooria põhiidee", "projekti kolme kohustuse vastuolu"],
+    "relations": [{"from": "projekti mõiste", "to": "piirangute teooria põhiidee"}, {"from": "piirangute teooria põhiidee", "to": "projekti kolme kohustuse vastuolu"}],
+    "course": "ICM0016",
+    "goal": "trial_run",
     "method": "kst",
     "cognitive_level": "mõistab"
   }'
@@ -154,5 +144,3 @@ Every API response contains `X-Request-ID`. Preserve it in logs and support
 requests, but never log bearer tokens, player URLs, JWT payloads containing
 credentials, or request bodies containing secrets.
 
-FastAPI exposes interactive and machine-readable documentation at
-`/docs`, `/redoc`, and `/openapi.json` on a running deployment.
