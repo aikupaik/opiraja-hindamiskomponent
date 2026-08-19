@@ -35,6 +35,7 @@ generator must be a separate approved machine.
 | `compose.loopback.yaml` | Temporarily exposes only API and R ports on VM loopback for component tests. |
 | `k6/static-edge-smoke.js` | One-client public static-edge smoke check. |
 | `fixtures/` | Version-controlled, non-secret graph and item fixture inputs. |
+| `preflight.md` | VM and Supabase preflight worksheet with safe collection commands. |
 | `results/` | Ignored per-run evidence output. |
 | `runbook.md` | Operational sequence, safety gates, and abort procedure. |
 | `report-template.md` | Required evidence and conclusion structure for each run. |

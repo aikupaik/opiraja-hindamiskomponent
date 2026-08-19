@@ -51,3 +51,22 @@ Export evidence before cleanup. Cleanup is a later explicit operation: it
 first previews exact matching rows and identifiers, refuses non-performance
 markers, deletes in dependency-safe order after confirmation, and verifies no
 run-owned rows remain.
+
+## First static edge smoke test
+1. Create a results directory.
+From repository root:
+```sh
+RUN_ID="smoke-$(date +%Y%m%dT%H%M%S)"
+mkdir -p "performance/results/$RUN_ID"
+```
+2. Run the k6 script.
+From repository root:
+```sh
+docker run --rm \
+    -e PERF_BASE_URL="https://193.40.157.124" \
+    -e K6_SUMMARY_EXPORT="/results/summary.json" \
+    -v "$PWD/performance/k6:/scripts:ro" \
+    -v "$PWD/performance/results/$RUN_ID:/results" \
+    grafana/k6:1.5.0 \
+    run --insecure-skip-tls-verify /scripts/static-edge-smoke.js
+```
