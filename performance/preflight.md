@@ -170,7 +170,7 @@ Fill every field before proceeding to the static-edge scenario.
 | VM RAM | 16,375,624 KiB (~15.62 GiB); idle available 15,135,440–15,192,516 KiB; no swap |
 | Disk/storage capacity and free space | 200G disk; `/` ext4 193G, 59G used, 135G available (31%) |
 | Network interfaces/routes and known bandwidth | `ens3` 192.168.42.72/24; default via 192.168.42.1; Docker bridges `172.18.0.0/16` and `172.30.0.0/24`; link detected, negotiated bandwidth unavailable (`ethtool` reports unknown) |
-| Public HTTPS base URL | https://192.168.42.72 |
+| Public HTTPS base URL | https://193.40.157.124/ |
 | Current ingress policy (approved CIDR or temporary public access) | UFW active: SSH/HTTP/HTTPS from 172.20.0.0/16 and 193.40.0.0/16; temporary public HTTP and HTTPS from Anywhere |
 | Generator public IP/CIDR | 193.40.250.119 |
 | Docker-published ports | `127.0.0.1:8080->web:8080/tcp`; no host publish for API, R, or player |
@@ -178,7 +178,7 @@ Fill every field before proceeding to the static-edge scenario.
 | No host listener on `8000` confirmed | yes; `ss -ltnp` showed no host listener on 8000 |
 | Certificate SHA-256 fingerprint, subject, and expiry | SHA-256 `73:EA:4F:30:DB:F4:23:41:4A:FA:85:52:E6:B8:5F:48:36:C9:F4:DD:48:A1:81:6C:D9:F6:C3:2A:76:20:CB:21`; subject/issuer `CN=193.40.157.124`; expires 2026-10-29 13:43:59 UTC |
 | VM clock synchronization state | synchronized; NTP active; Europe/Tallinn (EEST, UTC+03:00) |
-| Backup location, owner, and last successful backup time | |
+| Backup location, owner, and last successful backup time | No backup at this time |
 | Log/disk headroom | Journald 115.8M; `/` 135G available (31% used); Docker images 15.48G and build cache 38.26G (20.59G reclaimable) |
 
 ### Runtime configuration and health
@@ -200,12 +200,12 @@ Fill every field before proceeding to the static-edge scenario.
 
 | Field | Value |
 | --- | --- |
-| Supabase project reference | |
-| Tier/plan | |
-| Region | |
-| Documented CPU/RAM/I/O/connection limits | |
-| Dashboard observation UTC range | **Manual: Supabase dashboard observation was not available from this VM** |
-| Idle CPU/RAM/I/O/connections/API latency/database latency/errors | **Manual for Supabase metrics. VM: 60 samples, 06:28:33–06:35:36 UTC; 1-minute load 0.05–0.48; RAM used 1.13–1.18 GiB, available 14.43–14.49 GiB; no swap; no observed Docker block-I/O change; API/R latency and error counts not collected by this baseline** |
+| Supabase project reference | kwwxpsrojgtziluguqkm |
+| Tier/plan | Nano (Free plan) |
+| Region | eu-west-3 |
+| Documented CPU/RAM/I/O/connection limits | Shared CPU, 0.5GB memory, IOPS 3000, Throughput 125MB/s, 60 connections max, storage 2GB|
+| Dashboard observation UTC range | 2026-08-21T06:45:25Z |
+| Idle CPU/RAM/I/O/connections/API latency/database latency/errors | **Supabase Idle: CPU 2%, Disk 14%, RAM 51%, 9/60 conns. VM: 60 samples, 06:28:33–06:35:36 UTC; 1-minute load 0.05–0.48; RAM used 1.13–1.18 GiB, available 14.43–14.49 GiB; no swap; no observed Docker block-I/O change; API/R latency and error counts not collected by this baseline** |
 | VM idle evidence directory | `performance/results/preflight-20260821T062833Z/vm/` |
 | Idle CPU/memory/disk/network/container summary | Host CPU utilization was not directly measured; load average 0.05–0.48. `/` remained 31% used with ~135G available. `ens3` counters increased ~2.38 MB RX / ~3.53 MB TX; 0 errors/drops. Container CPU ranges: API 0.30–42.60%, web 0.00–6.51%, player 0.00–5.89%, R 0.00–119.13%; memory remained ~77.4 MiB, 8.6 MiB, 5.9 MiB, and 122.7 MiB respectively. |
 
@@ -213,6 +213,6 @@ Fill every field before proceeding to the static-edge scenario.
 
 | Decision | Value |
 | --- | --- |
-| Abort thresholds reviewed and understood | **Manual confirmation required** |
-| Ready for static-edge 1-user smoke | **Manual decision required after completing the fields below** |
-| Blockers or follow-up actions | Supabase project reference, tier/plan, region, documented limits, dashboard idle metrics, backup location/owner/last-success time, maintenance-window approval, no-activity confirmation, and operator confirmation remain manual. Confirm the exact public endpoint/certificate pairing: worksheet URL is `https://192.168.42.72`, while the observed certificate subject is `CN=193.40.157.124`. `docker compose images --format json` could not inspect the R image because its local image reference was unavailable, although the running R container was healthy and its image ID was recorded. |
+| Abort thresholds reviewed and understood | **Confirmed** |
+| Ready for static-edge 1-user smoke | **Ready** |
+| Blockers or follow-up actions | Backup location/owner/last-success time, maintenance-window approval, no-activity confirmation, and operator confirmation remain manual. |
