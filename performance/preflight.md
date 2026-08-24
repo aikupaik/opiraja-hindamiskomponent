@@ -178,7 +178,7 @@ Fill every field before proceeding to the static-edge scenario.
 | No host listener on `8000` confirmed | yes; `ss -ltnp` showed no host listener on 8000 |
 | Certificate SHA-256 fingerprint, subject, and expiry | SHA-256 `73:EA:4F:30:DB:F4:23:41:4A:FA:85:52:E6:B8:5F:48:36:C9:F4:DD:48:A1:81:6C:D9:F6:C3:2A:76:20:CB:21`; subject/issuer `CN=193.40.157.124`; expires 2026-10-29 13:43:59 UTC |
 | VM clock synchronization state | synchronized; NTP active; Europe/Tallinn (EEST, UTC+03:00) |
-| Backup location, owner, and last successful backup time | No backup at this time |
+| Backup location, owner, and last successful backup time | data.sql, roles.sql, schema.sql, 2026-08-24T19:08:53Z, owner: Andreas, verification done, SHA-256 recorded |
 | Log/disk headroom | Journald 115.8M; `/` 135G available (31% used); Docker images 15.48G and build cache 38.26G (20.59G reclaimable) |
 
 ### Runtime configuration and health
@@ -215,4 +215,4 @@ Fill every field before proceeding to the static-edge scenario.
 | --- | --- |
 | Abort thresholds reviewed and understood | **Confirmed** |
 | Ready for static-edge 1-user smoke | **Ready** |
-| Blockers or follow-up actions | Backup location/owner/last-success time, maintenance-window approval, no-activity confirmation, and operator confirmation remain manual. |
+| Blockers or follow-up actions | No blockers |

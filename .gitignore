@@ -11,3 +11,7 @@ performance/results/*
 !performance/results/.gitkeep
 assets/oppeprorektori-kohtumise-kava.html
 .DS_Store
+supabase/
+data.sql
+roles.sql
+schema.sql

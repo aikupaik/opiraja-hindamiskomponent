@@ -8,6 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         build-essential \
+        curl \
         libcurl4-openssl-dev \
         libglpk-dev \
         libicu-dev \

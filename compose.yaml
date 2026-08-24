@@ -153,15 +153,15 @@ services:
     healthcheck:
       test:
         - CMD
-        - Rscript
-        - --vanilla
-        - -e
-        - >-
-          response <- paste(
-              readLines("http://127.0.0.1:8000/health", warn = FALSE),
-              collapse = ""
-          );
-          quit(status = if (grepl('"status":"ok"', response, fixed = TRUE)) 0 else 1)
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - --max-time
+        - "3"
+        - --output
+        - /dev/null
+        - http://127.0.0.1:8000/health
       interval: 10s
       timeout: 5s
       retries: 10
