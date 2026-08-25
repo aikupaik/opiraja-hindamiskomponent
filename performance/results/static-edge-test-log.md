@@ -291,3 +291,66 @@ global and every per-resource p95 threshold passed, all functional and gzip
 header checks passed, and HTTP failure rate remained zero. The static-edge
 25-VU acceptance gate is therefore **passed**, and the 100-VU progression is
 unblocked.
+
+## 100-VU progression
+
+### Run
+
+- Run ID: `static-edge-100-20260825T111327Z`
+- Load model: 100 VUs, one iteration per VU
+- Generator summary:
+  [`summary.json`](static-edge-100-20260825T111327Z/summary.json)
+- Generator raw points:
+  [`raw-k6.json`](static-edge-100-20260825T111327Z/raw-k6.json)
+- Result: **passed**
+
+### Generator results
+
+| Metric | Result |
+| --- | ---: |
+| Completed iterations | 100 |
+| HTTP requests | 600 |
+| Checks | 3,200 passed, 0 failed |
+| HTTP failure rate | 0% |
+| Data received | 16,875,154 bytes |
+| Global request duration p95 | **1.435 s** |
+| Global request duration maximum | 1.544 s |
+
+| Resource | p95 | Maximum | Threshold |
+| --- | ---: | ---: | --- |
+| Admin HTML | 298.2 ms | 309.2 ms | Pass |
+| Admin JavaScript | **1.490 s** | 1.544 s | Pass |
+| Admin CSS | 579.4 ms | 665.5 ms | Pass |
+| Player HTML | 423.7 ms | 512.3 ms | Pass |
+| Player JavaScript | 859.4 ms | 872.7 ms | Pass |
+| Player CSS | 457.0 ms | 477.4 ms | Pass |
+
+All gzip and `Vary: Accept-Encoding` checks passed at 100 VUs. As with the
+previous runs, the k6 summary's `http_req_failed` raw pass/fail counters are
+counterintuitive; the reported failure-rate value was zero and no threshold
+failed.
+
+### VM evidence
+
+The VM review reported:
+
+- host Nginx recorded 600 requests, all HTTP 200;
+- container logs recorded 900 internal responses, all HTTP 200;
+- admin JavaScript remained gzip-compressed at approximately 85.8 KB;
+- host-Nginx admin-JavaScript latency was 0.770 seconds at p95 and 0.772
+  seconds maximum;
+- no Nginx warnings, buffering errors, timeouts, 4xx/5xx responses, or
+  upstream failures occurred;
+- all containers were healthy before and after the test, with zero restarts and
+  no OOM kills;
+- host load remained low at approximately 98% CPU idle, 14.8 GiB available
+  memory, and no swap use; and
+- the web container briefly reached approximately 93% of one CPU without host
+  saturation.
+
+### Conclusion
+
+The static-edge path passed successfully at 100 VUs. Gzip resolved the previous
+large-bundle delivery bottleneck, and the public edge, inner containers, and
+VM safety gates all passed. Static-edge testing is therefore **complete through
+100 VUs**.
