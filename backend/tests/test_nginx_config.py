@@ -30,9 +30,11 @@ def test_endpoint_limits_timeouts_and_cache_policy_are_present() -> None:
     assert "$http_authorization" not in config
 
 
-def test_rate_limits_remain_dry_run_until_deployed_review() -> None:
+def test_rate_limits_are_enforced_after_deployment_review() -> None:
     config = (
         Path(__file__).parents[2] / "deploy" / "nginx" / "opiraja.conf"
     ).read_text(encoding="utf-8")
-    assert "limit_req_dry_run on;" in config
-    assert "limit_conn_dry_run on;" in config
+    assert "limit_req_dry_run off;" in config
+    assert "limit_conn_dry_run off;" in config
+    assert "limit_req_dry_run on;" not in config
+    assert "limit_conn_dry_run on;" not in config

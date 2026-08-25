@@ -128,8 +128,6 @@ cannot hide incoming demand.
 
 ## Verification and Defaults
 
-- Fix the existing Nginx policy test that still expects dry-run limiting even
-  though enforcement is now active.
 - Validate k6 scripts, fixture determinism, cleanup refusal/dry-run behavior,
   Compose configuration, and loopback-only port exposure.
 - Run the full backend test suite and `python -m pyright`; run affected frontend
