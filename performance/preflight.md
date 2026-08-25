@@ -209,6 +209,17 @@ Fill every field before proceeding to the static-edge scenario.
 | VM idle evidence directory | `performance/results/preflight-20260821T062833Z/vm/` |
 | Idle CPU/memory/disk/network/container summary | Host CPU utilization was not directly measured; load average 0.05–0.48. `/` remained 31% used with ~135G available. `ens3` counters increased ~2.38 MB RX / ~3.53 MB TX; 0 errors/drops. Container CPU ranges: API 0.30–42.60%, web 0.00–6.51%, player 0.00–5.89%, R 0.00–119.13%; memory remained ~77.4 MiB, 8.6 MiB, 5.9 MiB, and 122.7 MiB respectively. |
 
+### Follow-up R-idle curl capture
+
+| Field | Value |
+| --- | --- |
+| Capture date and UTC time range | 2026-08-25; 08:45:09–08:50:00 UTC; 135 samples |
+| Git commit | `b6cf3639afe534b32498078f8ef07b5d8e4e1039` (`b6cf363`) |
+| R image ID | `sha256:9f503c0075550924ebc12e7f67c0c821656d144121d9a61e01f93250625d4f95` |
+| Evidence directory | `performance/results/r-idle-curl-20260825T084402Z/vm/` |
+| CPU range | R service `0.08–9.86%`; host-wide `0.00–8.44%` |
+| 119% CPU spike result | **Not observed; the previous R-service spikes have disappeared.** |
+
 ### Preflight decision
 
 | Decision | Value |

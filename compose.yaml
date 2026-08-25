@@ -138,6 +138,10 @@ services:
     image: opiraja-assessment-r-service:local
     build:
       context: ./R
+    environment:
+      RENV_PATHS_ROOT: /tmp/renv
+      RENV_PATHS_SANDBOX: /tmp/renv/sandbox
+      RENV_CONFIG_CACHE_ENABLED: "false"
     restart: unless-stopped
     init: true
     read_only: true

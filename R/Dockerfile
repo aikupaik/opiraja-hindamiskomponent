@@ -1,7 +1,6 @@
 FROM rocker/r-ver:4.6.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    RENV_CONFIG_AUTOLOADER_ENABLED=false \
     RENV_PATHS_CACHE=/opt/renv/cache \
     RENV_PATHS_LIBRARY=/opt/renv/library
 
@@ -22,13 +21,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-RUN R --vanilla -e \
-    "install.packages('https://cloud.r-project.org/src/contrib/renv_1.2.3.tar.gz', repos = NULL, type = 'source')"
-
-COPY renv.lock DESCRIPTION ./
+COPY renv.lock DESCRIPTION .Rprofile ./
 COPY renv ./renv
 
-RUN R --vanilla -e "renv::restore(project = '/app', prompt = FALSE)"
+RUN R --slave -e "renv::restore(project = '/app', prompt = FALSE)"
 
 COPY plumber.R ./
 COPY config ./config
