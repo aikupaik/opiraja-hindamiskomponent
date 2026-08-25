@@ -74,3 +74,39 @@ docker run --rm \
     run --insecure-skip-tls-verify /scripts/static-edge-smoke.js
 ```
 
+## Real Static Edge test
+
+1. Create a results directory.
+
+From repistory root:
+```sh
+PERF_EDGE_VUS=25
+RUN_ID="static-edge-${PERF_EDGE_VUS}-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "performance/results/$RUN_ID"
+echo "$RUN_ID"
+```
+
+2. Start monitoring from the VM.
+
+Use the exact same RUN_ID:
+```sh
+RUN_ID="<run_id>"
+sudo bash performance/bin/monitor-vm.sh "$RUN_ID"
+```
+
+3. Run the script from the laptop.
+
+```sh
+docker run --rm \
+      -e PERF_BASE_URL="https://193.40.157.124" \
+      -e PERF_EDGE_VUS="$PERF_EDGE_VUS" \
+      -e PERF_RUN_ID="$RUN_ID" \
+      -e K6_SUMMARY_EXPORT="/results/summary.json" \
+      -v "$PWD/performance/k6:/scripts:ro" \
+      -v "$PWD/performance/results/$RUN_ID:/results" \
+      grafana/k6:1.5.0 \
+      run \
+      --insecure-skip-tls-verify \
+      --out json=/results/raw-k6.json \
+      /scripts/static-edge.js
+```

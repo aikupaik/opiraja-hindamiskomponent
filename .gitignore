@@ -9,6 +9,7 @@ R/library/
 reports/
 performance/results/*
 !performance/results/.gitkeep
+!performance/results/static-edge-test-log.md
 assets/oppeprorektori-kohtumise-kava.html
 .DS_Store
 supabase/

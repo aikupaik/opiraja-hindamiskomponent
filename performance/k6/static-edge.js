@@ -56,6 +56,10 @@ function loadPageAndAssets(page, pagePath, assetPrefix) {
       [`${page} ${assetType} asset returns 200`]: (response) => response.status === 200,
       [`${page} ${assetType} asset has content type`]: (response) =>
         hasHeader(response, "Content-Type"),
+      [`${page} ${assetType} asset is gzip encoded`]: (response) =>
+        headerIncludes(response, "Content-Encoding", "gzip"),
+      [`${page} ${assetType} asset varies by encoding`]: (response) =>
+        headerIncludes(response, "Vary", "Accept-Encoding"),
       [`${page} ${assetType} asset is immutable`]: (response) =>
         headerIncludes(response, "Cache-Control", "immutable"),
       [`${page} ${assetType} asset has request ID`]: (response) =>
@@ -68,6 +72,7 @@ function requestParams(page, resource, sequence) {
   return {
     headers: {
       "X-Request-ID": `perf-static-edge-${__VU}-${__ITER}-${page}-${resource}-${sequence}`,
+      "Accept-Encoding": "gzip",
     },
     tags: {
       edge_page: page,
@@ -123,7 +128,10 @@ function headerIncludes(response, name, expectedValue) {
     (key) => key.toLowerCase() === name.toLowerCase(),
   );
 
-  return headerName !== undefined && String(response.headers[headerName]).includes(expectedValue);
+  return (
+    headerName !== undefined &&
+    String(response.headers[headerName]).toLowerCase().includes(expectedValue.toLowerCase())
+  );
 }
 
 function staticEdgeRouteThresholds() {
