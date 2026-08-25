@@ -206,7 +206,7 @@ first high-confidence correction because it reduces both the upstream payload
 that host Nginx must buffer and the downstream bytes each cold client must
 receive.
 
-### Next steps
+### Remediation plan recorded after the failed run
 
 1. Do not run the 100-VU level yet. Preserve this run as a genuine failed
    25-VU static-edge result.
@@ -226,3 +226,68 @@ receive.
 7. Proceed to 100 VUs only after reviewing the new 25-VU run and confirming
    that every threshold and safety gate passes.
 
+## Gzip remediation and successful 25-VU rerun
+
+### Run
+
+- Run ID: `static-edge-25-20260825T110639Z`
+- Load model: 25 VUs, one iteration per VU
+- Generator summary:
+  [`summary.json`](static-edge-25-20260825T110639Z/summary.json)
+- Generator raw points:
+  [`raw-k6.json`](static-edge-25-20260825T110639Z/raw-k6.json)
+- Result: **passed**
+
+The inner admin and player Nginx servers were updated to gzip JavaScript and
+CSS responses, emit `Vary: Accept-Encoding`, and preserve the immutable asset
+cache policy. The static-edge k6 scenario explicitly requested gzip and added
+checks for `Content-Encoding: gzip` and `Vary: Accept-Encoding`.
+
+### Generator results
+
+| Metric | Result |
+| --- | ---: |
+| Completed iterations | 25 |
+| HTTP requests | 150 |
+| Checks | 800 passed, 0 failed |
+| HTTP failure rate | 0% |
+| Data received | 4,218,737 bytes |
+| Iteration duration average | 2.985 s |
+| Request duration average | 471.6 ms |
+| Request duration p95 | **1.400 s** |
+| Request duration maximum | 1.622 s |
+
+| Resource | Average | p95 | Maximum | Threshold |
+| --- | ---: | ---: | ---: | --- |
+| Admin HTML | 75.9 ms | 138.4 ms | 138.8 ms | Pass |
+| Admin JavaScript | 1.255 s | **1.594 s** | 1.622 s | Pass |
+| Admin CSS | 471.6 ms | 722.3 ms | 745.0 ms | Pass |
+| Player HTML | 172.1 ms | 286.7 ms | 309.9 ms | Pass |
+| Player JavaScript | 525.6 ms | 697.9 ms | 846.4 ms | Pass |
+| Player CSS | 329.3 ms | 615.2 ms | 649.7 ms | Pass |
+
+The gzip-specific checks passed for every admin/player JavaScript and CSS
+asset. The k6 summary represents passing thresholds with `false` threshold
+failure values; all thresholds were therefore successful.
+
+### Improvement over the failed run
+
+| Metric | Uncompressed 25 VU | Gzip 25 VU | Change |
+| --- | ---: | ---: | ---: |
+| Global request p95 | 4.044 s | 1.400 s | 65.4% lower |
+| Admin JavaScript p95 | 4.361 s | 1.594 s | 63.4% lower |
+| Data received | 13,409,325 bytes | 4,218,737 bytes | 68.5% lower |
+
+### VM evidence
+
+The associated VM log review was performed separately and reported
+successful. No VM-side failure, container-health issue, or deployment blocker
+was identified for this rerun.
+
+### Conclusion
+
+The static-edge gzip remediation resolved the 25-VU latency failure. The
+global and every per-resource p95 threshold passed, all functional and gzip
+header checks passed, and HTTP failure rate remained zero. The static-edge
+25-VU acceptance gate is therefore **passed**, and the 100-VU progression is
+unblocked.
