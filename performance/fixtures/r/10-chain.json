@@ -1,0 +1,1332 @@
+{
+  "fixture_schema_version": 1,
+  "shape": "10-chain",
+  "graph": {
+    "nodes": [
+      "N01",
+      "N02",
+      "N03",
+      "N04",
+      "N05",
+      "N06",
+      "N07",
+      "N08",
+      "N09",
+      "N10"
+    ],
+    "relations": [
+      {
+        "from": "N01",
+        "to": "N02"
+      },
+      {
+        "from": "N02",
+        "to": "N03"
+      },
+      {
+        "from": "N03",
+        "to": "N04"
+      },
+      {
+        "from": "N04",
+        "to": "N05"
+      },
+      {
+        "from": "N05",
+        "to": "N06"
+      },
+      {
+        "from": "N06",
+        "to": "N07"
+      },
+      {
+        "from": "N07",
+        "to": "N08"
+      },
+      {
+        "from": "N08",
+        "to": "N09"
+      },
+      {
+        "from": "N09",
+        "to": "N10"
+      }
+    ]
+  },
+  "candidates_per_node": 3,
+  "operations": {
+    "model": {
+      "method": "POST",
+      "path": "/internal/v2/kst/model",
+      "request": {
+        "nodes": [
+          "N01",
+          "N02",
+          "N03",
+          "N04",
+          "N05",
+          "N06",
+          "N07",
+          "N08",
+          "N09",
+          "N10"
+        ],
+        "relations": [
+          {
+            "from": "N01",
+            "to": "N02"
+          },
+          {
+            "from": "N02",
+            "to": "N03"
+          },
+          {
+            "from": "N03",
+            "to": "N04"
+          },
+          {
+            "from": "N04",
+            "to": "N05"
+          },
+          {
+            "from": "N05",
+            "to": "N06"
+          },
+          {
+            "from": "N06",
+            "to": "N07"
+          },
+          {
+            "from": "N07",
+            "to": "N08"
+          },
+          {
+            "from": "N08",
+            "to": "N09"
+          },
+          {
+            "from": "N09",
+            "to": "N10"
+          }
+        ]
+      },
+      "expected_response": {
+        "model": {
+          "schema_version": 2,
+          "method": "kst",
+          "nodes": [
+            "N01",
+            "N02",
+            "N03",
+            "N04",
+            "N05",
+            "N06",
+            "N07",
+            "N08",
+            "N09",
+            "N10"
+          ],
+          "knowledge_states": [
+            [],
+            [
+              "N01"
+            ],
+            [
+              "N01",
+              "N02"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09",
+              "N10"
+            ]
+          ],
+          "matrix": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          ],
+          "uniform_prior": [
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909
+          ],
+          "configuration": {
+            "feedback_credible_mass": 0.9,
+            "reliability_floor": {
+              "maximum": 10,
+              "minimum": 7,
+              "multiplier": 1.5
+            },
+            "safety_cap": {
+              "minimum_above_floor": 1,
+              "node_multiplier": 2
+            },
+            "schema_version": 1,
+            "stop_confidence": 0.8
+          },
+          "configuration_hash": "kst-config-v1:sha256:89b7af74a8eca453d36a3410e18f8c221000ea67cc06388418ec675de766c774",
+          "reliability_floor": 10,
+          "safety_cap": 20
+        },
+        "posterior": [
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909
+        ]
+      }
+    },
+    "select": {
+      "method": "POST",
+      "path": "/internal/v2/kst/select",
+      "request": {
+        "model": {
+          "schema_version": 2,
+          "method": "kst",
+          "nodes": [
+            "N01",
+            "N02",
+            "N03",
+            "N04",
+            "N05",
+            "N06",
+            "N07",
+            "N08",
+            "N09",
+            "N10"
+          ],
+          "knowledge_states": [
+            [],
+            [
+              "N01"
+            ],
+            [
+              "N01",
+              "N02"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09",
+              "N10"
+            ]
+          ],
+          "matrix": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          ],
+          "uniform_prior": [
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909
+          ],
+          "configuration": {
+            "feedback_credible_mass": 0.9,
+            "reliability_floor": {
+              "maximum": 10,
+              "minimum": 7,
+              "multiplier": 1.5
+            },
+            "safety_cap": {
+              "minimum_above_floor": 1,
+              "node_multiplier": 2
+            },
+            "schema_version": 1,
+            "stop_confidence": 0.8
+          },
+          "configuration_hash": "kst-config-v1:sha256:89b7af74a8eca453d36a3410e18f8c221000ea67cc06388418ec675de766c774",
+          "reliability_floor": 10,
+          "safety_cap": 20
+        },
+        "posterior": [
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909
+        ],
+        "candidates": [
+          {
+            "candidate_id": "perf-fixture-10-chain-item-001",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-002",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-003",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-004",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-005",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-006",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-007",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-008",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-009",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-010",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-011",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-012",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-013",
+            "node": "N05",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-014",
+            "node": "N05",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-015",
+            "node": "N05",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-016",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-017",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-018",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-019",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-020",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-021",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-022",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-023",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-024",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-025",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-026",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-027",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-028",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-029",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-030",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          }
+        ]
+      },
+      "expected_response": {
+        "candidate_id": "perf-fixture-10-chain-item-013",
+        "node": "N05"
+      }
+    },
+    "advance": {
+      "method": "POST",
+      "path": "/internal/v2/kst/advance",
+      "request": {
+        "model": {
+          "schema_version": 2,
+          "method": "kst",
+          "nodes": [
+            "N01",
+            "N02",
+            "N03",
+            "N04",
+            "N05",
+            "N06",
+            "N07",
+            "N08",
+            "N09",
+            "N10"
+          ],
+          "knowledge_states": [
+            [],
+            [
+              "N01"
+            ],
+            [
+              "N01",
+              "N02"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09"
+            ],
+            [
+              "N01",
+              "N02",
+              "N03",
+              "N04",
+              "N05",
+              "N06",
+              "N07",
+              "N08",
+              "N09",
+              "N10"
+            ]
+          ],
+          "matrix": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          ],
+          "uniform_prior": [
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909,
+            0.0909090909090909
+          ],
+          "configuration": {
+            "feedback_credible_mass": 0.9,
+            "reliability_floor": {
+              "maximum": 10,
+              "minimum": 7,
+              "multiplier": 1.5
+            },
+            "safety_cap": {
+              "minimum_above_floor": 1,
+              "node_multiplier": 2
+            },
+            "schema_version": 1,
+            "stop_confidence": 0.8
+          },
+          "configuration_hash": "kst-config-v1:sha256:89b7af74a8eca453d36a3410e18f8c221000ea67cc06388418ec675de766c774",
+          "reliability_floor": 10,
+          "safety_cap": 20
+        },
+        "posterior": [
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909,
+          0.0909090909090909
+        ],
+        "administered": {
+          "candidate_id": "perf-fixture-10-chain-item-013",
+          "node": "N05",
+          "beta": 0.05,
+          "eta": 0.25
+        },
+        "response_correct": true,
+        "response_count": 1,
+        "remaining_candidates": [
+          {
+            "candidate_id": "perf-fixture-10-chain-item-001",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-002",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-003",
+            "node": "N01",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-004",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-005",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-006",
+            "node": "N02",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-007",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-008",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-009",
+            "node": "N03",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-010",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-011",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-012",
+            "node": "N04",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-014",
+            "node": "N05",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-015",
+            "node": "N05",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-016",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-017",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-018",
+            "node": "N06",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-019",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-020",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-021",
+            "node": "N07",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-022",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-023",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-024",
+            "node": "N08",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-025",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-026",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-027",
+            "node": "N09",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-028",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-029",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          },
+          {
+            "candidate_id": "perf-fixture-10-chain-item-030",
+            "node": "N10",
+            "beta": 0.05,
+            "eta": 0.25
+          }
+        ]
+      },
+      "expected_response": {
+        "status": "in_progress",
+        "posterior": [
+          0.0359712230215827,
+          0.0359712230215827,
+          0.0359712230215827,
+          0.0359712230215827,
+          0.0359712230215827,
+          0.136690647482014,
+          0.136690647482014,
+          0.136690647482014,
+          0.136690647482014,
+          0.136690647482014,
+          0.136690647482014
+        ],
+        "next_candidate": {
+          "candidate_id": "perf-fixture-10-chain-item-019",
+          "node": "N07"
+        }
+      }
+    }
+  }
+}

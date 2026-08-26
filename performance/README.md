@@ -35,7 +35,7 @@ generator must be a separate approved machine.
 | `compose.loopback.yaml` | Temporarily exposes only API and R ports on VM loopback for component tests. |
 | `bin/monitor-vm.sh` | Captures VM samples and live Docker/Nginx evidence for one run. |
 | `k6/static-edge-smoke.js` | One-client public static-edge smoke check. |
-| `fixtures/` | Version-controlled, non-secret graph and item fixture inputs. |
+| `fixtures/` | Version-controlled, non-secret graph and R request fixtures. |
 | `preflight.md` | VM and Supabase preflight worksheet with safe collection commands. |
 | `results/` | Ignored per-run evidence output. |
 | `runbook.md` | Operational sequence, safety gates, and abort procedure. |
