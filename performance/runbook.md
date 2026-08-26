@@ -46,31 +46,95 @@ or cleanup are involved.
 
 ### Prepare the endpoint and tunnel
 
+The commands below use three terminals:
+
+- **Pilot VM terminal:** the deployed repository and Docker Compose commands.
+- **Generator tunnel terminal:** the SSH local-forward, left running during
+  k6.
+- **Generator k6 terminal:** the k6 commands and result files.
+
+The tunnel may use the pilot VM's normal SSH address or its private VPN
+address. The R port itself remains bound to pilot-VM loopback; do not replace
+the loopback bind with the VPN address.
+
 1. Before the maintenance window, verify that the fixtures still reproduce
    exactly from the production R implementation:
 
+**Pilot VM terminal** (from the deployed repository root):
+
 ```sh
+cd /path/to/opiraja-hindamiskomponent
 Rscript performance/fixtures/r/generate.R --check
 ```
 
-2. Start the component overlay on the pilot VM as described above. Confirm on
-   the VM that R is published only on loopback:
+2. Start the component overlay on the pilot VM. Force recreation so Docker
+   applies the temporary port publication even when the normal Compose stack
+   is already running:
+
+**Pilot VM terminal:**
+
+```sh
+cd /path/to/opiraja-hindamiskomponent
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  up -d --force-recreate r-service
+docker compose -f compose.yaml -f performance/compose.loopback.yaml ps r-service
+docker compose -f compose.yaml -f performance/compose.loopback.yaml port r-service 8000
+```
+
+The `port` command must report `127.0.0.1:18001` (or the explicitly selected
+`PERF_R_LOOPBACK_PORT`). If the service is not healthy, stop here and inspect
+the Compose logs:
+
+```sh
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  logs --tail=100 r-service
+```
+
+3. Confirm on the VM that R is published only on loopback and that the health
+endpoint works:
+
+**Pilot VM terminal:**
 
 ```sh
 ss -ltn '( sport = :18001 )'
+curl --fail --silent --show-error http://127.0.0.1:18001/health
 ```
 
 The listener must be `127.0.0.1:18001`, never `0.0.0.0:18001` or the VM's
-public address.
+public address. The health response should be `{"status":"ok"}`.
 
-3. On the remote load generator, open an SSH tunnel and leave it running in a
-   dedicated terminal:
+4. On the remote load generator, open an SSH local-forward and leave it
+   running in a dedicated terminal. Use the pilot VM's VPN address in
+   `PILOT_SSH_HOST` when SSH is expected to travel through the VPN:
+
+**Generator tunnel terminal:**
 
 ```sh
-ssh -N -L 127.0.0.1:18001:127.0.0.1:18001 <pilot-ssh-host>
+PILOT_SSH_HOST="<ssh-user>@<pilot-vm-vpn-address-or-hostname>"
+ssh -N -T \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:18001:127.0.0.1:18001 \
+  "$PILOT_SSH_HOST"
 ```
 
-4. From a second load-generator terminal, verify the exact tunneled target:
+If the local port is already in use, select another generator-side port and
+use the same port in both the `-L` option and `PERF_R_BASE_URL`. For example,
+with local port `28001`:
+
+```sh
+ssh -N -T \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:28001:127.0.0.1:18001 \
+  "$PILOT_SSH_HOST"
+```
+
+5. From a second load-generator terminal, verify the exact tunneled target:
+
+**Generator k6 terminal:**
 
 ```sh
 curl --fail --silent --show-error http://127.0.0.1:18001/health
@@ -79,12 +143,26 @@ curl --fail --silent --show-error http://127.0.0.1:18001/health
 The expected response is `{"status":"ok"}`. The Docker commands below use
 host networking so the k6 container can reach the generator's loopback-only
 SSH tunnel. Run them on a Linux load generator; a native k6 1.5.x binary may be
-used instead where Docker host networking is unavailable.
+used instead where Docker host networking is unavailable. Confirm the k6
+image is available and that the generator has Docker host-network support:
+
+```sh
+docker pull grafana/k6:1.5.0
+docker version
+```
+
+Run all generator commands below from a checkout containing `performance/`:
+
+```sh
+cd /path/to/opiraja-hindamiskomponent
+```
 
 ### Smoke-test every graph shape
 
 Run this once for each `PERF_R_SHAPE`: `3-chain`, `10-chain`, and
 `10-independent`. Use a new run ID and result directory each time.
+
+**Generator k6 terminal:**
 
 ```sh
 PERF_R_SHAPE="3-chain"
@@ -114,6 +192,8 @@ VM monitoring and log streaming with the exact same `RUN_ID` before starting
 k6. Change only one load level at a time, preserve each result directory, and
 allow resources to return to baseline between runs.
 
+**Generator k6 terminal:** create and print the run ID:
+
 ```sh
 PERF_R_SHAPE="3-chain"
 PERF_R_VUS=1
@@ -123,14 +203,19 @@ mkdir -p "performance/results/$RUN_ID"
 echo "$RUN_ID"
 ```
 
-On the pilot VM, start monitoring with that printed ID:
+On the pilot VM, start monitoring with that printed ID. Run this from the
+deployed repository root and leave it running until k6 finishes.
+
+**Pilot VM monitoring terminal:**
 
 ```sh
 RUN_ID="<run_id>"
 sudo bash performance/bin/monitor-vm.sh "$RUN_ID"
 ```
 
-On the load generator, run the plateau:
+On the load generator, run the plateau from the repository root.
+
+**Generator k6 terminal:**
 
 ```sh
 docker run --rm --network host \
@@ -163,6 +248,8 @@ complete three-request flows per second, so the approximate request rate is
 three times that value. Choose the initial rate and VU allocation from the
 closed-test throughput instead of guessing a high starting load.
 
+**Generator k6 terminal:** create and print the run ID:
+
 ```sh
 PERF_R_SHAPE="3-chain"
 PERF_R_RATE=1
@@ -171,7 +258,12 @@ PERF_R_MAX_VUS=16
 PERF_R_DURATION="10m"
 RUN_ID="perf-r-${PERF_R_SHAPE}-open-rate${PERF_R_RATE}-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "performance/results/$RUN_ID"
+echo "$RUN_ID"
+```
 
+Run the open arrival-rate test from the generator k6 terminal:
+
+```sh
 docker run --rm --network host \
     -e PERF_R_BASE_URL="http://127.0.0.1:18001" \
     -e PERF_RUN_ID="$RUN_ID" \
@@ -199,11 +291,15 @@ cause is understood.
 
 ### Remove component exposure
 
-When the R-only stage is complete, stop the SSH tunnel. On the pilot VM,
+When the R-only stage is complete, stop k6 and the VM monitoring process, then
+stop the SSH tunnel with `Ctrl-C` in the tunnel terminal. On the pilot VM,
 re-apply the root Compose configuration without the overlay so API and R are
 recreated without published component ports:
 
+**Pilot VM terminal:**
+
 ```sh
+cd /path/to/opiraja-hindamiskomponent
 docker compose -f compose.yaml up -d --force-recreate api r-service
 ```
 
@@ -213,7 +309,13 @@ healthy before leaving the maintenance window:
 ```sh
 ss -ltn '( sport = :18000 or sport = :18001 )'
 docker compose -f compose.yaml ps
+docker compose -f compose.yaml exec -T api python -c \
+  'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=3).read()'
+docker compose -f compose.yaml logs --tail=50 api r-service
 ```
+
+The `ss` command must show no listeners on ports `18000` or `18001`. The
+in-container readiness request must succeed and both services must be healthy.
 
 ## Abort immediately when
 
