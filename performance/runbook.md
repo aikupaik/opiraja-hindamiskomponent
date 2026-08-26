@@ -11,8 +11,8 @@ cleans up credentials.
 
 1. Complete the plan's preflight record: deployed commit and image digests, VM
    resources, non-secret timeout/pool settings, Supabase tier/region/limits,
-   idle baseline, approved source IP, backups, clock synchronization, log
-   capacity, and dependency health.
+   generator hardware/runner/image digest, idle baseline, approved source IP,
+   backups, clock synchronization, log capacity, and dependency health.
 2. Obtain short-lived OR credentials outside k6 and provide them only through
    protected environment input.
 3. For public HTTPS tests, record and approve the self-signed certificate
@@ -20,8 +20,74 @@ cleans up credentials.
 4. Prepare a unique `perf-<timestamp>-<random>` run ID, run-owned data, and a
    results directory. Do not reuse a prior run ID.
 5. Start monitoring and log streaming before any traffic. Record five-second
-   VM/container and Supabase samples.
+   generator, VM/container, and Supabase samples.
 6. Smoke-test the selected scenario with one user before creating volume.
+
+## Qualify and monitor the load generator
+
+The generator must be a separate approved machine and must have enough
+headroom that it does not become the measured bottleneck. Supported runners
+are native k6 1.5.x, rootful Docker on Linux, and Docker Desktop for macOS 4.34
+or newer. Use the pinned `grafana/k6:1.5.0` image for Docker runs.
+
+For Docker Desktop on macOS:
+
+1. Use Linux containers.
+2. Enable **Settings > Resources > Network > Host networking**, then apply the
+   change and restart Docker Desktop.
+3. Leave Enhanced Container Isolation disabled. Docker Desktop host networking
+   supports TCP and UDP, but not direct binding to host interface addresses;
+   the R-only test needs only TCP access to the generator's loopback listener.
+4. Keep the Mac connected to AC power, prevent sleep for the test window, and
+   stop unrelated CPU-, memory-, disk-, and network-intensive work.
+
+Record non-secret generator identity during preflight:
+
+```sh
+sw_vers
+system_profiler SPHardwareDataType | awk -F': ' \
+  '/Model Name|Model Identifier|Chip|Total Number of Cores|Memory/ {
+    gsub(/^[[:space:]]+/, "", $1); print $1 "=" $2
+  }'
+df -h /
+docker version
+docker info --format \
+  'os={{.OperatingSystem}} ostype={{.OSType}} architecture={{.Architecture}} cpus={{.NCPU}} memory_bytes={{.MemTotal}} kernel={{.KernelVersion}} security={{json .SecurityOptions}}'
+docker image inspect grafana/k6:1.5.0 --format \
+  'id={{.Id}} repo_digests={{json .RepoDigests}} architecture={{.Architecture}} os={{.Os}}'
+```
+
+The filtered `system_profiler` command deliberately omits serial numbers and
+hardware UUIDs. Do not copy those identifiers into performance evidence.
+
+Before each non-smoke run on macOS, create the run's generator evidence
+directory and start this collector in a separate terminal. Leave it running
+until k6 exits, then stop it with `Ctrl-C`:
+
+```sh
+RUN_ID="<run_id>"
+RESULT_DIR="performance/results/$RUN_ID/generator"
+mkdir -p "$RESULT_DIR"
+
+while :; do
+  {
+    echo "--- time=$(date -u +%Y-%m-%dT%H:%M:%SZ) ---"
+    top -l 1 -n 0 | sed -n '1,12p'
+    vm_stat
+    netstat -ibdn
+    docker stats --no-stream \
+      --format 'container={{.Name}} cpu={{.CPUPerc}} memory={{.MemUsage}} memory_pct={{.MemPerc}} net={{.NetIO}} block_io={{.BlockIO}} pids={{.PIDs}}'
+  } >> "$RESULT_DIR/macos-generator-samples.txt"
+  sleep 5
+done
+```
+
+Treat the run as generator-limited and do not use it to claim pilot capacity
+if the Mac or Docker VM exhausts CPU, memory, disk, or network headroom; k6
+drops iterations; or generator-side receive time grows while the pilot remains
+idle. Preserve the evidence, allow both machines to recover, and rerun the
+entire comparison matrix on a more capable generator if needed. Never combine
+plateaus produced by different generator environments into one capacity claim.
 
 ## Component-test overlay
 
@@ -160,13 +226,26 @@ curl --fail --silent --show-error http://127.0.0.1:18001/health
 
 The expected response is `{"status":"ok"}`. The Docker commands below use
 host networking so the k6 container can reach the generator's loopback-only
-SSH tunnel. Run them on a Linux load generator; a native k6 1.5.x binary may be
-used instead where Docker host networking is unavailable. Confirm the k6
-image is available and that the generator has Docker host-network support:
+SSH tunnel. Use either rootful Docker on Linux or qualified Docker Desktop on
+macOS as described above. A native k6 1.5.x binary may be used instead when
+host networking is unavailable. Confirm the k6 image is available and record
+the runner versions and immutable image digest:
 
 ```sh
 docker pull grafana/k6:1.5.0
 docker version
+docker image inspect grafana/k6:1.5.0 --format \
+  'id={{.Id}} repo_digests={{json .RepoDigests}} architecture={{.Architecture}} os={{.Os}}'
+```
+
+With the SSH tunnel still open, verify the same endpoint from the generator
+host and from a host-networked container. Do not continue if only the host
+request succeeds:
+
+```sh
+curl --fail --silent --show-error http://127.0.0.1:18001/health
+docker run --rm --network host curlimages/curl:8.15.0 \
+  --fail --silent --show-error http://127.0.0.1:18001/health
 ```
 
 Run all generator commands below from a checkout containing `performance/`:
@@ -206,9 +285,9 @@ fixtures.
 ### Run the closed-VU concurrency plateaus
 
 For each graph shape, run separate plateaus at 1, 2, 4, 8, and 16 VUs. Start
-VM monitoring and log streaming with the exact same `RUN_ID` before starting
-k6. Change only one load level at a time, preserve each result directory, and
-allow resources to return to baseline between runs.
+generator and VM monitoring plus log streaming with the exact same `RUN_ID`
+before starting k6. Change only one load level at a time, preserve each result
+directory, and allow resources to return to baseline between runs.
 
 **Generator k6 terminal:** create and print the run ID:
 
@@ -299,8 +378,8 @@ docker run --rm --network host \
     run --out json=/results/raw-k6.json /scripts/r-only.js
 ```
 
-After every run, retain `summary.json`, `raw-k6.json`, VM samples, and streamed
-R/container logs. Confirm `r_completed_flows`, the `r_model_requests`,
+After every run, retain `summary.json`, `raw-k6.json`, generator and VM samples,
+and streamed R/container logs. Confirm `r_completed_flows`, the `r_model_requests`,
 `r_select_requests`, and `r_advance_requests` counts/rates, per-operation
 p50/p90/p95/p99 and max latency, `r_flow_duration`, failure classifications,
 VUs, throughput, and `dropped_iterations` in the report. Apply the runbook's
@@ -344,7 +423,8 @@ in-container readiness request must succeed and both services must be healthy.
 - p99 exceeds 10 seconds for two minutes;
 - VM or Supabase CPU exceeds 90% for two minutes;
 - memory or connections exceed 90%; or
-- swap growth, I/O exhaustion, or quota alarms appear.
+- swap growth, I/O exhaustion, or quota alarms appear; or
+- the generator loses resource headroom or becomes the apparent bottleneck.
 
 Export evidence before cleanup. Cleanup is a later explicit operation: it
 first previews exact matching rows and identifiers, refuses non-performance
@@ -385,7 +465,8 @@ mkdir -p "performance/results/$RUN_ID"
 echo "$RUN_ID"
 ```
 
-2. Start monitoring from the VM.
+2. Start generator monitoring on the load generator and VM monitoring on the
+   pilot VM.
 
 Use the exact same RUN_ID:
 ```sh

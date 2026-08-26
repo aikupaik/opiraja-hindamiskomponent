@@ -101,10 +101,12 @@ cannot hide incoming demand.
 - Stream logs during tests so Docker rotation cannot remove evidence. Do not
   enable admin experiment diagnostics: its 500-event process-local buffer and
   body capture would truncate and distort high-volume runs.
-- Sample VM/container CPU, memory, PIDs, network, disk, restart count, and load
-  every five seconds. Capture Supabase CPU, RAM, I/O, connections, API/database
-  latency, error counts, and relevant query diagnostics over the same
-  timestamps.
+- Sample load-generator CPU, memory, disk, network, and k6 process/container
+  utilization every five seconds. Sample VM/container CPU, memory, PIDs,
+  network, disk, restart count, and load on the same interval. Capture Supabase
+  CPU, RAM, I/O, connections, API/database latency, error counts, and relevant
+  query diagnostics over the same timestamps. Do not claim pilot capacity from
+  a generator-limited run.
 - Validate after every scenario:
   - one accepted result per submission ID;
   - no cross-session answers or duplicated state transitions;
@@ -138,5 +140,7 @@ cannot hide incoming demand.
   maintenance window. No real students or unrelated administrative work may
   run concurrently.
 - Results describe this exact VM, Compose revision, Supabase tier/region, data
-  shape, and rate-limit policy; changing any of those requires rerunning at
-  least the baseline, design-point, and synchronized-burst scenarios.
+  shape, rate-limit policy, load-generator hardware, runner configuration, and
+  network path; changing any of those requires a new comparison matrix or, at
+  minimum, rerunning the baseline, design-point, and synchronized-burst
+  scenarios where the change cannot affect generator capacity.

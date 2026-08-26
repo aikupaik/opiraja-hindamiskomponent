@@ -28,6 +28,21 @@ The harness uses HTTP-level k6 scripts, so it does not need a browser build or
 Chromium. Do not install or run k6 on the pilot VM for public-load tests: the
 generator must be a separate approved machine.
 
+Docker runners are supported on a rootful Linux host and on Docker Desktop for
+macOS 4.34 or newer. The R-only SSH-tunnel commands require
+[host networking](https://docs.docker.com/engine/network/drivers/host/). On
+macOS, enable **Settings > Resources > Network > Host networking**, use Linux
+containers, and leave Enhanced Container Isolation disabled; Docker Desktop
+does not support host networking with that isolation mode. Verify the tunneled
+health endpoint from inside a host-networked container before running k6.
+
+The generator is part of the measured environment. Record its hardware, OS,
+Docker Desktop/client/engine versions, Docker VM CPU and memory allocation, and
+the immutable k6 image digest during preflight. Capture generator CPU, memory,
+and network samples during every non-smoke run. Keep one generator and runner
+configuration for a comparison matrix; results from a different generator or
+runner configuration form a new matrix and require a new baseline.
+
 ## Layout
 
 | Path | Purpose |
@@ -37,7 +52,7 @@ generator must be a separate approved machine.
 | `k6/static-edge-smoke.js` | One-client public static-edge smoke check. |
 | `k6/r-only.js` | Replays the internal R v2 `model` -> `select` -> `advance` flow in smoke, closed-VU, or open arrival-rate mode. |
 | `fixtures/` | Version-controlled, non-secret graph and R request fixtures. |
-| `preflight.md` | VM and Supabase preflight worksheet with safe collection commands. |
+| `preflight.md` | Generator, VM, and Supabase preflight worksheet with safe collection commands. |
 | `results/` | Ignored per-run evidence output. |
 | `runbook.md` | Operational sequence, safety gates, and abort procedure. |
 | `report-template.md` | Required evidence and conclusion structure for each run. |
@@ -45,7 +60,8 @@ generator must be a separate approved machine.
 ## Runner convention
 
 All future commands must use the exact k6 image tag above or a documented
-native 1.5.x installation. A scenario receives its non-secret configuration
+native 1.5.x installation. Record the resolved image ID and repository digest,
+not only the mutable tag. A scenario receives its non-secret configuration
 through protected environment input; secrets are never written into this
 directory, a command line, k6 output, or a report.
 

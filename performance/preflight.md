@@ -1,13 +1,14 @@
 # Pilot performance preflight worksheet
 
-Complete this worksheet on the pilot VM before any load scenario beyond a
-one-request smoke check. It records the exact environment to which later
-results apply. It does not start, stop, rebuild, reload, or reconfigure
-anything.
+Complete this worksheet on the pilot VM and the separate load generator before
+any load scenario beyond a one-request smoke check. It records the exact
+environment to which later results apply. It does not start, stop, rebuild,
+reload, or reconfigure anything.
 
 ## Safety rules
 
-- Run the commands from the deployed repository root on the VM.
+- Run VM commands from the deployed repository root on the VM. Run the
+  load-generator commands only on the separate generator checkout.
 - Do **not** print `.env`, use `docker compose config` without `--quiet`, dump
   container environments, or copy JWTs, service keys, cookies, or player
   tokens into this document or its result files.
@@ -134,7 +135,36 @@ Record the result directory below. Retain it as raw evidence; do not commit
 it. The counters in `/proc/net/dev` are cumulative, so use differences between
 samples to assess idle network activity.
 
-## 4. Supabase console collection
+## 4. Load-generator collection
+
+Record the generator hardware, OS, free storage, runner versions, Docker VM
+allocation, and immutable k6 image digest. The filtered hardware command omits
+serial numbers and hardware UUIDs; do not record those identifiers.
+
+On a macOS Docker Desktop generator:
+
+```sh
+sw_vers
+system_profiler SPHardwareDataType | awk -F': ' \
+  '/Model Name|Model Identifier|Chip|Total Number of Cores|Memory/ {
+    gsub(/^[[:space:]]+/, "", $1); print $1 "=" $2
+  }'
+df -h /
+pmset -g batt
+
+docker version
+docker info --format \
+  'os={{.OperatingSystem}} ostype={{.OSType}} architecture={{.Architecture}} cpus={{.NCPU}} memory_bytes={{.MemTotal}} kernel={{.KernelVersion}} security={{json .SecurityOptions}}'
+docker image inspect grafana/k6:1.5.0 --format \
+  'id={{.Id}} repo_digests={{json .RepoDigests}} architecture={{.Architecture}} os={{.Os}}'
+```
+
+Docker Desktop must be version 4.34 or newer, use Linux containers, have host
+networking enabled under **Settings > Resources > Network**, and have Enhanced
+Container Isolation disabled for the R-only SSH-tunnel path. Verify both the
+host and host-networked-container health checks in `runbook.md` before k6.
+
+## 5. Supabase console collection
 
 In the pilot Supabase dashboard, record the project reference, selected plan or
 tier, region, documented CPU/RAM/connection/database limits, and the dashboard
@@ -143,7 +173,7 @@ window, capture CPU, RAM, I/O, connections, API/database latency, and error
 counts. Do not copy database passwords, service-role keys, API keys, or query
 result contents into this worksheet.
 
-## 5. Completion record
+## 6. Completion record
 
 Fill every field before proceeding to the static-edge scenario.
 
@@ -196,6 +226,33 @@ Fill every field before proceeding to the static-edge scenario.
 | Container health/restart state | API, player, r-service, and web running/healthy; restart count 0 for all |
 | Public Nginx rate/connection-limit policy | Enforcement active (`limit_req_dry_run off`, `limit_conn_dry_run off`): player 50r/s burst 100; API 10r/s burst 20; admin login 5r/m burst 5; issuance 2r/s burst 10; admin SSE connection limit 2 |
 
+### Load generator
+
+| Field | Value |
+| --- | --- |
+| Collection date/time | 2026-08-26T10:39:17Z |
+| Role | Separate Mac load generator; not the pilot VM |
+| Hardware | MacBook Air (`Mac16,12`), Apple M4, 10 cores (4 performance + 6 efficiency), 16 GB RAM, 256 GB nominal storage |
+| Available host storage at collection | APFS root reports 228 GiB capacity and 34 GiB available |
+| macOS | 26.6.2, build `25G83`, arm64 |
+| Power at collection | AC attached; repeat and confirm AC power before every volume run |
+| Docker Desktop | 4.88.1 (`237512`); `desktop-linux` context |
+| Docker client/engine | 29.7.2 / 29.7.2; API 1.55 |
+| Docker VM | Linux/arm64, LinuxKit `7.0.12-linuxkit`, 10 CPUs, 8,319,504,384 bytes (~7.75 GiB) RAM |
+| Docker security/network mode | Built-in seccomp and cgroup namespace; Host networking enabled; host-networked R health and smoke requests verified; Enhanced Container Isolation not active for this path |
+| k6 runner | Pinned `grafana/k6:1.5.0` Linux/arm64 image |
+| k6 image identity | ID and repository digest `sha256:2072ea9eafa596532d9aee0cc0e0a50cfb0e7fb703981a46179af5f4f22c5ea4` |
+| Generator monitoring | Required at five-second intervals for every non-smoke run; retain under `performance/results/<run-id>/generator/` |
+| Comparison rule | Keep this hardware, Docker allocation, runner image, power state, and network path fixed for the full matrix; a change starts a new baseline/matrix |
+
+### R-only Docker Desktop qualification
+
+| Graph shape | Smoke run | Result |
+| --- | --- | --- |
+| `3-chain` | `perf-r-smoke-3-chain-20260826T102346Z` | Pass: one completed flow, 9/9 checks, no crossed thresholds |
+| `10-chain` | `perf-r-smoke-10-chain-20260826T102710Z` | Pass: one completed flow, 9/9 checks, no crossed thresholds |
+| `10-independent` | `perf-r-smoke-10-independent-20260826T102748Z` | Pass: one completed flow, 9/9 checks, no crossed thresholds |
+
 ### Supabase and idle baseline
 
 | Field | Value |
@@ -226,4 +283,5 @@ Fill every field before proceeding to the static-edge scenario.
 | --- | --- |
 | Abort thresholds reviewed and understood | **Confirmed** |
 | Ready for static-edge 1-user smoke | **Ready** |
-| Blockers or follow-up actions | No blockers |
+| R-only smoke gate | **Passed for all three graph shapes on the recorded macOS Docker generator** |
+| Blockers or follow-up actions | Start and retain generator monitoring together with VM monitoring before the first closed-VU plateau |

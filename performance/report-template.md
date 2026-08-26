@@ -6,7 +6,10 @@
 - Operator:
 - Scenario and load model:
 - Run ID:
-- Generator host and k6 version/image digest:
+- Generator hardware, OS, power state, and free storage:
+- Runner type and k6 version/image ID/repository digest:
+- Docker Desktop/client/engine versions and Docker VM CPU/RAM allocation:
+- Generator network path and host-networking mode:
 - Deployment commit and image digests:
 - VM vCPU/RAM/network/storage:
 - Supabase tier, region, and documented limits:
@@ -38,10 +41,12 @@
 
 ## Resource evidence
 
+- Generator CPU, memory, disk, network, Docker/k6 utilization, and headroom:
 - VM/container CPU, memory, PIDs, network, disk, load, and restart counts:
 - Supabase CPU, RAM, I/O, connections, API/database latency, and errors:
 - Relevant query or queue diagnostics:
 - Log correlation using `X-Request-ID`:
+- Generator bottleneck assessment and comparison-matrix consistency:
 
 ## Integrity validation
 
