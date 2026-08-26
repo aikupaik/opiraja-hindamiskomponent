@@ -34,7 +34,10 @@ docker compose -f compose.yaml -f performance/compose.loopback.yaml up -d
 It publishes API and R only as `127.0.0.1:18000` and `127.0.0.1:18001` by
 default. A remote generator reaches them through SSH tunnels; it must not
 receive a direct public component port. After the run, stop the overlay and
-verify no loopback listeners remain.
+verify no loopback listeners remain. The overlay also gives R a temporary
+gateway-capable network attachment: Docker cannot publish a port for a
+container attached only to the root configuration's internal `compute`
+network. Re-applying the root configuration removes that attachment.
 
 ## R-only v2 component test
 
@@ -76,14 +79,29 @@ Rscript performance/fixtures/r/generate.R --check
 ```sh
 cd /path/to/opiraja-hindamiskomponent
 docker compose -f compose.yaml -f performance/compose.loopback.yaml \
-  up -d --force-recreate r-service
-docker compose -f compose.yaml -f performance/compose.loopback.yaml ps r-service
-docker compose -f compose.yaml -f performance/compose.loopback.yaml port r-service 8000
+  up -d --force-recreate --wait --wait-timeout 120 r-service
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  ps --format json r-service
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  port r-service 8000
 ```
 
-The `port` command must report `127.0.0.1:18001` (or the explicitly selected
-`PERF_R_LOOPBACK_PORT`). If the service is not healthy, stop here and inspect
-the Compose logs:
+The JSON output must show `Health` as `healthy` and `Publishers` must include
+the selected host port with `URL` set to `127.0.0.1`. The `port` command must
+then report `127.0.0.1:18001` (or the explicitly selected
+`PERF_R_LOOPBACK_PORT`). Do not continue if either check disagrees. With
+Compose v5, `invalid IP:0` from `port` means the requested binding was not
+actually published; it is not an alternate address. Inspect the merged model
+and actual container state:
+
+```sh
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  config r-service
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  ps --format json r-service
+```
+
+If the service is not healthy, stop here and inspect the Compose logs:
 
 ```sh
 docker compose -f compose.yaml -f performance/compose.loopback.yaml \

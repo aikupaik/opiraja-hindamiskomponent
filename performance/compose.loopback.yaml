@@ -13,3 +13,11 @@ services:
   r-service:
     ports:
       - "127.0.0.1:${PERF_R_LOOPBACK_PORT:-18001}:8000"
+    # The normal compute-only attachment is internal and therefore has no
+    # gateway through which Docker can publish a host port. Temporarily give R
+    # the same NAT-capable gateway used by API. The root-only cleanup in the
+    # runbook recreates R without this edge attachment.
+    networks:
+      compute: {}
+      edge:
+        gw_priority: 1
