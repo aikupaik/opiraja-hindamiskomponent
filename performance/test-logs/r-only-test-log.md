@@ -41,11 +41,12 @@ p95 <= 3 seconds, full-request p99 <= 5 seconds, and an abort boundary at p99
 > 10 seconds after two minutes. The same p95/p99 latency thresholds are also
   applied separately to `model`, `select`, and `advance`.
 
-These initial runs cover only the `3-chain` fixture at closed 1 VU and open
-1 complete flow per second. They are baseline/qualification points, not the
-R-only capacity limit. The planned matrix also includes 3-chain, 10-chain,
-and 10-independent at closed 1, 2, 4, 8, and 16 VUs, followed by open-rate
-tests selected from the closed-test throughput.
+The initial baseline/qualification runs covered the `3-chain` fixture at
+closed 1 VU and open 1 complete flow per second. The closed-VU matrix now also
+contains the `10-chain` fixture at 2, 4, 8, and 16 VUs. These runs are still
+not an R-only capacity limit. The remaining planned matrix includes
+`10-independent` at closed 1, 2, 4, 8, and 16 VUs, followed by open-rate tests
+selected from the closed-test throughput.
 
 The runbook requires generator and VM monitoring for non-smoke runs. The VM
 monitoring report is recorded below. Generator-side samples are not present in
@@ -236,6 +237,71 @@ ceiling.
   accounting and does not indicate saturation.
 - No Nginx error-log activity was recorded.
 
+## 10-chain closed 2-, 4-, 8-, and 16-VU results
+
+### Consolidated result
+
+All four 10-chain runs passed. Each completed flow returned the expected HTTP
+200, JSON, and fixture responses; checks and integrity validation had no
+failures. There were no dropped iterations or unexpected HTTP failures.
+Throughput increased with the closed VU count, while full-flow latency
+increased as the load rose but remained below the acceptance thresholds.
+
+| Closed VUs | Run | Completed flows | Flow rate | Flow p95 | Flow p99 | Dropped |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 2 | [`summary.json`](../results/perf-r-10-chain-closed-vu2-20260828T075640Z/summary.json) | 3,899 | 6.50/s | 386 ms | 457 ms | 0 |
+| 4 | [`summary.json`](../results/perf-r-10-chain-closed-vu4-20260828T081006Z/summary.json) | 6,912 | 11.52/s | 442 ms | 526 ms | 0 |
+| 8 | [`summary.json`](../results/perf-r-10-chain-closed-vu8-20260828T082140Z/summary.json) | 8,959 | 14.92/s | 636 ms | 713 ms | 0 |
+| 16 | [`summary.json`](../results/perf-r-10-chain-closed-vu16-20260828T095541Z/summary.json) | 9,110 | 15.17/s | 1,170 ms | 1,477 ms | 0 |
+
+### 16-VU detail
+
+| Metric | Result |
+| --- | ---: |
+| R HTTP requests | 27,330 |
+| Approximate request throughput | 45.50 requests/s |
+| Checks | 81,990 passed, 0 failed |
+| HTTP status results | 27,330 x HTTP 200 |
+| HTTP failure rate | 0% |
+| Unexpected failure rate | 0% |
+| Integrity failure rate | 0% |
+
+| Operation | Average | p95 | p99 | Maximum |
+| --- | ---: | ---: | ---: | ---: |
+| `model` | 339.0 ms | 434.4 ms | 531.1 ms | 1,763.1 ms |
+| `select` | 338.3 ms | 430.6 ms | 532.9 ms | 1,775.9 ms |
+| `advance` | 373.8 ms | 448.0 ms | 529.9 ms | 1,662.5 ms |
+
+The 10-chain closed curve shows a clear load-related latency increase. The
+2-VU run achieved 6.50 complete flows/s with a 457 ms full-flow p99; the
+16-VU run achieved 15.17 flows/s with a 1,477 ms p99. The 16-VU result still
+passed the full-flow p95/p99 limits and had no functional failures or dropped
+work, but its reduced throughput gain and higher tail latency indicate that
+the heavier fixture is approaching a practical contention limit sooner than
+the 3-chain fixture. This is a measured point, not a capacity ceiling.
+
+### VM monitoring
+
+Each monitor captured 72 samples over approximately ten minutes. All services
+remained healthy, with no evidence of OOM kills or container restarts.
+
+| Run | R-service CPU average / maximum | Host CPU average / maximum | RAM used | Load 1m average / maximum |
+| --- | ---: | ---: | ---: | ---: |
+| VU 2 | 62.5% / 77.5% | 8.9% / 19.5% | ~1.03 GiB | 0.58 / 0.82 |
+| VU 4 | 90.2% / 99.1% | 12.1% / 19.7% | ~1.03 GiB | 0.91 / 1.10 |
+| VU 8 | 98.1% / 99.5% | 13.7% / 19.1% | ~1.03 GiB | 1.03 / 1.43 |
+| VU 16 | 99.3% / ~110% | 13.7% / 18.3% | ~1.03 GiB | 0.75 / 1.12 |
+
+The R service is the clear bottleneck: it approaches one fully occupied CPU
+core at VU 4 and remains saturated at VU 8 and VU 16. The VM itself was not
+resource constrained: host CPU stayed below 20%, approximately 14.6 GiB of
+memory remained available, swap was unused, and I/O wait was effectively
+zero. API, web, and player containers remained light with stable memory use.
+The VU 8 and VU 16 results therefore mainly demonstrate saturation of the
+single R-service process, not additional VM capacity. These VM measurements do
+not by themselves establish latency, throughput, dropped iterations, or the
+actual capacity plateau; those conclusions come from the k6 summaries above.
+
 ## Combined findings and next step
 
 All closed 3-chain runs from 1 through 16 VUs passed their correctness and
@@ -246,11 +312,15 @@ without dropped iterations; it should not be read as a capacity comparison.
 
 No evidence indicates an R functional or serialization problem. VM monitoring
 shows no host, memory, service-health, Nginx, or R memory saturation across the
-closed-VU runs. R queue depth and load-generator limitation remain unassessed:
-queue depth was not directly measured, and generator-side monitoring output was
-not retained with the runs.
+closed-VU runs, but the 10-chain reports do show saturation of the R service's
+CPU at VU 8 and VU 16. R queue depth and load-generator limitation remain
+unassessed: queue depth was not directly measured, and generator-side
+monitoring output was not retained with the runs.
 
-The 3-chain closed curve is suitable for proceeding to the 10-chain and
-10-independent shapes. Continue retaining five-second generator and VM
-samples plus streamed R/container logs, then raise the open arrival rate from
-the observed closed-test throughput rather than treating `rate=1` as a ceiling.
+The 3-chain and 10-chain closed curves both passed the correctness and latency
+gates. The 10-chain results show materially higher flow latency and only a
+small throughput increase from 8 to 16 VUs, so the next test should retain
+five-second generator and VM samples plus streamed R/container logs. Proceed
+to the `10-independent` closed matrix, then raise the open arrival rate from
+the observed closed-test throughput rather than treating `rate=1` as a
+ceiling.
