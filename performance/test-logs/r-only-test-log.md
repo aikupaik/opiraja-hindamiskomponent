@@ -1,6 +1,6 @@
 # R-only performance test log
 
-Last updated: 2026-08-26
+Last updated: 2026-08-28
 
 ## Test purpose and scope
 
@@ -182,23 +182,75 @@ The VM and R service also had substantial headroom at the offered 1 flow/s
 rate. The lower R CPU peak is consistent with the lower request rate than the
 closed baseline.
 
+## 3-chain closed 2-, 4-, 8-, and 16-VU results
+
+### Consolidated result
+
+All four runs passed. Each completed flow returned the expected HTTP 200,
+JSON, and fixture responses; checks and integrity validation had no failures.
+There were no dropped iterations or unexpected HTTP failures. Throughput
+increased with the closed VU count while latency remained well below the
+acceptance thresholds.
+
+| Closed VUs | Run | Completed flows | Flow rate | Flow p95 | Flow p99 | Dropped |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 2 | [`summary.json`](../results/perf-r-3-chain-closed-vu2-20260828T064711Z/summary.json) | 4,768 | 7.94/s | 327 ms | 374 ms | 0 |
+| 4 | [`summary.json`](../results/perf-r-3-chain-closed-vu4-20260828T065852Z/summary.json) | 9,631 | 16.05/s | 315 ms | 388 ms | 0 |
+| 8 | [`summary.json`](../results/perf-r-3-chain-closed-vu8-20260828T071001Z/summary.json) | 19,245 | 32.07/s | 322 ms | 410 ms | 0 |
+| 16 | [`summary.json`](../results/perf-r-3-chain-closed-vu16-20260828T073108Z/summary.json) | 29,911 | 49.83/s | 395 ms | 451 ms | 0 |
+
+### 16-VU detail
+
+| Metric | Result |
+| --- | ---: |
+| R HTTP requests | 89,733 |
+| Approximate request throughput | 149.49 requests/s |
+| Checks | 269,199 passed, 0 failed |
+| HTTP status results | 89,733 x HTTP 200 |
+| HTTP failure rate | 0% |
+| Unexpected failure rate | 0% |
+| Integrity failure rate | 0% |
+
+| Operation | Average | p95 | p99 | Maximum |
+| --- | ---: | ---: | ---: | ---: |
+| `model` | 106.3 ms | 148.0 ms | 188.5 ms | 515.5 ms |
+| `select` | 108.8 ms | 150.5 ms | 186.7 ms | 515.1 ms |
+| `advance` | 103.9 ms | 146.2 ms | 182.2 ms | 456.0 ms |
+
+The 16-VU run also passed the full-flow p95/p99 limits, with no sign of a
+functional failure or dropped work. It provides a measured result of about
+49.8 complete flows/s for this fixture and load model; it is not a capacity
+ceiling.
+
+### VM monitoring across the closed-VU runs
+
+- All services were healthy before and after every run. There were no
+  container restarts, OOM kills, unhealthy states, or nonzero health-check
+  exits.
+- Host CPU scaled smoothly from 2.8% average user CPU at 1 VU to 13.0% at
+  16 VUs; load peaked at only 1.92 on the 8-CPU VM.
+- Memory remained stable at roughly 1.0 GiB used, with at least approximately
+  14.6 GiB available. R-service memory stayed around 236–240 MiB, with no
+  obvious leak.
+- R-service CPU peaked at 114.9% at 16 VUs. This is normal Docker multi-core
+  accounting and does not indicate saturation.
+- No Nginx error-log activity was recorded.
+
 ## Combined findings and next step
 
-Both initial R-only runs passed their correctness and latency gates. The
-closed baseline sustained approximately 3.24 complete flows/s at one VU, while
-the open test deliberately offered approximately 1 flow/s and sustained it
-without dropped iterations. The open result is consistent with the closed
-baseline, but the two runs use different offered loads and should not be read
-as a direct capacity comparison.
+All closed 3-chain runs from 1 through 16 VUs passed their correctness and
+latency gates. Throughput rose from approximately 3.24 complete flows/s at one
+VU to 49.83 flows/s at 16 VUs, with full-flow p99 remaining below 451 ms. The
+open test deliberately offered approximately 1 flow/s and also sustained it
+without dropped iterations; it should not be read as a capacity comparison.
 
 No evidence indicates an R functional or serialization problem. VM monitoring
-shows no host, memory, service-health, network, or R CPU/memory saturation in
-either run. R queue depth and load-generator limitation remain unassessed:
+shows no host, memory, service-health, Nginx, or R memory saturation across the
+closed-VU runs. R queue depth and load-generator limitation remain unassessed:
 queue depth was not directly measured, and generator-side monitoring output was
 not retained with the runs.
 
-Proceed with the planned closed-VU 3-chain levels at 2, 4, 8, and 16 VUs,
-retaining five-second generator and VM samples plus streamed R/container logs
-for each run. After the closed 3-chain curve is understood, continue with the
-10-chain and 10-independent shapes, then raise the open arrival rate from the
-observed closed-test throughput rather than treating `rate=1` as a ceiling.
+The 3-chain closed curve is suitable for proceeding to the 10-chain and
+10-independent shapes. Continue retaining five-second generator and VM
+samples plus streamed R/container logs, then raise the open arrival rate from
+the observed closed-test throughput rather than treating `rate=1` as a ceiling.
