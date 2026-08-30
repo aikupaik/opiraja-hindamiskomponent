@@ -1,6 +1,7 @@
 """Concurrency-safe in-memory implementation of the repository contract."""
 
 import asyncio
+from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -38,14 +39,16 @@ class RepositoryCall:
 class InMemoryAssessmentRepository:
     """A deterministic fake with the same state-transition rules as storage."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, record_calls: bool = True) -> None:
         self._lock = asyncio.Lock()
+        self._record_calls = record_calls
         self._graphs: dict[str, GraphCacheEntry] = {}
         self._sessions: dict[TestId, AssessmentSession] = {}
         self._items: dict[ItemId, AssessmentItem] = {}
         self._yg_orders: dict[TestId, list[YgOrder]] = {}
         self._answers: dict[SubmissionId, AnswerRecord] = {}
         self._calls: list[RepositoryCall] = []
+        self._method_counts: Counter[str] = Counter()
         self._failures: dict[str, BaseException] = {}
         self._next_order_id = 1
 
@@ -414,8 +417,16 @@ class InMemoryAssessmentRepository:
     def calls(self) -> tuple[RepositoryCall, ...]:
         return deepcopy(tuple(self._calls))
 
+    @property
+    def method_counts(self) -> dict[str, int]:
+        return dict(self._method_counts)
+
     def _record(self, method: str, *arguments: object) -> None:
-        self._calls.append(RepositoryCall(method=method, arguments=deepcopy(arguments)))
+        self._method_counts[method] += 1
+        if self._record_calls:
+            self._calls.append(
+                RepositoryCall(method=method, arguments=deepcopy(arguments))
+            )
 
     def _raise_injected(self, method: str) -> None:
         error = self._failures.pop(method, None)

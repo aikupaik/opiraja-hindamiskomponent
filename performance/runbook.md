@@ -414,6 +414,388 @@ docker compose -f compose.yaml logs --tail=50 api r-service
 The `ss` command must show no listeners on ports `18000` or `18001`. The
 in-container readiness request must succeed and both services must be healthy.
 
+## API-only component test
+
+The API-only stage runs a derived performance image beside the normal stack.
+It uses the production FastAPI routes, DTOs, JWT validation, middleware,
+logging, and assessment service, but replaces Supabase and R with deterministic
+in-process implementations. The service is not connected to the edge network,
+is never reachable through Nginx, and is published only as pilot-VM loopback
+port `18002`. One Uvicorn worker is used, matching the production command.
+
+The `routes` workload repeatedly exercises liveness, authenticated OR status,
+player start, and completed-answer replay using two setup-owned sessions. Its
+state therefore remains bounded during a 10-minute plateau. The `session`
+workload gives each VU one unique complete session, including an accepted-answer
+replay and completed OR status check. Session mode is a bounded concurrency and
+integrity test, not a sustained plateau.
+
+The 3-chain fixture completes after seven answers. Both 10-node fixtures
+complete after ten. Covered inventory is loaded in memory, so any YG order is
+an integrity failure.
+
+### Prepare the derived image on the pilot VM
+
+Use the deployed checkout and confirm the normal API image is the image for the
+recorded commit. Do not rebuild or retag it merely for this test. The derived
+image adds only the performance app and committed fixtures.
+
+**Pilot VM terminal:**
+
+```sh
+cd /path/to/opiraja-hindamiskomponent
+git rev-parse HEAD
+docker image inspect opiraja-assessment-api:local --format \
+  'base_id={{.Id}} base_digests={{json .RepoDigests}} created={{.Created}} cmd={{json .Config.Cmd}}'
+
+PERF_RUN_ID="perf-api-build-validation" \
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only config --no-env-resolution > /tmp/api-only-compose.yaml
+
+PERF_RUN_ID="perf-api-build-validation" \
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only build api-perf
+
+docker image inspect opiraja-assessment-api-perf:local --format \
+  'derived_id={{.Id}} derived_digests={{json .RepoDigests}} created={{.Created}} cmd={{json .Config.Cmd}}'
+```
+
+`--no-env-resolution` is mandatory because an ordinary rendered Compose model
+would copy secrets from `.env` into the output file. Inspect
+`/tmp/api-only-compose.yaml` before proceeding. `api-perf` must have one
+worker, no `depends_on`, only the `api-performance` network, and only a
+`127.0.0.1:18002` publication. The normal `api`, `web`, `player`, and
+`r-service` definitions are not replaced by `api-perf`.
+
+### Prepare protected OR credentials
+
+Obtain a dedicated OR JWT from the approved credential issuer immediately
+before a run. It must contain the normal create/read/launch scopes, have an
+`assessment-api` audience, use the configured issuer, and have between 15 and
+20 minutes of remaining lifetime. The isolated service raises only its maximum
+accepted OR lifetime to 20 minutes; the production API keeps its normal value.
+
+On the generator, store the token in an environment file outside the checkout.
+The file must contain exactly `PERF_OR_TOKEN=<token>`, be owned by the operator,
+and have mode `0600`. Do not echo, print, commit, attach, or copy this file into
+results. Supply it to Docker with `--env-file`, never with a command-line
+`-e PERF_OR_TOKEN=...` value.
+
+**Generator terminal:**
+
+```sh
+PERF_CREDENTIALS_FILE="/secure/path/api-only-k6.env"
+test -f "$PERF_CREDENTIALS_FILE"
+chmod 600 "$PERF_CREDENTIALS_FILE"
+```
+
+Destroy the credential file after the API-only window ends or the token
+expires.
+
+### Start one run-owned API-only service
+
+Every smoke, plateau, open-rate, and session-burst run gets a fresh run ID,
+container, and evidence directory. Set the workload and graph shape before
+starting the container; those values are written into its shutdown evidence.
+
+**Pilot VM terminal:**
+
+```sh
+cd /path/to/opiraja-hindamiskomponent
+export PERF_API_WORKLOAD="routes"
+export PERF_API_SHAPE="3-chain"
+export PERF_RUN_ID="perf-api-${PERF_API_WORKLOAD}-${PERF_API_SHAPE}-smoke-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "performance/results/$PERF_RUN_ID/api-only"
+echo "$PERF_RUN_ID"
+git rev-parse HEAD > \
+  "performance/results/$PERF_RUN_ID/api-only/deployed-commit.txt"
+docker image inspect \
+  opiraja-assessment-api:local opiraja-assessment-api-perf:local \
+  --format \
+  'tags={{json .RepoTags}} id={{.Id}} digests={{json .RepoDigests}} created={{.Created}} cmd={{json .Config.Cmd}}' \
+  > "performance/results/$PERF_RUN_ID/api-only/image-lineage.txt"
+
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only up -d --no-deps --force-recreate --wait \
+  --wait-timeout 120 api-perf
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only ps --format json api-perf
+ss -ltn '( sport = :18002 )'
+curl --fail --silent --show-error http://127.0.0.1:18002/health/ready
+```
+
+The listener must be exactly `127.0.0.1:18002`; the readiness response must be
+`{"status":"ready","dependencies":{"supabase":"ready","r":"ready"}}`.
+These dependency labels describe the in-process seams, not real Supabase or R
+traffic.
+
+Start VM monitoring with the same printed run ID and leave it running until
+the API-only container has been stopped gracefully after k6 exits.
+
+**Pilot VM monitoring terminal:**
+
+```sh
+RUN_ID="<run_id>"
+sudo bash performance/bin/monitor-vm.sh "$RUN_ID" api-only
+```
+
+### Open and verify the SSH tunnel
+
+**Generator tunnel terminal:**
+
+```sh
+PILOT_SSH_HOST="<ssh-user>@<pilot-vm-vpn-address-or-hostname>"
+ssh -N -T \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:18002:127.0.0.1:18002 \
+  "$PILOT_SSH_HOST"
+```
+
+With that terminal left open, verify the tunnel from both the generator host
+and the host-networked runner environment.
+
+**Generator k6 terminal:**
+
+```sh
+curl --fail --silent --show-error http://127.0.0.1:18002/health/ready
+docker run --rm --network host curlimages/curl:8.15.0 \
+  --fail --silent --show-error http://127.0.0.1:18002/health/ready
+```
+
+Do not continue if only the host request succeeds.
+
+### Smoke-test both workloads and every graph shape
+
+Run six independent smokes: `routes` and `session` for each of `3-chain`,
+`10-chain`, and `10-independent`. Recreate `api-perf` with the matching run ID,
+workload, and shape before every command.
+
+**Generator k6 terminal:**
+
+```sh
+cd /path/to/opiraja-hindamiskomponent
+RUN_ID="<run_id printed by the pilot VM>"
+PERF_API_WORKLOAD="routes"
+PERF_API_SHAPE="3-chain"
+mkdir -p "performance/results/$RUN_ID"
+
+docker run --rm --network host \
+    --env-file "$PERF_CREDENTIALS_FILE" \
+    -e PERF_API_BASE_URL="http://127.0.0.1:18002" \
+    -e PERF_RUN_ID="$RUN_ID" \
+    -e PERF_API_WORKLOAD="$PERF_API_WORKLOAD" \
+    -e PERF_API_SHAPE="$PERF_API_SHAPE" \
+    -e PERF_API_LOAD_MODE="smoke" \
+    -e K6_SUMMARY_EXPORT="/results/summary.json" \
+    -v "$PWD/performance/k6:/scripts:ro" \
+    -v "$PWD/performance/fixtures:/fixtures:ro" \
+    -v "$PWD/performance/results/$RUN_ID:/results" \
+    grafana/k6:1.5.0 \
+    run --out json=/results/raw-k6.json /scripts/api-only.js
+```
+
+All checks and thresholds must pass before volume. The setup requests create
+the two bounded route fixtures and are tagged `phase=setup`; load thresholds
+apply only to `phase=load`.
+
+### Run closed route plateaus
+
+Run each graph shape at 1, 25, and 100 closed VUs for ten minutes. Select the
+limiting shape by the lowest passing level; break ties by highest p99 at 25 VUs
+and then highest API-container CPU. Complete that shape's matrix at 5, 10, and
+50 VUs. Recreate the API-only container and use a new run ID for every level.
+
+**Generator k6 terminal:**
+
+```sh
+RUN_ID="<matching fresh run id>"
+PERF_API_SHAPE="10-independent"
+PERF_API_VUS=25
+PERF_API_DURATION="10m"
+mkdir -p "performance/results/$RUN_ID"
+
+docker run --rm --network host \
+    --env-file "$PERF_CREDENTIALS_FILE" \
+    -e PERF_API_BASE_URL="http://127.0.0.1:18002" \
+    -e PERF_RUN_ID="$RUN_ID" \
+    -e PERF_API_WORKLOAD="routes" \
+    -e PERF_API_SHAPE="$PERF_API_SHAPE" \
+    -e PERF_API_LOAD_MODE="closed" \
+    -e PERF_API_VUS="$PERF_API_VUS" \
+    -e PERF_API_DURATION="$PERF_API_DURATION" \
+    -e K6_SUMMARY_EXPORT="/results/summary.json" \
+    -v "$PWD/performance/k6:/scripts:ro" \
+    -v "$PWD/performance/fixtures:/fixtures:ro" \
+    -v "$PWD/performance/results/$RUN_ID:/results" \
+    grafana/k6:1.5.0 \
+    run --out json=/results/raw-k6.json /scripts/api-only.js
+```
+
+If a level fails, repeat that exact level once and repeat the immediately lower
+passing level before declaring a route-flow boundary. If 100 VUs passes, report
+tested headroom of at least 100 closed VUs rather than claiming an exact VU
+ceiling.
+
+### Measure the open route-flow ceiling
+
+For the limiting shape, let `T` be completed route flows/second at its highest
+passing closed plateau. Run rates `floor(0.75*T)`, `floor(T)`, and
+`ceil(1.25*T)`, with a minimum rate of one. Preallocate the highest passing
+closed VU count and set the maximum to twice that count. If the highest rate
+passes, increase by 25% until failure; if the lowest fails, decrease by 25%
+until one passes. Repeat the first failing rate and the immediately lower
+passing rate.
+
+**Generator k6 terminal:**
+
+```sh
+RUN_ID="<matching fresh run id>"
+PERF_API_SHAPE="<limiting shape>"
+PERF_API_RATE="<calculated flows per second>"
+PERF_API_PRE_ALLOCATED_VUS="<highest passing closed VUs>"
+PERF_API_MAX_VUS="$((PERF_API_PRE_ALLOCATED_VUS * 2))"
+PERF_API_DURATION="10m"
+mkdir -p "performance/results/$RUN_ID"
+
+docker run --rm --network host \
+    --env-file "$PERF_CREDENTIALS_FILE" \
+    -e PERF_API_BASE_URL="http://127.0.0.1:18002" \
+    -e PERF_RUN_ID="$RUN_ID" \
+    -e PERF_API_WORKLOAD="routes" \
+    -e PERF_API_SHAPE="$PERF_API_SHAPE" \
+    -e PERF_API_LOAD_MODE="open" \
+    -e PERF_API_RATE="$PERF_API_RATE" \
+    -e PERF_API_PRE_ALLOCATED_VUS="$PERF_API_PRE_ALLOCATED_VUS" \
+    -e PERF_API_MAX_VUS="$PERF_API_MAX_VUS" \
+    -e PERF_API_DURATION="$PERF_API_DURATION" \
+    -e K6_SUMMARY_EXPORT="/results/summary.json" \
+    -v "$PWD/performance/k6:/scripts:ro" \
+    -v "$PWD/performance/fixtures:/fixtures:ro" \
+    -v "$PWD/performance/results/$RUN_ID:/results" \
+    grafana/k6:1.5.0 \
+    run --out json=/results/raw-k6.json /scripts/api-only.js
+```
+
+One route flow is four HTTP requests. Any `dropped_iterations` means the
+offered flow rate failed, even when completed-request latency remains low.
+
+### Run bounded stateful session bursts
+
+For every graph shape, run separate 1-, 25-, 50-, and 100-VU bursts. In this
+mode `closed` means one complete iteration per VU, not a ten-minute loop. The
+container must be configured with `PERF_API_WORKLOAD=session` before it starts.
+
+**Generator k6 terminal:**
+
+```sh
+RUN_ID="<matching fresh run id>"
+PERF_API_SHAPE="10-chain"
+PERF_API_VUS=25
+mkdir -p "performance/results/$RUN_ID"
+
+docker run --rm --network host \
+    --env-file "$PERF_CREDENTIALS_FILE" \
+    -e PERF_API_BASE_URL="http://127.0.0.1:18002" \
+    -e PERF_RUN_ID="$RUN_ID" \
+    -e PERF_API_WORKLOAD="session" \
+    -e PERF_API_SHAPE="$PERF_API_SHAPE" \
+    -e PERF_API_LOAD_MODE="closed" \
+    -e PERF_API_VUS="$PERF_API_VUS" \
+    -e PERF_API_MAX_DURATION="10m" \
+    -e K6_SUMMARY_EXPORT="/results/summary.json" \
+    -v "$PWD/performance/k6:/scripts:ro" \
+    -v "$PWD/performance/fixtures:/fixtures:ro" \
+    -v "$PWD/performance/results/$RUN_ID:/results" \
+    grafana/k6:1.5.0 \
+    run --out json=/results/raw-k6.json /scripts/api-only.js
+```
+
+`api_completed_sessions` must equal the configured VUs. Every session creates,
+starts, answers seven or ten times, replays the final accepted answer, and
+checks completed OR status.
+
+### Export and validate API-only evidence
+
+After k6 exits, leave monitoring running and stop `api-perf` gracefully. The
+lifespan shutdown writes aggregate state and event-loop evidence to the run's
+VM result directory.
+
+**Pilot VM terminal:**
+
+```sh
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only stop -t 30 api-perf
+
+STATE_FILE="performance/results/$PERF_RUN_ID/api-only/api-only-state.json"
+test -s "$STATE_FILE"
+jq . "$STATE_FILE"
+jq -e '.yg_order_count == 0 and (.integrity_errors | length) == 0' "$STATE_FILE"
+```
+
+For `routes`, also require exactly two sessions, one active and one completed:
+
+```sh
+jq -e \
+  '.session_count == 2 and .session_status_counts == {"active":1,"completed":1}' \
+  "$STATE_FILE"
+```
+
+For `session`, require every VU to complete and the stored answer count to be
+`VUs * 7` for 3-chain or `VUs * 10` for either 10-node shape:
+
+```sh
+EXPECTED_VUS="<VU count>"
+EXPECTED_ANSWERS="<VU count multiplied by 7 or 10>"
+jq -e --argjson vus "$EXPECTED_VUS" --argjson answers "$EXPECTED_ANSWERS" \
+  '.session_count == $vus and
+   .session_status_counts == {"completed":$vus} and
+   .answer_count == $answers and
+   .unique_submission_count == $answers' \
+  "$STATE_FILE"
+```
+
+Stop VM monitoring with `Ctrl-C` only after the state file exists. Inspect the
+streamed API logs and fail the run if any application request recorded a real
+dependency operation:
+
+```sh
+LOG_FILE="performance/results/$PERF_RUN_ID/vm/compose-live.log"
+if rg '"(supabase_execute_count|r_request_count)":[1-9]' "$LOG_FILE"; then
+  echo "API-only run made a real dependency call" >&2
+  exit 1
+fi
+```
+
+Retain the k6 summary/raw points on the generator and the state summary,
+container logs, event-loop lag, Docker events, and VM samples on the pilot VM.
+Report per-operation and full-flow latency, completed flow/session counts,
+dropped iterations, API CPU/RSS, event-loop p95/p99/max lag, and generator
+headroom. One Uvicorn process can saturate one logical core while VM-wide CPU
+still appears low, so report API-container CPU separately.
+
+### Remove API-only exposure
+
+Stop the generator tunnel with `Ctrl-C`, then remove only the stopped
+performance service. This deletes its in-memory synthetic state; the exported
+evidence remains under `performance/results/`.
+
+**Pilot VM terminal:**
+
+```sh
+docker compose -f compose.yaml -f performance/compose.loopback.yaml \
+  --profile api-only rm -f api-perf
+ss -ltn '( sport = :18002 )'
+docker compose -f compose.yaml ps
+docker compose -f compose.yaml exec -T api python -c \
+  'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=3).read()'
+```
+
+Port `18002` must have no listener, and the normal deployment must remain
+healthy. Do not delete the derived image until the full API-only comparison
+matrix and any required reruns are complete.
+
 ## Abort immediately when
 
 - any integrity check fails;

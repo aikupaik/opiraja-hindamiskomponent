@@ -77,7 +77,7 @@ Capacity is the highest repeatable 10-minute plateau that meets all of these:
 | Static edge | Admin/player HTML and hashed assets through public HTTPS | 1, 25, and 100 clients; measure TLS, Nginx, caching, bytes, and edge errors |
 | R only | Recorded `model`, `select`, and `advance` payloads | 3-node chain, 10-node chain, and 10-node relation-free graphs at concurrency 1, 2, 4, 8, and 16; identify R CPU/serialization/queueing limits |
 | Supabase only | Existing repository operations against run-owned data | Concurrency 1-32; measure graph/session reads, per-node inventory listing, sequential pool loads, answer commits, unique-item telemetry, and same-item telemetry contention |
-| API only | One Uvicorn worker with deterministic in-memory repository and R fake | Measure JWT validation, DTO processing, serialization, middleware, and event-loop overhead without network dependencies |
+| API only | A derived, loopback-only service with one Uvicorn worker, deterministic in-memory repository, and KST fake | Run sustained four-route closed/open ceilings plus bounded 1/25/50/100-session bursts for every graph shape; measure JWT validation, DTO processing, serialization, middleware, logging, event-loop lag, and state integrity without network dependencies |
 | API to R | Real API and R with deterministic repository | Concurrency 1, 2, 4, 5, 8, and 16; locate R connection-pool waiting and `503` onset |
 | API to Supabase | Real API/repository with deterministic R fake | Vary graph and pool size; quantify Supabase amplification and the completion-review N+1 behavior |
 | Pilot rehearsal | Full public HTTPS flow with unique sessions, valid player tokens, random valid answers, and 4-9 second think time | Admit 100 students over the rehearsal while limiting active concurrency to 25 |
@@ -90,6 +90,14 @@ The realistic model uses closed virtual users because students wait for each
 answer before sending the next. Stateless component ceilings additionally use
 open arrival-rate scenarios and report `dropped_iterations` so slow responses
 cannot hide incoming demand.
+
+The API-only sustained flow reuses one active and one completed setup session,
+preventing an ever-growing in-memory store from distorting ten-minute route
+plateaus. Complete stateful sessions are tested separately as one iteration per
+VU. The service is derived from the exact production API image but runs beside
+the normal stack on a separate network and VM-loopback port; its result is a
+single-worker API ceiling, not pilot capacity. Supabase-only remains a pending
+independent stage even if API-only is executed first.
 
 ## Measurement and Diagnosis
 
@@ -131,7 +139,8 @@ cannot hide incoming demand.
 ## Verification and Defaults
 
 - Validate k6 scripts, fixture determinism, cleanup refusal/dry-run behavior,
-  Compose configuration, and loopback-only port exposure.
+  Compose configuration, derived API image lineage, shutdown integrity export,
+  and loopback-only port exposure.
 - Run the full backend test suite and `python -m pyright`; run affected frontend
   checks with `npm run lint` if TypeScript changes become necessary.
 - Smoke-test every scenario at one user before creating volume, and rehearse the

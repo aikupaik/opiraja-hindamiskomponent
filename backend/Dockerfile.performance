@@ -1,0 +1,12 @@
+ARG API_BASE_IMAGE=opiraja-assessment-api:local
+FROM ${API_BASE_IMAGE}
+
+COPY --chown=app:app backend/performance_api ./performance_api
+COPY --chown=app:app backend/tests/__init__.py ./tests/__init__.py
+COPY --chown=app:app backend/tests/fakes/__init__.py ./tests/fakes/__init__.py
+COPY --chown=app:app backend/tests/fakes/assessment_repository.py \
+    ./tests/fakes/assessment_repository.py
+COPY --chown=app:app backend/tests/fakes/kst_engine.py ./tests/fakes/kst_engine.py
+COPY --chown=app:app performance/fixtures/r /performance/fixtures/r
+
+CMD ["uvicorn", "performance_api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--no-access-log"]
