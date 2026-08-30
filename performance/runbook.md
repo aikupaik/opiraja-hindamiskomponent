@@ -552,7 +552,7 @@ sudo bash performance/bin/monitor-vm.sh "$RUN_ID" api-only
 **Generator tunnel terminal:**
 
 ```sh
-PILOT_SSH_HOST="<ssh-user>@<pilot-vm-vpn-address-or-hostname>"
+PILOT_SSH_HOST="ubuntu@193.40.157.124"
 ssh -N -T \
   -o ExitOnForwardFailure=yes \
   -o ServerAliveInterval=30 \
