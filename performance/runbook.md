@@ -484,7 +484,15 @@ results. Supply it to Docker with `--env-file`, never with a command-line
 **Generator terminal:**
 
 ```sh
-PERF_CREDENTIALS_FILE="/secure/path/api-only-k6.env"
+PERF_CREDENTIALS_FILE=~/dev/api-only-k6.env
+umask 077
+
+backend/.venv/bin/python .tmp/generate_or_jwt.py \
+  --lifetime-seconds 900 \
+  --write-env-file "$PERF_CREDENTIALS_FILE"
+
+chmod 600 "$PERF_CREDENTIALS_FILE"
+
 test -f "$PERF_CREDENTIALS_FILE"
 chmod 600 "$PERF_CREDENTIALS_FILE"
 ```
