@@ -12,32 +12,6 @@ normalize_probability_vector <- function(probabilities) {
   unname(probabilities / sum(probabilities))
 }
 
-select_half_split_index <- function(posterior, matrix) {
-  distances <- abs(as.numeric(crossprod(posterior, matrix)) - 0.5)
-  minimum <- min(distances)
-  candidates <- which(
-    abs(distances - minimum) <= .Machine$double.eps^0.5
-  )
-  as.integer(candidates[[1L]])
-}
-
-select_half_split_node <- function(posterior, matrix, nodes) {
-  nodes[[select_half_split_index(posterior, matrix)]]
-}
-
-update_posterior <- function(posterior, matrix, beta, eta, question_index,
-                             response_correct) {
-  updated <- kstMatrix::kmassessbayesian(
-    unname(as.numeric(posterior)),
-    matrix,
-    unname(as.numeric(beta)),
-    unname(as.numeric(eta)),
-    as.integer(question_index),
-    as.integer(response_correct)
-  )
-  normalize_probability_vector(updated)
-}
-
 select_candidate <- function(posterior, matrix, nodes, candidates) {
   candidate_nodes <- vapply(candidates, `[[`, character(1), "node")
   candidate_columns <- match(candidate_nodes, nodes)

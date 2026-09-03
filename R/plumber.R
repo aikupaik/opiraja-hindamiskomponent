@@ -37,8 +37,6 @@ for (source_file in c(
 }
 
 create_kst_router <- function(
-    model_operation = create_model_response,
-    advance_operation = advance_assessment,
     model_operation_v2 = create_model_response_v2,
     select_operation_v2 = select_assessment_candidate_v2,
     advance_operation_v2 = advance_assessment_v2,
@@ -66,27 +64,9 @@ create_kst_router <- function(
   )
   router <- plumber::pr_post(
     router,
-    "/internal/v1/kst/model",
-    function(req, res) {
-      handle_http_operation(req, res, model_operation)
-    },
-    serializer = json_serializer,
-    parsers = "kst_raw_json"
-  )
-  router <- plumber::pr_post(
-    router,
     "/internal/v2/kst/configuration/validate",
     function(req, res) {
       handle_http_operation(req, res, validate_configuration_operation)
-    },
-    serializer = json_serializer,
-    parsers = "kst_raw_json"
-  )
-  router <- plumber::pr_post(
-    router,
-    "/internal/v1/kst/advance",
-    function(req, res) {
-      handle_http_operation(req, res, advance_operation)
     },
     serializer = json_serializer,
     parsers = "kst_raw_json"

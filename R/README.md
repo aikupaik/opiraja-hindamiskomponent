@@ -71,23 +71,6 @@ SHA-256 digest of the exact canonical file bytes.
 
 ## Internal API contract
 
-`contracts/internal-kst-v1.openapi.json` defines the stateless internal
-legacy boundary and remains frozen:
-
-- `GET /health`
-- `POST /internal/v1/kst/model`
-- `POST /internal/v1/kst/advance`
-
-HTTP node references are strings. One-based matrix column indices stay inside
-R. Validation failures use HTTP 422 and unexpected failures use HTTP 500, both
-with `{"error":{"code","message","details"}}`.
-
-The English profile mapping is frozen in the contract and tests. One
-production behavior intentionally differs from the characterized prototype:
-`kmassesshalfsplit()` randomly samples exact ties, while the internal contract
-selects the first tied node in declared node order for reproducible sessions.
-The legacy fixture therefore stores the complete allowed-node set for ties.
-
 `contracts/internal-kst-v2.openapi.json` defines the candidate-aware boundary:
 
 - `POST /internal/v2/kst/model` builds the graph model and returns the
@@ -116,9 +99,8 @@ võimaldab hiljem võrrelda katseid ja kontrollida, kas tulemuste erinevus võis
 tuleneda seadistuse muutmisest. Parameetri muutmine mõjutab tulevikus uusi
 teste; juba alanud testi juures tuleb säilitada selle algne seadistus ja räsi.
 
-Fail `contracts/internal-kst-v1.openapi.json` kirjeldab külmutatud pärand-
-andmevahetust. Fail `contracts/internal-kst-v2.openapi.json` kirjeldab uute
-sessioonide kandidaaditeadlikku R-arvutusteenuse
+Fail `contracts/internal-kst-v2.openapi.json` kirjeldab
+kandidaaditeadlikku R-arvutusteenuse
 andmevahetust. Mudeli päring võtab vastu järjestatud sõlmed, eeldusseosed ja
 tagastab teadmusruumi, ühtlase priorjaotuse ja tuletatud peatamispiirid.
 Valiku päring saab ainult kasutamata ülesandekandidaadid. Edasiliikumise päring
@@ -126,7 +108,5 @@ kasutab vastatud konkreetse ülesande vea- ja äraarvamisparameetreid ning
 tagastab järgmise kandidaadi või lõpp-profiili.
 
 Leping fikseerib ka ingliskeelsed väljanimed ja veavastuste kuju. Täpsete
-poolitusviikide korral valib tulevane teenus deklareeritud sõlmejärjestuses
-esimese kandidaadi, mis teeb hindamissessioonid korratavaks; pärandkoodi
-juhuslik viigikäitumine on võrdlusandmetes säilitatud lubatud kandidaatide
-hulgana.
+poolitusviikide korral valib teenus deklareeritud kandidaadijärjestuses esimese
+kandidaadi, mis teeb hindamissessioonid korratavaks.

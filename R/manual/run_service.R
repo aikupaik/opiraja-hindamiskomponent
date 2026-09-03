@@ -40,20 +40,19 @@ sys.source(
   envir = service_environment
 )
 
-model_operation <- if (nzchar(configuration_path)) {
+model_operation_v2 <- if (nzchar(configuration_path)) {
   function(request) {
-    service_environment$create_model_response(
+    service_environment$create_model_response_v2(
       request,
       configuration_path = configuration_path
     )
   }
 } else {
-  service_environment$create_model_response
+  service_environment$create_model_response_v2
 }
 
 router <- service_environment$create_kst_router(
-  model_operation = model_operation,
-  advance_operation = service_environment$advance_assessment
+  model_operation_v2 = model_operation_v2
 )
 
 request_counter <- 0L

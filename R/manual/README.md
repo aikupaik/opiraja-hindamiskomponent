@@ -55,9 +55,6 @@ answers without reusing candidates. The small example inventory deliberately
 demonstrates explicit `item_inventory_exhausted` completion. Every JSON
 response is printed with `jq`.
 
-The original v1 characterization demo remains available as
-`R/manual/demo.sh`.
-
 If the service uses another port:
 
 ```sh
@@ -88,10 +85,9 @@ curl --silent \
   http://127.0.0.1:8001/internal/v2/kst/model | jq .
 ```
 
-For v2, pass the returned model and posterior to `/internal/v2/kst/select`
-with `R/manual/candidates-v2.json`. Advancement also includes the concrete
-administered descriptor and the ordered remaining candidates. The existing
-`demo.sh` remains the frozen v1 characterization demo.
+Pass the returned model and posterior to `/internal/v2/kst/select` with
+`R/manual/candidates-v2.json`. Advancement also includes the concrete
+administered descriptor and the ordered remaining candidates.
 
 ## Try alternate KST parameters
 

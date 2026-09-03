@@ -134,7 +134,7 @@ testthat::test_that("v2 rejects foreign and duplicate candidates", {
   )
 })
 
-testthat::test_that("v2 OpenAPI declares exactly three candidate operations", {
+testthat::test_that("v2 OpenAPI declares all internal operations", {
   contract <- jsonlite::fromJSON(
     file.path(test_root, "R", "contracts", "internal-kst-v2.openapi.json"),
     simplifyVector = FALSE
@@ -142,6 +142,7 @@ testthat::test_that("v2 OpenAPI declares exactly three candidate operations", {
   testthat::expect_setequal(
     names(contract$paths),
     c(
+      "/internal/v2/kst/configuration/validate",
       "/internal/v2/kst/model",
       "/internal/v2/kst/select",
       "/internal/v2/kst/advance"
