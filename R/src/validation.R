@@ -347,6 +347,43 @@ validate_matrix <- function(value, nodes, states, field = "model.matrix") {
   details
 }
 
+validate_matrix_structure <- function(value, nodes, state_count,
+                                      field = "model.matrix") {
+  if (!is_array(value) || length(value) == 0L) {
+    return(list(detail(field, "must be a non-empty array")))
+  }
+  details <- list()
+  expected_columns <- length(nodes)
+  for (row_index in seq_along(value)) {
+    path <- sprintf("%s[%d]", field, row_index)
+    row <- value[[row_index]]
+    if (!is_array(row)) {
+      details[[length(details) + 1L]] <- detail(path, "must be an array")
+      next
+    }
+    if (length(row) != expected_columns) {
+      details[[length(details) + 1L]] <- detail(
+        path, sprintf("must contain exactly %d values", expected_columns)
+      )
+      next
+    }
+    binary <- vapply(row, function(item) {
+      is_scalar_integer(item) && item %in% c(0, 1)
+    }, logical(1))
+    if (!all(binary)) {
+      details[[length(details) + 1L]] <- detail(
+        path, "must contain only binary integers"
+      )
+    }
+  }
+  if (length(value) != state_count) {
+    details[[length(details) + 1L]] <- detail(
+      field, "row count must match knowledge_states"
+    )
+  }
+  details
+}
+
 validate_persisted_model <- function(model) {
   required <- c(
     "schema_version", "method", "nodes", "knowledge_states", "matrix",
@@ -528,14 +565,16 @@ validate_model_request_v2 <- function(request) {
   )
 }
 
-validate_persisted_model_v2 <- function(model) {
+compile_persisted_model_v2 <- function(model) {
   required <- c(
     "schema_version", "method", "nodes", "knowledge_states", "matrix",
     "uniform_prior", "configuration", "configuration_hash",
     "reliability_floor", "safety_cap"
   )
   details <- validate_object_fields(model, "model", required)
-  if (length(details) > 0L) return(details)
+  if (length(details) > 0L) {
+    return(list(details = details, model = NULL, matrix = NULL))
+  }
   if (!is_scalar_integer(model$schema_version) || model$schema_version != 2) {
     details[[length(details) + 1L]] <- detail(
       "model.schema_version", "must equal 2"
@@ -550,18 +589,25 @@ validate_persisted_model_v2 <- function(model) {
     model$nodes, "model.nodes", unique = TRUE
   )
   details <- c(details, node_details)
-  if (length(node_details) > 0L) return(details)
+  if (length(node_details) > 0L) {
+    return(list(details = details, model = NULL, matrix = NULL))
+  }
   nodes <- unlist(model$nodes, use.names = FALSE)
   state_details <- validate_knowledge_states(
     model$knowledge_states, nodes, field = "model.knowledge_states"
   )
   details <- c(details, state_details)
-  if (length(state_details) > 0L) return(details)
+  if (length(state_details) > 0L) {
+    return(list(details = details, model = NULL, matrix = NULL))
+  }
   states <- lapply(
     model$knowledge_states,
     function(state) as.character(unlist(state, use.names = FALSE))
   )
-  details <- c(details, validate_matrix(model$matrix, nodes, states))
+  state_matrix <- knowledge_states_matrix(states, nodes)
+  details <- c(details, validate_matrix_structure(
+    model$matrix, nodes, nrow(state_matrix)
+  ))
   details <- c(details, validate_probability_array(
     model$uniform_prior,
     "model.uniform_prior",
@@ -616,19 +662,34 @@ validate_persisted_model_v2 <- function(model) {
       )
     }
   }
-  details
+  if (length(details) > 0L) {
+    return(list(details = details, model = NULL, matrix = NULL))
+  }
+  list(
+    details = list(),
+    model = normalize_persisted_model_v2(model, nodes, states),
+    matrix = state_matrix
+  )
 }
 
-normalize_persisted_model_v2 <- function(model) {
+validate_persisted_model_v2 <- function(model) {
+  compile_persisted_model_v2(model)$details
+}
+
+normalize_persisted_model_v2 <- function(model, nodes = NULL, states = NULL) {
   model$schema_version <- as.integer(model$schema_version)
-  model$nodes <- unlist(model$nodes, use.names = FALSE)
-  model$knowledge_states <- lapply(
-    model$knowledge_states,
-    function(state) as.character(unlist(state, use.names = FALSE))
-  )
-  model$matrix <- lapply(model$matrix, function(row) {
-    as.integer(unlist(row, use.names = FALSE))
-  })
+  model$nodes <- if (is.null(nodes)) {
+    unlist(model$nodes, use.names = FALSE)
+  } else {
+    nodes
+  }
+  model$knowledge_states <- if (is.null(states)) {
+    lapply(model$knowledge_states, function(state) {
+      as.character(unlist(state, use.names = FALSE))
+    })
+  } else {
+    states
+  }
   model$uniform_prior <- unname(as.numeric(unlist(
     model$uniform_prior, use.names = FALSE
   )))
@@ -698,16 +759,16 @@ validate_candidates_v2 <- function(value, field, nodes, non_empty = TRUE) {
 }
 
 validate_model_and_posterior_v2 <- function(request) {
-  model_details <- validate_persisted_model_v2(request$model)
-  if (length(model_details) > 0L) throw_validation(model_details)
-  model <- normalize_persisted_model_v2(request$model)
+  compiled <- compile_persisted_model_v2(request$model)
+  if (length(compiled$details) > 0L) throw_validation(compiled$details)
+  model <- compiled$model
   details <- validate_probability_array(
     request$posterior,
     "posterior",
     expected_length = length(model$knowledge_states),
     normalized = TRUE
   )
-  list(model = model, details = details)
+  list(model = model, matrix = compiled$matrix, details = details)
 }
 
 validate_select_request_v2 <- function(request) {
@@ -721,6 +782,7 @@ validate_select_request_v2 <- function(request) {
   throw_validation(c(common$details, candidates$details))
   list(
     model = common$model,
+    matrix = common$matrix,
     posterior = unname(as.numeric(unlist(
       request$posterior, use.names = FALSE
     ))),
@@ -776,6 +838,7 @@ validate_advance_request_v2 <- function(request) {
   throw_validation(details)
   list(
     model = common$model,
+    matrix = common$matrix,
     posterior = unname(as.numeric(unlist(
       request$posterior, use.names = FALSE
     ))),

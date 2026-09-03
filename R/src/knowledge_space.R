@@ -22,6 +22,31 @@ state_key <- function(state) {
   paste(state, collapse = "\u001f")
 }
 
+states_follow_canonical_order <- function(states, nodes) {
+  if (length(states) < 2L) return(TRUE)
+
+  for (index in 2:length(states)) {
+    previous <- states[[index - 1L]]
+    current <- states[[index]]
+    previous_size <- length(previous)
+    current_size <- length(current)
+
+    if (previous_size > current_size) return(FALSE)
+    if (previous_size < current_size) next
+
+    previous_positions <- match(previous, nodes)
+    current_positions <- match(current, nodes)
+    differences <- which(previous_positions != current_positions)
+    if (length(differences) == 0L) return(FALSE)
+    first_difference <- differences[[1L]]
+    if (previous_positions[[first_difference]] >
+        current_positions[[first_difference]]) {
+      return(FALSE)
+    }
+  }
+  TRUE
+}
+
 validate_knowledge_states <- function(states, nodes, relations = NULL,
                                       field = "cached_knowledge_states") {
   details <- list()
@@ -68,12 +93,7 @@ validate_knowledge_states <- function(states, nodes, relations = NULL,
   }
 
   if (length(details) == 0L) {
-    all_subsets <- generate_knowledge_states(nodes, list())
-    ranks <- match(
-      vapply(normalized, state_key, character(1)),
-      vapply(all_subsets, state_key, character(1))
-    )
-    if (is.unsorted(ranks, strictly = TRUE)) {
+    if (!states_follow_canonical_order(normalized, nodes)) {
       add(field, "states must follow canonical declared-node ordering")
     }
   }

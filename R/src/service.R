@@ -95,7 +95,7 @@ select_assessment_candidate_v2 <- function(request) {
   validated <- validate_select_request_v2(request)
   selected <- select_candidate(
     validated$posterior,
-    model_matrix(validated$model),
+    validated$matrix,
     validated$model$nodes,
     validated$candidates
   )
@@ -105,7 +105,7 @@ select_assessment_candidate_v2 <- function(request) {
 advance_assessment_v2 <- function(request) {
   validated <- validate_advance_request_v2(request)
   model <- validated$model
-  matrix <- model_matrix(model)
+  matrix <- validated$matrix
   posterior <- update_posterior_for_candidate(
     validated$posterior,
     matrix,

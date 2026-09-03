@@ -79,6 +79,35 @@ testthat::test_that("v2 uses concrete parameters and exhausts explicitly", {
   testthat::expect_false(isTRUE(all.equal(
     result$posterior, changed_result$posterior
   )))
+
+  inconsistent_matrix <- request
+  inconsistent_matrix$model$matrix[[1L]] <- list(1L, 1L)
+  testthat::expect_identical(
+    advance_assessment_v2(inconsistent_matrix), result
+  )
+})
+
+testthat::test_that("v2 still rejects structurally invalid matrix payloads", {
+  built <- v2_built_json()
+  request <- list(
+    model = built$model,
+    posterior = built$posterior,
+    candidates = v2_candidates()
+  )
+
+  ragged <- request
+  ragged$model$matrix[[1L]] <- list(0L)
+  testthat::expect_error(
+    select_assessment_candidate_v2(ragged),
+    class = "kst_validation_error"
+  )
+
+  non_binary <- request
+  non_binary$model$matrix[[1L]][[1L]] <- 2L
+  testthat::expect_error(
+    select_assessment_candidate_v2(non_binary),
+    class = "kst_validation_error"
+  )
 })
 
 testthat::test_that("v2 rejects foreign and duplicate candidates", {

@@ -88,6 +88,38 @@ testthat::test_that("cached-state validation rejects structural corruption", {
   }
 })
 
+testthat::test_that("canonical state ordering is checked without subset ranks", {
+  nodes <- c("A", "B", "C")
+  ordered <- list(
+    character(), "A", "B", "C", c("A", "B"), c("A", "C"),
+    c("B", "C"), nodes
+  )
+  out_of_order <- ordered
+  out_of_order[[5L]] <- c("A", "C")
+  out_of_order[[6L]] <- c("A", "B")
+
+  testthat::expect_true(states_follow_canonical_order(ordered, nodes))
+  testthat::expect_false(states_follow_canonical_order(out_of_order, nodes))
+
+  validation_environment <- environment(validate_knowledge_states)
+  original_generator <- get(
+    "generate_knowledge_states", envir = validation_environment
+  )
+  assign(
+    "generate_knowledge_states",
+    function(...) stop("subset generation should not be needed"),
+    envir = validation_environment
+  )
+  on.exit(assign(
+    "generate_knowledge_states", original_generator,
+    envir = validation_environment
+  ), add = TRUE)
+  testthat::expect_identical(
+    validate_knowledge_states(lapply(ordered, as.list), nodes),
+    list()
+  )
+})
+
 testthat::test_that("persisted model validation rejects inconsistent data", {
   response <- create_model_response(fixture_model_request())
   model <- jsonlite::fromJSON(
