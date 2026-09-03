@@ -1,6 +1,6 @@
 # API-only performance test log
 
-Last updated: 2026-08-28
+Last updated: 2026-08-30
 
 ## Purpose and isolation
 
@@ -52,6 +52,19 @@ Local verification result: 139 backend tests passed, one opt-in contract test
 was skipped, Pyright reported zero errors, the Compose model validated, and k6
 1.5 successfully inspected route closed/open and stateful closed scenarios.
 
-No pilot-VM API-only capacity run has been performed yet. Execute and record
-the matrix using the **API-only component test** section of
-`performance/runbook.md`.
+## Pilot-VM route plateau results
+
+On 2026-08-30, the `3-chain` routes workload completed 10-minute closed-VU
+plateaus at 25 and 100 VUs. Both runs had zero dropped iterations, zero
+unexpected failures, zero integrity failures, and all checks passed.
+
+| VUs | Completed flows | Flow rate | Flow p95 / p99 |
+| ---: | ---: | ---: | ---: |
+| 25 | 59,040 | 98.2/s | 444 ms / 610 ms |
+| 100 | 66,839 | 111.1/s | 1,058 ms / 1,154 ms |
+
+The API-only container was the bottleneck: average CPU was 89.6% at 25 VUs
+and 97.0% at 100 VUs, with peaks above 140%. VM-wide CPU and memory remained
+well below saturation. This indicates single-worker/container CPU saturation,
+not a VM or generator resource limit; do not interpret these API-only results
+as full pilot capacity.
