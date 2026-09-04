@@ -338,6 +338,8 @@ The Supabase mapping layer is the only production module that knows the
 Estonian table and column names. It maps the domain to:
 
 - `graafid_kst` for normalized graphs and cached knowledge states;
+- `kst_model_cache` for immutable complete KST models keyed by graph hash,
+  configuration hash, and model schema version;
 - `testisessioonid` for session, model, player state, and final profile;
 - `ylesandepank` for usable items, answer keys, BLIM parameters, and usage
   telemetry;

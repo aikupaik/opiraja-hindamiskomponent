@@ -21,12 +21,16 @@ FilterValue: TypeAlias = str | int | bool
 Filters: TypeAlias = dict[str, FilterValue]
 
 GRAPH_TABLE = "graafid_kst"
+KST_MODEL_CACHE_TABLE = "kst_model_cache"
 SESSION_TABLE = "testisessioonid"
 ITEM_TABLE = "ylesandepank"
 ANSWER_TABLE = "tulemustepank"
 YG_ORDER_TABLE = "yg_tellimused"
 
 GRAPH_COLUMNS = "graaf_hash,graafi_struktuur,teadmusruum_maatriks,loodud"
+KST_MODEL_CACHE_COLUMNS = (
+    "graph_hash,configuration_hash,model_schema_version,model_payload,created_at"
+)
 SESSION_COLUMNS = (
     "test_id,kasutaja_id,rada_id,graaf_hash,staatus,alustatud,"
     "lopp_profiil,testi_loogika,metoodika,tp_seisund,eesmark"
@@ -61,6 +65,7 @@ CURRENT_SUBMISSION_PATH = "tp_seisund->current_question->>submission_id"
 YG_ORDER_ID_COLUMN = "id"
 YG_ORDER_STATUS_COLUMN = "staatus"
 GRAPH_CONFLICT_COLUMN = GRAPH_HASH_COLUMN
+KST_MODEL_CACHE_CONFLICT_COLUMNS = "graph_hash,configuration_hash,model_schema_version"
 ITEM_ORDER_COLUMN = ITEM_ID_COLUMN
 YG_ORDER_ORDER_COLUMN = YG_ORDER_ID_COLUMN
 
@@ -236,6 +241,56 @@ def decode_graph_entry(row: Row) -> GraphCacheEntry:
             for value in _sequence(row, "teadmusruum_maatriks")
         ),
         created_at=_optional_datetime(row, "loodud"),
+    )
+
+
+def kst_model_cache_filters(graph_hash: str, configuration_hash: str) -> Filters:
+    return {
+        "graph_hash": graph_hash,
+        "configuration_hash": configuration_hash,
+        "model_schema_version": KST_MODEL_SCHEMA_VERSION,
+    }
+
+
+def encode_kst_model_cache_entry(entry: KstModelCacheEntry) -> EncodedRow:
+    if entry.model.schema_version != KST_MODEL_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            "unsupported cached KST model schema version: "
+            f"{entry.model.schema_version}"
+        )
+    if entry.model.configuration_hash != entry.configuration_hash:
+        raise RepositoryDataError(
+            "cached KST model configuration hash does not match cache key"
+        )
+    return {
+        "graph_hash": entry.graph_hash,
+        "configuration_hash": entry.configuration_hash,
+        "model_schema_version": entry.model.schema_version,
+        "model_payload": encode_kst_model(entry.model),
+    }
+
+
+def decode_kst_model_cache_entry(row: Row) -> KstModelCacheEntry:
+    schema_version = _integer(row, "model_schema_version")
+    if schema_version != KST_MODEL_SCHEMA_VERSION:
+        raise RepositoryDataError(
+            f"unsupported cached KST model schema version: {schema_version}"
+        )
+    model = decode_kst_model(_mapping(row, "model_payload"))
+    if not isinstance(model, KstModel):
+        raise RepositoryDataError("cached KST model must use the current schema")
+    configuration_hash = _string(row, "configuration_hash")
+    if model.schema_version != schema_version:
+        raise RepositoryDataError("cached KST model schema version does not match key")
+    if model.configuration_hash != configuration_hash:
+        raise RepositoryDataError(
+            "cached KST model configuration hash does not match cache key"
+        )
+    return KstModelCacheEntry(
+        graph_hash=_string(row, "graph_hash"),
+        configuration_hash=configuration_hash,
+        model=model,
+        created_at=_optional_datetime(row, "created_at"),
     )
 
 

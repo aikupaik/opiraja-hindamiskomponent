@@ -208,6 +208,16 @@ class KstModel:
 
 
 @dataclass(frozen=True, slots=True)
+class KstModelCacheEntry:
+    """An immutable complete KST model keyed by graph and configuration."""
+
+    graph_hash: str
+    configuration_hash: str
+    model: KstModel
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class LegacyKstModel:
     """Readable v1 model retained only for completed historical sessions."""
 

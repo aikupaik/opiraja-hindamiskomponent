@@ -24,7 +24,7 @@ Supabase INSERT webhook → existing YG Edge Function → ylesandepank
 ### FastAPI backend
 
 - Use English code, DTOs, routes, and comments; map existing Estonian database names in one Supabase repository adapter.
-- Define one asynchronous, domain-focused `AssessmentRepository` interface rather than generic CRUD. Its Supabase implementation covers graph caching, sessions, item-bank access, YG orders, results, and idempotent answer commits.
+- Define one asynchronous, domain-focused `AssessmentRepository` interface rather than generic CRUD. Its Supabase implementation covers graph and immutable built-model caching, sessions, item-bank access, YG orders, results, and idempotent answer commits.
 - Use `async def` FastAPI route and service functions with Supabase's official `AsyncClient`. Create one shared client during application lifespan with `await acreate_client(...)`, await all database operations, and close its initialized async transports during shutdown.
 - Pin the stable Python package `supabase==2.31.0`; do not adopt the `3.0.0a1` prerelease during the pilot. [PyPI package metadata](https://pypi.org/project/supabase/2.31.0/)
 - Use one lifespan-managed `httpx.AsyncClient` for R calls, with explicit connection, read, write, and pool timeouts. Bound its connection pool with the single backend setting `R_MAX_CONNECTIONS` (default `4`) and keep no more idle connections than that limit. [HTTPX resource-limit documentation](https://www.python-httpx.org/advanced/resource-limits/)

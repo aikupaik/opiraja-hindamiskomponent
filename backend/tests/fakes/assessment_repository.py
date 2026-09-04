@@ -19,6 +19,8 @@ from app.domain.models import (
     GraphCacheEntry,
     ItemId,
     is_domain_valid_usable_item,
+    KST_MODEL_SCHEMA_VERSION,
+    KstModelCacheEntry,
     PlayerState,
     SessionStatus,
     SubmissionId,
@@ -43,6 +45,7 @@ class InMemoryAssessmentRepository:
         self._lock = asyncio.Lock()
         self._record_calls = record_calls
         self._graphs: dict[str, GraphCacheEntry] = {}
+        self._kst_models: dict[tuple[str, str, int], KstModelCacheEntry] = {}
         self._sessions: dict[TestId, AssessmentSession] = {}
         self._items: dict[ItemId, AssessmentItem] = {}
         self._yg_orders: dict[TestId, list[YgOrder]] = {}
@@ -66,6 +69,27 @@ class InMemoryAssessmentRepository:
             self._record("insert_cached_graph_if_absent", entry)
             self._raise_injected("insert_cached_graph_if_absent")
             canonical = self._graphs.setdefault(entry.graph_hash, deepcopy(entry))
+            return deepcopy(canonical)
+
+    async def get_cached_kst_model(
+        self, graph_hash: str, configuration_hash: str
+    ) -> KstModelCacheEntry | None:
+        async with self._lock:
+            self._record("get_cached_kst_model", graph_hash, configuration_hash)
+            self._raise_injected("get_cached_kst_model")
+            entry = self._kst_models.get(
+                (graph_hash, configuration_hash, KST_MODEL_SCHEMA_VERSION)
+            )
+            return deepcopy(entry)
+
+    async def insert_cached_kst_model_if_absent(
+        self, entry: KstModelCacheEntry
+    ) -> KstModelCacheEntry:
+        async with self._lock:
+            self._record("insert_cached_kst_model_if_absent", entry)
+            self._raise_injected("insert_cached_kst_model_if_absent")
+            key = (entry.graph_hash, entry.configuration_hash, entry.model.schema_version)
+            canonical = self._kst_models.setdefault(key, deepcopy(entry))
             return deepcopy(canonical)
 
     async def create_session(self, session: AssessmentSession) -> AssessmentSession:
@@ -357,6 +381,12 @@ class InMemoryAssessmentRepository:
         async with self._lock:
             self._graphs[entry.graph_hash] = deepcopy(entry)
 
+    async def seed_kst_model(self, entry: KstModelCacheEntry) -> None:
+        async with self._lock:
+            self._kst_models[
+                (entry.graph_hash, entry.configuration_hash, entry.model.schema_version)
+            ] = deepcopy(entry)
+
     async def seed_session(self, session: AssessmentSession) -> None:
         async with self._lock:
             self._sessions[session.test_id] = deepcopy(session)
@@ -393,6 +423,10 @@ class InMemoryAssessmentRepository:
     @property
     def graph_snapshot(self) -> dict[str, GraphCacheEntry]:
         return deepcopy(self._graphs)
+
+    @property
+    def kst_model_snapshot(self) -> dict[tuple[str, str, int], KstModelCacheEntry]:
+        return deepcopy(self._kst_models)
 
     @property
     def session_snapshot(self) -> dict[TestId, AssessmentSession]:

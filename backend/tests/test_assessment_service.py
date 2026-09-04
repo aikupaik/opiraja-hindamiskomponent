@@ -3,9 +3,12 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import cast
+from uuid import UUID
 
 import pytest
 
+from app.admin.kst_configuration import KstConfigurationVersion
+from app.admin.kst_configuration import KstConfigurationRepository
 from app.domain.models import *
 from app.services.assessment import (
     AssessmentConflict,
@@ -37,8 +40,42 @@ def _built() -> ModelBuildResult:
 def _service(
     repository: InMemoryAssessmentRepository,
     engine: FakeKstEngine,
+    configuration_repository: KstConfigurationRepository | None = None,
 ) -> AssessmentService:
-    return AssessmentService(repository, engine, max_graph_nodes=10)
+    return AssessmentService(
+        repository,
+        engine,
+        max_graph_nodes=10,
+        configuration_repository=configuration_repository,
+    )
+
+
+class _ActiveConfigurationRepository:
+    def __init__(self, model: KstModel) -> None:
+        self._active = KstConfigurationVersion(
+            id=UUID("00000000-0000-4000-8000-000000000001"),
+            schema_version=model.configuration.schema_version,
+            configuration={
+                "schema_version": model.configuration.schema_version,
+                "stop_confidence": model.configuration.stop_confidence,
+                "feedback_credible_mass": model.configuration.feedback_credible_mass,
+                "reliability_floor": {
+                    "minimum": model.configuration.reliability_floor.minimum,
+                    "multiplier": model.configuration.reliability_floor.multiplier,
+                    "maximum": model.configuration.reliability_floor.maximum,
+                },
+                "safety_cap": {
+                    "minimum_above_floor": model.configuration.safety_cap.responses_above_floor,
+                    "node_multiplier": model.configuration.safety_cap.node_multiplier,
+                },
+            },
+            configuration_hash=model.configuration_hash,
+            created_by="test",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+    async def get_active_configuration(self) -> KstConfigurationVersion:
+        return self._active
 
 
 def _items(node: str, start: int, amount: int) -> tuple[AssessmentItem, ...]:
@@ -46,6 +83,28 @@ def _items(node: str, start: int, amount: int) -> tuple[AssessmentItem, ...]:
         make_item(ItemId(start + index), node=node)
         for index in range(amount)
     )
+
+
+@pytest.mark.asyncio
+async def test_reuses_complete_model_for_same_graph_and_active_configuration() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_items(*_items("A", 1, 3), *_items("B", 20, 3))
+    built = _built()
+    engine = FakeKstEngine(model_results=(built,))
+    service = _service(
+        repository,
+        engine,
+        cast(KstConfigurationRepository, _ActiveConfigurationRepository(built.model)),
+    )
+
+    await service.create_assessment(_command())
+    await service.create_assessment(
+        replace(_command(), nodes=("B", "A"), relations=(GraphRelation("A", "B"),))
+    )
+
+    assert [call.method for call in engine.calls].count("build_model") == 1
+    assert len(repository.kst_model_snapshot) == 1
+    assert repository.method_counts["get_cached_graph"] == 1
 
 
 @pytest.mark.asyncio

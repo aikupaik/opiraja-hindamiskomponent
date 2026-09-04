@@ -14,6 +14,7 @@ from app.domain.models import (
     ItemId,
     ItemStatus,
     KnowledgeState,
+    KstModelCacheEntry,
     LegacyPlayerState,
     PendingGraph,
     PlayerState,
@@ -26,6 +27,7 @@ from app.domain.models import (
 from app.domain.repository import AssessmentRepository, RepositoryDataError
 from tests.factories import (
     ITEM_ID,
+    GRAPH_HASH,
     NEXT_ITEM_ID,
     NEXT_SUBMISSION_ID,
     SUBMISSION_ID,
@@ -33,6 +35,7 @@ from tests.factories import (
     make_activation,
     make_answer,
     make_item,
+    make_model,
     make_preparing_session,
     make_profile,
     make_question,
@@ -67,6 +70,28 @@ def test_graph_insert_if_absent_race_returns_one_canonical_entry() -> None:
 
         assert left == right
         assert len(repository.graph_snapshot) == 1
+
+    asyncio.run(scenario())
+
+
+def test_kst_model_insert_if_absent_race_returns_one_canonical_entry() -> None:
+    async def scenario() -> None:
+        repository = InMemoryAssessmentRepository()
+        model = make_model()
+        first = KstModelCacheEntry(
+            graph_hash=GRAPH_HASH,
+            configuration_hash=model.configuration_hash,
+            model=model,
+        )
+        second = replace(first)
+
+        left, right = await asyncio.gather(
+            repository.insert_cached_kst_model_if_absent(first),
+            repository.insert_cached_kst_model_if_absent(second),
+        )
+
+        assert left == right == first
+        assert len(repository.kst_model_snapshot) == 1
 
     asyncio.run(scenario())
 

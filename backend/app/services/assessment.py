@@ -117,12 +117,21 @@ class AssessmentService:
             max_nodes=self._max_graph_nodes,
         )
         identifier = graph_hash(graph)
-        cached = await self._repository.get_cached_graph(identifier)
         if self._configuration_repository is None:
+            cached_graph = await self._repository.get_cached_graph(identifier)
             built = await cast(KstModelBuilderWithConfiguration, self._engine).build_model(
                 graph,
-                None if cached is None else cached.knowledge_states,
+                None if cached_graph is None else cached_graph.knowledge_states,
             )
+            self._validate_model_build(graph, built)
+            if cached_graph is None:
+                await self._repository.insert_cached_graph_if_absent(
+                    GraphCacheEntry(
+                        graph_hash=identifier,
+                        graph=graph,
+                        knowledge_states=built.model.knowledge_states,
+                    )
+                )
         else:
             active = await self._configuration_repository.get_active_configuration()
             if active is None:
@@ -146,42 +155,49 @@ class AssessmentService:
                     responses_above_floor=configuration.safety_cap.minimum_above_floor,
                 ),
             )
-            built = await cast(KstModelBuilderWithConfiguration, self._engine).build_model(
-                graph,
-                None if cached is None else cached.knowledge_states,
-                domain_configuration,
+            cached_model = await self._repository.get_cached_kst_model(
+                identifier, active.configuration_hash
             )
-            returned = KstConfigurationDto.model_validate(
-                {
-                    "schema_version": built.model.configuration.schema_version,
-                    "stop_confidence": built.model.configuration.stop_confidence,
-                    "feedback_credible_mass": built.model.configuration.feedback_credible_mass,
-                    "reliability_floor": {
-                        "minimum": built.model.configuration.reliability_floor.minimum,
-                        "multiplier": built.model.configuration.reliability_floor.multiplier,
-                        "maximum": built.model.configuration.reliability_floor.maximum,
-                    },
-                    "safety_cap": {
-                        "minimum_above_floor": built.model.configuration.safety_cap.responses_above_floor,
-                        "node_multiplier": built.model.configuration.safety_cap.node_multiplier,
-                    },
-                }
-            )
-            if (
-                returned.model_dump(mode="json") != configuration.model_dump(mode="json")
-                or built.model.configuration_hash != active.configuration_hash
-            ):
-                raise RepositoryDataError(
-                    "R returned a KST configuration different from the active version"
+            if cached_model is not None:
+                built = ModelBuildResult(
+                    model=cached_model.model,
+                    posterior=cached_model.model.uniform_prior,
                 )
-        self._validate_model_build(graph, built)
-        if cached is None:
-            cached = await self._repository.insert_cached_graph_if_absent(
-                GraphCacheEntry(
-                    graph_hash=identifier,
-                    graph=graph,
-                    knowledge_states=built.model.knowledge_states,
+            else:
+                cached_graph = await self._repository.get_cached_graph(identifier)
+                built = await cast(
+                    KstModelBuilderWithConfiguration, self._engine
+                ).build_model(
+                    graph,
+                    None if cached_graph is None else cached_graph.knowledge_states,
+                    domain_configuration,
                 )
+                self._validate_model_build(graph, built)
+                self._validate_model_configuration(
+                    built, domain_configuration, active.configuration_hash
+                )
+                if cached_graph is None:
+                    await self._repository.insert_cached_graph_if_absent(
+                        GraphCacheEntry(
+                            graph_hash=identifier,
+                            graph=graph,
+                            knowledge_states=built.model.knowledge_states,
+                        )
+                    )
+                cached_model = await self._repository.insert_cached_kst_model_if_absent(
+                    KstModelCacheEntry(
+                        graph_hash=identifier,
+                        configuration_hash=active.configuration_hash,
+                        model=built.model,
+                    )
+                )
+                built = ModelBuildResult(
+                    model=cached_model.model,
+                    posterior=cached_model.model.uniform_prior,
+                )
+            self._validate_model_build(graph, built)
+            self._validate_model_configuration(
+                built, domain_configuration, active.configuration_hash
             )
         items = await self._repository.list_usable_items_for_nodes(graph.nodes)
         plan = self._inventory_plan(graph.nodes, items)
@@ -633,6 +649,20 @@ class AssessmentService:
         limits = built.model.derived_limits
         if limits.reliability_floor < 0 or limits.safety_cap < limits.reliability_floor:
             raise RepositoryDataError("R returned invalid derived limits")
+
+    @staticmethod
+    def _validate_model_configuration(
+        built: ModelBuildResult,
+        configuration: KstConfiguration,
+        configuration_hash: str,
+    ) -> None:
+        if (
+            built.model.configuration != configuration
+            or built.model.configuration_hash != configuration_hash
+        ):
+            raise RepositoryDataError(
+                "R returned a KST configuration different from the active version"
+            )
 
     @staticmethod
     def _yg_order(

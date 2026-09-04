@@ -9,6 +9,7 @@ from app.domain.models import (
     CandidateSelection,
     GraphDefinition,
     ItemCandidate,
+    KstConfiguration,
     KnowledgeState,
     KstModel,
     ModelBuildResult,
@@ -42,11 +43,13 @@ class FakeKstEngine:
         self,
         graph: GraphDefinition,
         cached_knowledge_states: tuple[KnowledgeState, ...] | None = None,
+        configuration: KstConfiguration | None = None,
     ) -> ModelBuildResult:
         self._record(
             "build_model",
             graph,
             cached_knowledge_states,
+            configuration,
         )
         self._raise_injected("build_model")
         try:

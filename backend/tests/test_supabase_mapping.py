@@ -14,6 +14,7 @@ from app.domain.models import (
     GraphRelation,
     KnowledgeState,
     InventoryRequest,
+    KstModelCacheEntry,
     LearningPathId,
     LegacyPlayerState,
     PlayerState,
@@ -30,22 +31,26 @@ from app.persistence.supabase_mapping import (
     decode_graph_entry,
     decode_item,
     decode_final_profile,
+    decode_kst_model_cache_entry,
     decode_session,
     decode_yg_order,
     encode_answer,
     encode_graph_entry,
     encode_item,
     encode_final_profile,
+    encode_kst_model_cache_entry,
     encode_session,
     encode_yg_order,
     item_eligibility_filters,
 )
 from tests.factories import (
     NOW,
+    GRAPH_HASH,
     SUBMISSION_ID,
     TEST_ID,
     make_answer,
     make_item,
+    make_model,
     make_profile,
     make_session,
 )
@@ -112,6 +117,17 @@ def test_graph_round_trip() -> None:
     )
 
     assert decode_graph_entry(encode_graph_entry(graph)) == graph
+
+
+def test_kst_model_cache_round_trip() -> None:
+    model = make_model()
+    entry = KstModelCacheEntry(
+        graph_hash=GRAPH_HASH,
+        configuration_hash=model.configuration_hash,
+        model=model,
+    )
+
+    assert decode_kst_model_cache_entry(encode_kst_model_cache_entry(entry)) == entry
 
 
 def test_yg_order_round_trip_preserves_course_only_on_order() -> None:

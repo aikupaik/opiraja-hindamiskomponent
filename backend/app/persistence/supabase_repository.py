@@ -64,6 +64,39 @@ class SupabaseAssessmentRepository:
             raise RepositoryUnavailable("graph cache insert was not observable")
         return canonical
 
+    async def get_cached_kst_model(
+        self, graph_hash: str, configuration_hash: str
+    ) -> KstModelCacheEntry | None:
+        response = await self._execute(
+            self._apply_filters(
+                self._client.table(KST_MODEL_CACHE_TABLE).select(
+                    KST_MODEL_CACHE_COLUMNS
+                ),
+                kst_model_cache_filters(graph_hash, configuration_hash),
+            ).limit(1),
+            operation="kst_model_cache.get",
+        )
+        row = self._zero_or_one(response, KST_MODEL_CACHE_TABLE)
+        return None if row is None else decode_kst_model_cache_entry(row)
+
+    async def insert_cached_kst_model_if_absent(
+        self, entry: KstModelCacheEntry
+    ) -> KstModelCacheEntry:
+        await self._execute(
+            self._client.table(KST_MODEL_CACHE_TABLE).upsert(
+                encode_kst_model_cache_entry(entry),
+                on_conflict=KST_MODEL_CACHE_CONFLICT_COLUMNS,
+                ignore_duplicates=True,
+            ),
+            operation="kst_model_cache.insert_if_absent",
+        )
+        canonical = await self.get_cached_kst_model(
+            entry.graph_hash, entry.configuration_hash
+        )
+        if canonical is None:
+            raise RepositoryUnavailable("KST model cache insert was not observable")
+        return canonical
+
     async def create_session(self, session: AssessmentSession) -> AssessmentSession:
         response = await self._execute(
             self._client.table(SESSION_TABLE)

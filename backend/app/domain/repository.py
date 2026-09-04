@@ -22,6 +22,16 @@ class AssessmentRepository(Protocol):
         """Insert an entry or return the canonical entry already stored."""
         ...
 
+    async def get_cached_kst_model(
+        self, graph_hash: str, configuration_hash: str
+    ) -> KstModelCacheEntry | None: ...
+
+    async def insert_cached_kst_model_if_absent(
+        self, entry: KstModelCacheEntry
+    ) -> KstModelCacheEntry:
+        """Insert an entry or return the canonical entry already stored."""
+        ...
+
     async def create_session(self, session: AssessmentSession) -> AssessmentSession: ...
 
     async def get_session(self, test_id: TestId) -> AssessmentSession | None: ...

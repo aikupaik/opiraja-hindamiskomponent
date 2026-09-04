@@ -16,6 +16,7 @@ from app.domain.models import (
     GraphCacheEntry,
     GraphDefinition,
     KnowledgeState,
+    KstModelCacheEntry,
     YgOrder,
     YgStatus,
 )
@@ -24,16 +25,19 @@ from app.observability import collect_dependency_metrics
 from app.persistence.supabase_mapping import (
     ANSWER_TABLE,
     ITEM_TABLE,
+    KST_MODEL_CACHE_TABLE,
     SESSION_TABLE,
     YG_ORDER_TABLE,
     encode_answer,
     encode_graph_entry,
     encode_item,
+    encode_kst_model_cache_entry,
     encode_session,
 )
 from app.persistence.supabase_repository import SupabaseAssessmentRepository
 from tests.factories import (
     ITEM_ID,
+    GRAPH_HASH,
     NEXT_ITEM_ID,
     NOW,
     SUBMISSION_ID,
@@ -41,6 +45,7 @@ from tests.factories import (
     make_activation,
     make_answer,
     make_item,
+    make_model,
     make_session,
     make_transition,
 )
@@ -183,6 +188,44 @@ def test_graph_cache_ignores_conflicts_and_reloads_canonical_row() -> None:
 
     async def scenario(repository: SupabaseAssessmentRepository) -> None:
         assert await repository.insert_cached_graph_if_absent(entry) == entry
+
+    asyncio.run(_with_repository(handler, scenario))
+    assert [request.method for request in requests] == ["POST", "GET"]
+
+
+def test_kst_model_cache_ignores_conflicts_and_reloads_canonical_row() -> None:
+    model = make_model()
+    entry = KstModelCacheEntry(
+        graph_hash=GRAPH_HASH,
+        configuration_hash=model.configuration_hash,
+        model=model,
+    )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert _path_table(request) == KST_MODEL_CACHE_TABLE
+        if request.method == "POST":
+            assert (
+                request.url.params.get("on_conflict")
+                == "graph_hash,configuration_hash,model_schema_version"
+            )
+            assert "resolution=ignore-duplicates" in request.headers["prefer"]
+            assert _body(request) == encode_kst_model_cache_entry(entry)
+            return _response([])
+        assert request.method == "GET"
+        assert request.url.params.get("graph_hash") == f"eq.{GRAPH_HASH}"
+        assert (
+            request.url.params.get("configuration_hash")
+            == f"eq.{model.configuration_hash}"
+        )
+        assert request.url.params.get("model_schema_version") == "eq.2"
+        return _response([
+            {**encode_kst_model_cache_entry(entry), "created_at": None}
+        ])
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        assert await repository.insert_cached_kst_model_if_absent(entry) == entry
 
     asyncio.run(_with_repository(handler, scenario))
     assert [request.method for request in requests] == ["POST", "GET"]
