@@ -1,6 +1,7 @@
 FROM rocker/r-ver:4.6.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    RENV_CONFIG_INSTALL_JOBS=1 \
     RENV_PATHS_CACHE=/opt/renv/cache \
     RENV_PATHS_LIBRARY=/opt/renv/library
 
@@ -17,15 +18,18 @@ RUN apt-get update \
         libuv1-dev \
         libxml2-dev \
         zlib1g-dev \
+        cmake \
+	pandoc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY renv.lock DESCRIPTION .Rprofile ./
+COPY renv.lock .Rprofile ./
 COPY renv ./renv
 
 RUN R --slave -e "renv::restore(project = '/app', prompt = FALSE)"
 
+COPY DESCRIPTION ./
 COPY plumber.R ./
 COPY config ./config
 COPY src ./src
