@@ -56,7 +56,12 @@ from app.config import Settings
 from app.domain.graphs import GraphValidationError
 from app.domain.repository import RepositoryDataError, RepositoryUnavailable
 from app.integrations.kst_engine import HttpxKstEngine, RUnavailable, RValidationError
-from app.observability import collect_dependency_metrics
+from app.logging_config import request_log_level, safe_exception_location
+from app.observability import (
+    collect_dependency_metrics,
+    reset_request_id,
+    set_request_id,
+)
 from app.persistence.supabase_repository import SupabaseAssessmentRepository
 from app.services.assessment import (
     AssessmentConflict,
@@ -311,6 +316,19 @@ async def _request_completion_middleware(
         if _SAFE_REQUEST_ID.fullmatch(supplied_request_id)
         else str(uuid4())
     )
+    request_id_token = set_request_id(request_id)
+    try:
+        return await _complete_request(request, call_next, started_at, request_id)
+    finally:
+        reset_request_id(request_id_token)
+
+
+async def _complete_request(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+    started_at: float,
+    request_id: str,
+) -> Response:
     experiment_id = _authenticated_experiment(request)
     match = _TEST_ID_PATH.search(request.url.path)
     test_id = None if match is None else match.group("test_id")
@@ -348,12 +366,15 @@ async def _request_completion_middleware(
                 ):
                     request.state.outcome_code = _outcome_for_status(status_code)
             except Exception as error:
+                error_event: dict[str, object] = {
+                    "error_type": type(error).__name__,
+                }
+                error_location = safe_exception_location(error)
+                if error_location is not None:
+                    error_event["error_location"] = error_location
                 logger.error(
                     "unhandled_request_exception",
-                    extra={
-                        "request_id": request_id,
-                        "diagnostic": type(error).__name__,
-                    },
+                    extra=error_event,
                 )
                 response = _error_response(
                     500, "internal_error", "The request could not be completed."
@@ -397,7 +418,16 @@ async def _request_completion_middleware(
     }
     if test_id is not None:
         event["test_id"] = test_id
-    logger.info(json.dumps(event, separators=(",", ":"), sort_keys=True))
+    route: object = request.scope.get("route")
+    route_path: object = getattr(route, "path", None)
+    if isinstance(route_path, str):
+        event["route"] = route_path
+    if not _successful_health_check(request.url.path, status_code):
+        logger.log(
+            request_log_level(status_code),
+            "request_completed",
+            extra=event,
+        )
     completion_context = (
         diagnostic_context(
             hub,
@@ -418,6 +448,10 @@ async def _request_completion_middleware(
             payload=event,
         )
     return response
+
+
+def _successful_health_check(path: str, status_code: int) -> bool:
+    return status_code < 400 and path in {"/health/live", "/health/ready"}
 
 
 @contextmanager

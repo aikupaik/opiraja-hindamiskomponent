@@ -83,6 +83,12 @@ Candidate IDs are opaque, nonblank, and unique. Candidate order resolves exact
 half-split ties. If no candidate remains after a nonterminal update, v2
 completes with `item_inventory_exhausted` and `confidence_limited=true`.
 
+Every non-health request emits a body-free, one-line JSON completion log with
+its request ID, method, path, status, outcome, and duration. The router accepts
+a safe `X-Request-ID` from FastAPI, generates one when absent or invalid, and
+returns the resolved value in the response header. `APP_LOG_LEVEL` defaults to
+`INFO` and accepts `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
+
 ## Lühiraport: seadistus ja lepingud
 
 Fail `config/kst.json` koondab KST-hindamise uurimuslikud parameetrid ühte

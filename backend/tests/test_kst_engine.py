@@ -8,6 +8,7 @@ import pytest
 
 from app.domain.models import *
 from app.integrations.kst_engine import HttpxKstEngine, RUnavailable
+from app.observability import reset_request_id, set_request_id
 from tests.factories import make_model, make_profile
 
 
@@ -80,6 +81,28 @@ async def test_model_select_and_advance_use_v2_candidate_contract() -> None:
         "eta": 0.25,
     }
     assert "beta" not in cast(dict[str, object], advance_payload["model"])
+
+
+@pytest.mark.asyncio
+async def test_request_id_is_propagated_to_r() -> None:
+    seen_request_id: str | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal seen_request_id
+        seen_request_id = request.headers.get("X-Request-ID")
+        return httpx.Response(200, json={"status": "ok"})
+
+    token = set_request_id("correlated-request-123")
+    try:
+        async with httpx.AsyncClient(
+            base_url="http://r-service",
+            transport=httpx.MockTransport(handler),
+        ) as client:
+            assert await HttpxKstEngine(client).is_ready()
+    finally:
+        reset_request_id(token)
+
+    assert seen_request_id == "correlated-request-123"
 
 
 @pytest.mark.asyncio

@@ -48,6 +48,7 @@ def test_settings_require_service_locations_and_credentials() -> None:
     assert settings.or_jwt_max_lifetime_seconds == 300
     assert settings.player_jwt_lifetime_seconds == 28_800
     assert settings.admin_jwt_lifetime_seconds == 28_800
+    assert settings.app_log_level == "INFO"
     assert settings.player_app_url == "http://localhost:5173"
     assert settings.admin_source_max_bytes == 10_000_000
     assert settings.admin_source_max_pdf_pages == 100
@@ -56,6 +57,25 @@ def test_settings_require_service_locations_and_credentials() -> None:
     assert settings.admin_source_fetch_timeout_seconds == 10
     assert settings.admin_diagnostic_max_events == 500
     assert settings.admin_diagnostic_ttl_seconds == 3600
+
+
+def test_log_level_is_normalized_and_validated() -> None:
+    values = {
+        "SUPABASE_URL": "https://example.supabase.co",
+        "SUPABASE_SERVICE_KEY": "secret",
+        "R_SERVICE_URL": "http://r-service:8000",
+        "ALLOWED_HOSTS": ["127.0.0.1"],
+        "OR_JWT_SECRET": "or-test-secret-00000000000000000000000000000000",
+        "API_JWT_SECRET": "api-test-secret-0000000000000000000000000000000",
+        "OR_JWT_ISSUER": "test-or",
+        "PLAYER_APP_URL": "http://localhost:5173",
+        "APP_LOG_LEVEL": "warning",
+    }
+
+    assert Settings.model_validate(values).app_log_level == "WARNING"
+    values["APP_LOG_LEVEL"] = "verbose"
+    with pytest.raises(ValidationError):
+        Settings.model_validate(values)
 
 
 @pytest.mark.parametrize(

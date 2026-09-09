@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from io import BytesIO
+import json
 import logging
 import math
 from time import monotonic
@@ -533,14 +534,14 @@ async def test_request_logs_exclude_sensitive_headers_query_and_upload_content(
         )
 
     assert saved.status_code == 201
-    messages = [
-        record.getMessage()
+    records = [
+        record
         for record in caplog.records
         if record.name == "app.requests"
-        and '"event":"request_completed"' in record.getMessage()
+        and record.getMessage() == "request_completed"
     ]
-    assert len(messages) == 1
-    message = messages[0]
+    assert len(records) == 1
+    message = json.dumps(records[0].__dict__, default=str)
     for forbidden in (
         "operator-secret",
         "service-secret",
@@ -550,7 +551,7 @@ async def test_request_logs_exclude_sensitive_headers_query_and_upload_content(
         "redirect_token",
     ):
         assert forbidden not in message
-    assert '"path":"/api/v1/admin/source-materials"' in message
+    assert getattr(records[0], "path", None) == "/api/v1/admin/source-materials"
 
 
 @pytest.mark.asyncio

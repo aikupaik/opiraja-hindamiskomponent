@@ -80,6 +80,7 @@ Optional settings and their defaults:
 
 | Variable | Default | Purpose |
 |---|---:|---|
+| `APP_LOG_LEVEL` | `INFO` | Minimum structured application log level: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 | `MAX_GRAPH_NODES` | `10` | Maximum nodes accepted in a test graph. |
 | `R_MAX_CONNECTIONS` | `4` | R HTTP connection and keep-alive pool size. |
 | `R_CONNECT_TIMEOUT_SECONDS` | `2` | R connection timeout. |
@@ -374,7 +375,9 @@ submission token and persisted player state provide the recovery mechanism.
 |---|---|
 | `app/main.py` | Creates the FastAPI application; constructs and closes shared Supabase and HTTPX clients during lifespan; registers routers and exception mappings; adds request-ID middleware and one structured completion log per request. |
 | `app/config.py` | Defines strict environment-backed settings, required service credentials/URLs, limits, and timeout defaults. |
-| `app/observability.py` | Holds request-local Supabase/R timing and request-count metrics accumulated by adapters and emitted by middleware. |
+| `app/observability.py` | Holds request-local correlation, Supabase/R timing, and request-count metrics accumulated by adapters and emitted by middleware. |
+| `app/logging_config.py` | Defines the versioned one-line JSON log formatter, Uvicorn logging configuration, and safe error metadata. |
+| `app/server.py` | Starts production Uvicorn with JSON logging and duplicate access logging disabled. |
 | `app/api/auth.py` | Defines the OR/player/admin bearer boundary, immutable auth context, and route-level scope/profile checks. |
 | `app/api/tokens.py` | Issues API JWTs and strictly validates the exact OR, player, and admin claim profiles. |
 | `app/api/dependencies.py` | Retrieves configured objects from `app.state` and supports independent FastAPI dependency overrides in tests. |

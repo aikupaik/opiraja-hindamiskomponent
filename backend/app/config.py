@@ -1,6 +1,6 @@
 """Validated environment configuration for the assessment API."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from urllib.parse import urlsplit, urlunsplit
 
@@ -81,6 +81,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "ADMIN_JWT_LIFETIME_SECONDS", "admin_jwt_lifetime_seconds"
         ),
+    )
+    app_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+        default="INFO",
+        validation_alias=AliasChoices("APP_LOG_LEVEL", "app_log_level"),
     )
 
     max_graph_nodes: PositiveInt = Field(
@@ -188,6 +192,11 @@ class Settings(BaseSettings):
         if not issuer.strip():
             raise ValueError("OR_JWT_ISSUER must not be blank")
         return issuer
+
+    @field_validator("app_log_level", mode="before")
+    @classmethod
+    def normalize_app_log_level(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
 
     @field_validator("player_app_url")
     @classmethod

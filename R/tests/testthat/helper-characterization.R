@@ -3,8 +3,8 @@ source(file.path(test_root, "R", "tests", "reference", "harness.R"))
 characterization_use_local_library(test_root)
 options(kst.service.root = file.path(test_root, "R"))
 for (source_file in c(
-  "configuration.R", "knowledge_space.R", "model.R", "assessment.R",
-  "profile.R", "validation.R", "service.R", "http.R"
+  "observability.R", "configuration.R", "knowledge_space.R", "model.R",
+  "assessment.R", "profile.R", "validation.R", "service.R", "http.R"
 )) {
   source(file.path(test_root, "R", "src", source_file))
 }
@@ -55,12 +55,13 @@ as_json_request <- function(value) {
   )
 }
 
-mock_http_request <- function(method, path, body = NULL) {
+mock_http_request <- function(method, path, body = NULL, request_id = NULL) {
   req <- new.env(parent = globalenv())
   req$REQUEST_METHOD <- method
   req$PATH_INFO <- path
   req$QUERY_STRING <- ""
   req$HTTP_CONTENT_TYPE <- "application/json"
+  if (!is.null(request_id)) req$HTTP_X_REQUEST_ID <- request_id
   input <- new.env(parent = globalenv())
   input$read <- if (is.null(body)) {
     function(...) raw()

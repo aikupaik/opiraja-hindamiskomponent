@@ -55,8 +55,6 @@ router <- service_environment$create_kst_router(
   model_operation_v2 = model_operation_v2
 )
 
-request_counter <- 0L
-
 body_text <- function(value) {
   if (is.null(value)) return("")
   if (is.raw(value)) return(rawToChar(value))
@@ -84,24 +82,6 @@ pretty_json <- function(value) {
 
 router <- plumber::pr_hook(
   router,
-  "preroute",
-  function(data, req) {
-    request_counter <<- request_counter + 1L
-    data$request_id <- request_counter
-    data$started_at <- proc.time()[["elapsed"]]
-    cat(sprintf(
-      "[%s] --> #%d %s %s\n",
-      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-      data$request_id,
-      req$REQUEST_METHOD,
-      req$PATH_INFO
-    ))
-    flush.console()
-  }
-)
-
-router <- plumber::pr_hook(
-  router,
   "postroute",
   function(req) {
     if (log_bodies && req$REQUEST_METHOD != "GET") {
@@ -116,27 +96,16 @@ router <- plumber::pr_hook(
   }
 )
 
-router <- plumber::pr_hook(
-  router,
-  "postserialize",
-  function(data, res) {
-    elapsed_ms <- round(
-      (proc.time()[["elapsed"]] - data$started_at) * 1000
-    )
-    status <- if (is.null(res$status)) 200L else as.integer(res$status)
-    cat(sprintf(
-      "[%s] <-- #%d %d (%d ms)\n",
-      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-      data$request_id,
-      status,
-      elapsed_ms
-    ))
-    if (log_bodies) {
+if (log_bodies) {
+  router <- plumber::pr_hook(
+    router,
+    "postserialize",
+    function(res) {
       cat("Response body:\n", pretty_json(res$body), "\n", sep = "")
+      flush.console()
     }
-    flush.console()
-  }
-)
+  )
+}
 
 cat("KST manual test service\n")
 cat(sprintf("Listening at http://%s:%d\n", host, port))

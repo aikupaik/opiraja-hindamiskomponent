@@ -637,21 +637,42 @@ async def test_request_id_completion_event_and_redaction(
         )
 
     assert response.headers["x-request-id"] == "request.safe-123"
-    messages = [
-        record.getMessage()
+    records = [
+        record
         for record in caplog.records
-        if '"event":"request_completed"' in record.getMessage()
+        if record.name == "app.requests"
+        and record.getMessage() == "request_completed"
     ]
-    assert len(messages) == 1
-    event = cast(dict[str, object], json.loads(messages[0]))
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    event = records[0].__dict__
     assert event["request_id"] == "request.safe-123"
     assert event["test_id"] == str(TEST_ID)
+    assert event["route"] == "/api/v1/tests/{test_id}"
     assert event["status"] == 404
     assert event["outcome"] == "assessment_not_found"
     assert event["supabase_execute_count"] == 0
     assert event["r_request_count"] == 0
-    assert _or_token() not in messages[0]
-    assert "super-secret-service-key" not in messages[0]
+    serialized = json.dumps(event, default=str)
+    assert _or_token() not in serialized
+    assert "super-secret-service-key" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_successful_health_completion_log_is_suppressed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.requests")
+
+    async with _client(_app(InMemoryAssessmentRepository(), FakeKstEngine())) as client:
+        response = await client.get("/health/live")
+
+    assert response.status_code == 200
+    assert not any(
+        record.name == "app.requests"
+        and record.getMessage() == "request_completed"
+        for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio

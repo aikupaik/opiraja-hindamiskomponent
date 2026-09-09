@@ -100,6 +100,7 @@ services:
     environment:
       R_SERVICE_URL: http://r-service:8000
       FORWARDED_ALLOW_IPS: 172.30.0.0/24
+      APP_LOG_LEVEL: '${APP_LOG_LEVEL:-INFO}'
       # Keep the public host identity deployment-specific. The value is a JSON
       # array because Pydantic parses it as list[str] inside the API container.
       ALLOWED_HOSTS: '${ALLOWED_HOSTS:?set ALLOWED_HOSTS to a JSON array of exact deployment hosts}'
@@ -139,6 +140,7 @@ services:
     build:
       context: ./R
     environment:
+      APP_LOG_LEVEL: '${APP_LOG_LEVEL:-INFO}'
       RENV_PATHS_ROOT: /tmp/renv
       RENV_PATHS_SANDBOX: /tmp/renv/sandbox
       RENV_CONFIG_CACHE_ENABLED: "false"

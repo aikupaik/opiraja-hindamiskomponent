@@ -3,13 +3,14 @@
 import logging
 from time import perf_counter
 from typing import Never, Protocol
+from uuid import uuid4
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from app.admin.diagnostics import emit_diagnostic
 from app.domain.models import *
-from app.observability import record_r_request
+from app.observability import current_request_id, record_r_request
 
 from .r_dtos import *
 
@@ -228,8 +229,14 @@ class HttpxKstEngine:
             event_type="r_request",
             payload={"method": method, "path": path, "body": json},
         )
+        request_id = current_request_id() or str(uuid4())
         try:
-            response = await self._client.request(method, path, json=json)
+            response = await self._client.request(
+                method,
+                path,
+                json=json,
+                headers={"X-Request-ID": request_id},
+            )
             duration_ms = round((perf_counter() - started_at) * 1000, 3)
             emit_diagnostic(
                 source="r-to-fastapi",

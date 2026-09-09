@@ -9,6 +9,7 @@
     "/internal/v2/kst/configuration/validate": {
       "post": {
         "operationId": "validateKstConfigurationV2",
+        "parameters": [{"$ref": "#/components/parameters/RequestId"}],
         "requestBody": {
           "required": true,
           "content": {
@@ -20,6 +21,7 @@
         "responses": {
           "200": {
             "description": "Canonical configuration snapshot and hash",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/ConfigurationValidationResponse"}
@@ -34,6 +36,7 @@
     "/internal/v2/kst/model": {
       "post": {
         "operationId": "buildKstModelV2",
+        "parameters": [{"$ref": "#/components/parameters/RequestId"}],
         "requestBody": {
           "required": true,
           "content": {
@@ -45,6 +48,7 @@
         "responses": {
           "200": {
             "description": "Versioned model, prior, and derived limits",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/ModelResponse"}
@@ -59,6 +63,7 @@
     "/internal/v2/kst/select": {
       "post": {
         "operationId": "selectKstCandidateV2",
+        "parameters": [{"$ref": "#/components/parameters/RequestId"}],
         "requestBody": {
           "required": true,
           "content": {
@@ -70,6 +75,7 @@
         "responses": {
           "200": {
             "description": "Selected supplied candidate",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/SelectedCandidate"}
@@ -84,6 +90,7 @@
     "/internal/v2/kst/advance": {
       "post": {
         "operationId": "advanceKstAssessmentV2",
+        "parameters": [{"$ref": "#/components/parameters/RequestId"}],
         "requestBody": {
           "required": true,
           "content": {
@@ -95,6 +102,7 @@
         "responses": {
           "200": {
             "description": "Updated posterior and next candidate or final profile",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
             "content": {
               "application/json": {
                 "schema": {
@@ -120,6 +128,26 @@
     }
   },
   "components": {
+    "parameters": {
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        }
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Resolved request correlation identifier",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        }
+      }
+    },
     "schemas": {
       "Relation": {
         "type": "object",
@@ -366,6 +394,7 @@
     "responses": {
       "ValidationError": {
         "description": "Request validation failed",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
         "content": {
           "application/json": {
             "schema": {"$ref": "#/components/schemas/ErrorEnvelope"}
@@ -374,6 +403,7 @@
       },
       "UnexpectedError": {
         "description": "Unexpected internal error",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
         "content": {
           "application/json": {
             "schema": {"$ref": "#/components/schemas/ErrorEnvelope"}

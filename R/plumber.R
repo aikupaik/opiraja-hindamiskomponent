@@ -21,6 +21,7 @@ if (!is.null(configured_root)) {
 options(kst.service.root = service_root)
 
 for (source_file in c(
+  "observability.R",
   "configuration.R",
   "knowledge_space.R",
   "model.R",
@@ -41,6 +42,7 @@ create_kst_router <- function(
     select_operation_v2 = select_assessment_candidate_v2,
     advance_operation_v2 = advance_assessment_v2,
     validate_configuration_operation = validate_configuration_request) {
+  log_level <- configured_log_level()
   plumber::register_parser(
     "kst_raw_json",
     function() {
@@ -98,7 +100,9 @@ create_kst_router <- function(
     serializer = json_serializer,
     parsers = "kst_raw_json"
   )
+  router <- register_observability_hooks(router, log_level)
   plumber::pr_set_error(router, function(req, res, error) {
+    log_unhandled_http_error(req, error, log_level)
     write_json_response(
       res,
       error_envelope(

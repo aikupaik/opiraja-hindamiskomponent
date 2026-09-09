@@ -1,7 +1,8 @@
 # Manual KST service demo
 
-This harness runs the production KST router locally and adds console logging.
-It does not change the production router, configuration, or automated tests.
+This harness runs the production KST router locally with its structured
+request logging. It does not change the production router, configuration, or
+automated tests.
 
 ## First-time environment setup
 
@@ -23,7 +24,8 @@ Rscript R/manual/run_service.R
 ```
 
 The service listens on `http://127.0.0.1:8001`. Leave this terminal open.
-Every request produces a method, path, response status, and duration log.
+Every non-health request produces a one-line JSON log containing its request
+ID, method, path, response status, and duration.
 Press Ctrl+C to stop the service.
 
 To include formatted request and response bodies in the service console:
