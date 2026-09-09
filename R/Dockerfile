@@ -3,7 +3,8 @@ FROM rocker/r-ver:4.6.1
 ENV DEBIAN_FRONTEND=noninteractive \
     RENV_CONFIG_INSTALL_JOBS=1 \
     RENV_PATHS_CACHE=/opt/renv/cache \
-    RENV_PATHS_LIBRARY=/opt/renv/library
+    RENV_PATHS_LIBRARY=/opt/renv/library \
+    RENV_TEMPDIR_NOEXEC_CHECK=false
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
