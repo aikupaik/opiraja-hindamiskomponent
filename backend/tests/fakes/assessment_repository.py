@@ -232,12 +232,12 @@ class InMemoryAssessmentRepository:
                 )
             ))
 
-    async def load_items_by_ids(
+    async def load_usable_items_by_ids(
         self, item_ids: tuple[ItemId, ...]
     ) -> tuple[AssessmentItem, ...]:
         async with self._lock:
-            self._record("load_items_by_ids", item_ids)
-            self._raise_injected("load_items_by_ids")
+            self._record("load_usable_items_by_ids", item_ids)
+            self._raise_injected("load_usable_items_by_ids")
             if len(item_ids) != len(set(item_ids)):
                 raise RepositoryDataError("pool item IDs must be unique")
             return deepcopy(tuple(
@@ -247,11 +247,19 @@ class InMemoryAssessmentRepository:
                 and is_domain_valid_usable_item(item)
             ))
 
-    async def get_item(self, item_id: ItemId) -> AssessmentItem | None:
+    async def get_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
         async with self._lock:
-            self._record("get_item", item_id)
-            self._raise_injected("get_item")
-            return deepcopy(self._items.get(item_id))
+            self._record("get_items_by_ids", item_ids)
+            self._raise_injected("get_items_by_ids")
+            if len(item_ids) != len(set(item_ids)):
+                raise RepositoryDataError("item IDs must be unique")
+            return deepcopy(tuple(
+                item
+                for item_id in item_ids
+                if (item := self._items.get(item_id)) is not None
+            ))
 
     async def increment_inadequate_count(self, item_id: ItemId) -> None:
         async with self._lock:

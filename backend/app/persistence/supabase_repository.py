@@ -19,7 +19,7 @@ from app.observability import record_supabase_execute
 from .supabase_mapping import *
 
 _UNIQUE_VIOLATION = "23505"
-_TELEMETRY_RETRIES = 8
+_ITEM_BATCH_SIZE = 100
 
 
 class _ExecutableQuery(Protocol):
@@ -216,42 +216,77 @@ class SupabaseAssessmentRepository:
             raise RepositoryDataError("usable item query returned duplicate IDs")
         return tuple(items)
 
-    async def load_items_by_ids(
+    async def load_usable_items_by_ids(
         self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        return await self._load_items_by_ids(
+            item_ids,
+            usable_only=True,
+            operation="ylesandepank.load_usable_batch",
+        )
+
+    async def get_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        return await self._load_items_by_ids(
+            item_ids,
+            usable_only=False,
+            operation="ylesandepank.load_review_batch",
+        )
+
+    async def _load_items_by_ids(
+        self,
+        item_ids: tuple[ItemId, ...],
+        *,
+        usable_only: bool,
+        operation: str,
     ) -> tuple[AssessmentItem, ...]:
         if len(set(item_ids)) != len(item_ids):
             raise RepositoryDataError("pool item IDs must be unique")
-        items: list[AssessmentItem] = []
-        for item_id in item_ids:
-            filters = item_id_filters(item_id)
-            filters[ITEM_STATUS_COLUMN] = USABLE_ITEM_STATUS
-            response = await self._execute(
-                self._apply_filters(
-                    self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
-                    filters,
-                ).limit(1),
-                operation="ylesandepank.load_pool_item",
+        if not item_ids:
+            return ()
+
+        loaded_by_id: dict[ItemId, AssessmentItem] = {}
+        for start in range(0, len(item_ids), _ITEM_BATCH_SIZE):
+            chunk = item_ids[start : start + _ITEM_BATCH_SIZE]
+            requested_ids = set(chunk)
+            returned_ids: set[ItemId] = set()
+            query = self._client.table(ITEM_TABLE).select(ITEM_COLUMNS).in_(
+                ITEM_ID_COLUMN, [int(item_id) for item_id in chunk]
             )
-            row = self._zero_or_one(response, ITEM_TABLE)
-            if row is not None:
+            if usable_only:
+                query = query.eq(ITEM_STATUS_COLUMN, USABLE_ITEM_STATUS)
+            response = await self._execute(
+                query,
+                operation=operation,
+            )
+            for row in self._rows(response, ITEM_TABLE):
+                raw_item_id = row.get(ITEM_ID_COLUMN)
+                if (
+                    not isinstance(raw_item_id, int)
+                    or isinstance(raw_item_id, bool)
+                ):
+                    raise RepositoryDataError("item batch returned an invalid item ID")
+                item_id = ItemId(raw_item_id)
+                if item_id not in requested_ids:
+                    raise RepositoryDataError("item batch returned an unrequested item")
+                if item_id in returned_ids:
+                    raise RepositoryDataError("item batch returned duplicate item IDs")
+                returned_ids.add(item_id)
                 try:
                     item = decode_item(row)
                 except RepositoryDataError:
+                    if usable_only:
+                        continue
+                    raise
+                if usable_only and not is_domain_valid_usable_item(item):
                     continue
-                if is_domain_valid_usable_item(item):
-                    items.append(item)
-        return tuple(items)
-
-    async def get_item(self, item_id: ItemId) -> AssessmentItem | None:
-        response = await self._execute(
-            self._apply_filters(
-                self._client.table(ITEM_TABLE).select(ITEM_COLUMNS),
-                item_id_filters(item_id),
-            ).limit(1),
-            operation="ylesandepank.get",
+                loaded_by_id[item_id] = item
+        return tuple(
+            loaded_by_id[item_id]
+            for item_id in item_ids
+            if item_id in loaded_by_id
         )
-        row = self._zero_or_one(response, ITEM_TABLE)
-        return None if row is None else decode_item(row)
 
     async def increment_inadequate_count(self, item_id: ItemId) -> None:
         response = await self._execute(
@@ -389,25 +424,20 @@ class SupabaseAssessmentRepository:
         )
 
     async def _increment_item_telemetry(self, answer: AnswerRecord) -> None:
-        for _ in range(_TELEMETRY_RETRIES):
-            item = await self.get_item(answer.item_id)
-            if item is None:
-                raise RepositoryDataError(f"unknown item: {answer.item_id}")
-            used_at = answer.answered_at or datetime.now(UTC)
-            filters = item_id_filters(answer.item_id)
-            filters[ITEM_USAGE_COUNT_COLUMN] = item.usage_count
-            response = await self._execute(
-                self._apply_filters(
-                    self._client.table(ITEM_TABLE)
-                    .update(item_telemetry_updates(item.usage_count + 1, used_at))
-                    .select(ITEM_COLUMNS),
-                    filters,
-                ),
-                operation="ylesandepank.increment_telemetry",
-            )
-            if self._zero_or_one(response, ITEM_TABLE) is not None:
-                return
-        raise RepositoryUnavailable("item telemetry update remained contended")
+        used_at = answer.answered_at or datetime.now(UTC)
+        response = await self._execute(
+            self._client.rpc(
+                INCREMENT_ITEM_USAGE_FUNCTION,
+                {
+                    "p_yp_id": int(answer.item_id),
+                    "p_used_at": used_at.isoformat(),
+                },
+            ),
+            operation="ylesandepank.increment_telemetry",
+        )
+        row = self._exactly_one(response, INCREMENT_ITEM_USAGE_FUNCTION)
+        if row.get(ITEM_ID_COLUMN) != int(answer.item_id):
+            raise RepositoryDataError("item-usage RPC returned another item")
 
     async def _require_answer(self, submission_id: SubmissionId) -> AnswerRecord:
         response = await self._execute(

@@ -234,7 +234,9 @@ class AssessmentService:
             )
 
         pool = self._snapshot_pool(graph.nodes, built.model, items, plan)
-        first_question = await self._first_question(built.model, built.posterior, pool)
+        first_question = await self._first_question(
+            built.model, built.posterior, pool, items
+        )
         session = AssessmentSession(
             test_id=test_id,
             user_id=command.user_id,
@@ -276,6 +278,12 @@ class AssessmentService:
         if len(answers_by_submission) != len(answers):
             raise RepositoryDataError("assessment has duplicate answer submissions")
 
+        history_item_ids = tuple(answered.item_id for answered in state.answered_items)
+        items = await self._repository.get_items_by_ids(history_item_ids)
+        items_by_id = {item.item_id: item for item in items}
+        if len(items_by_id) != len(items):
+            raise RepositoryDataError("completed assessment item batch has duplicates")
+
         results: list[QuestionResult] = []
         for answered in state.answered_items:
             answer = answers_by_submission.get(answered.submission_id)
@@ -285,7 +293,7 @@ class AssessmentService:
                 raise RepositoryDataError("completed assessment answer does not match history")
             if answer.score != int(answered.response_correct):
                 raise RepositoryDataError("completed assessment score does not match history")
-            item = await self._repository.get_item(answered.item_id)
+            item = items_by_id.get(answered.item_id)
             if item is None:
                 raise RepositoryDataError("completed assessment item is missing")
             if (answer.selected_answer == item.answer_key) != answered.response_correct:
@@ -361,7 +369,7 @@ class AssessmentService:
 
             pool = self._snapshot_pool(cached.graph.nodes, session.model, items, plan)
             first_question = await self._first_question(
-                session.model, state.posterior, pool
+                session.model, state.posterior, pool, items
             )
             activated = await self._repository.activate_session(
                 ActivationCommand(
@@ -413,7 +421,8 @@ class AssessmentService:
             beta=question.beta,
             eta=question.eta,
         )
-        remaining = await self._remaining_candidates(state)
+        remaining_pairs = await self._remaining_candidate_items(state)
+        remaining = tuple(candidate for candidate, _ in remaining_pairs)
         advanced = await self._engine.advance(
             model,
             state.posterior,
@@ -430,7 +439,11 @@ class AssessmentService:
         )
         if isinstance(advanced, AdvanceInProgress):
             candidate = self._verify_selection(advanced.next_candidate, remaining)
-            next_question = await self._question_for_candidate(candidate)
+            item_by_id = {item.item_id: item for _, item in remaining_pairs}
+            item = item_by_id.get(candidate.item_id)
+            if item is None:
+                raise RepositoryDataError("R selected a candidate without a loaded item")
+            next_question = self._question_for_candidate(candidate, item)
             next_state = PlayerState(
                 schema_version=PLAYER_STATE_SCHEMA_VERSION,
                 posterior=advanced.posterior,
@@ -515,21 +528,19 @@ class AssessmentService:
         model: KstModel,
         posterior: tuple[float, ...],
         pool: SessionPool,
+        items: tuple[AssessmentItem, ...],
     ) -> CurrentQuestion:
         selected = await self._engine.select(model, posterior, pool.candidates)
-        return await self._question_for_candidate(
-            self._verify_selection(selected, pool.candidates)
-        )
+        candidate = self._verify_selection(selected, pool.candidates)
+        items_by_id = {item.item_id: item for item in items}
+        item = items_by_id.get(candidate.item_id)
+        if item is None:
+            raise RepositoryDataError("selected pool item is missing from inventory")
+        return self._question_for_candidate(candidate, item)
 
-    async def _question_for_candidate(
-        self, candidate: ItemCandidate
+    def _question_for_candidate(
+        self, candidate: ItemCandidate, item: AssessmentItem
     ) -> CurrentQuestion:
-        loaded = await self._repository.load_items_by_ids((candidate.item_id,))
-        if len(loaded) != 1:
-            raise RepositoryDataError(
-                f"selected pool item is not usable: {candidate.item_id}"
-            )
-        item = loaded[0]
         self._validate_item_matches_candidate(item, candidate)
         return build_question(
             item,
@@ -538,9 +549,9 @@ class AssessmentService:
             uuid_factory=self._uuid_factory,
         )
 
-    async def _remaining_candidates(
+    async def _remaining_candidate_items(
         self, state: PlayerState
-    ) -> tuple[ItemCandidate, ...]:
+    ) -> tuple[tuple[ItemCandidate, AssessmentItem], ...]:
         if state.session_pool is None or state.current_question is None:
             raise RepositoryDataError("active state has no pool or current question")
         excluded = {
@@ -552,17 +563,17 @@ class AssessmentService:
             for candidate in state.session_pool.candidates
             if candidate.item_id not in excluded
         )
-        loaded = await self._repository.load_items_by_ids(
+        loaded = await self._repository.load_usable_items_by_ids(
             tuple(candidate.item_id for candidate in eligible)
         )
         loaded_by_id = {item.item_id: item for item in loaded}
-        remaining: list[ItemCandidate] = []
+        remaining: list[tuple[ItemCandidate, AssessmentItem]] = []
         for candidate in eligible:
             item = loaded_by_id.get(candidate.item_id)
             if item is None:
                 continue
             self._validate_item_matches_candidate(item, candidate)
-            remaining.append(candidate)
+            remaining.append((candidate, item))
         return tuple(remaining)
 
     @staticmethod

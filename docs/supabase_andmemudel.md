@@ -151,6 +151,21 @@ kasutab selleks atomaarset `public.increment_ebaadekvaatne_arv(bigint)` RPC-d;
 anonüümsetel ja autentitud Supabase'i klientidel puudub funktsiooni käivitamise
 õigus ning seda kasutab ainult `service_role`.
 
+### Kasutuse telemeetria
+
+Backend suurendab uue, edukalt sisestatud vastuse järel kasutusandmeid ühe
+atomaarse `public.increment_ylesande_kasutus(bigint, timestamp with time zone)`
+RPC-kutsega. Funktsioon suurendab `kasutamiste_arv` väärtust ühe võrra ja
+seab `viimane_kasutus` väärtuseks hilisema olemasoleva aja või edastatud aja;
+seega ei saa hilinenud vastus ajatemplit tagasi liigutada. Funktsioon on
+`SECURITY INVOKER`, täielikult kvalifitseeritud tabeliviitega ja tühja
+`search_path`-iga. Käivitusõigus on antud ainult `service_role`-ile;
+`anon` ja `authenticated` rollidel seda õigust ei ole.
+
+Funktsioon on pilootprojekti Supabase Dashboardis käsitsi juurutatud. See on
+lisanduv skeemimuudatus: vanem backend seda ei kutsu ning rollback ei eelda
+funktsiooni kohest eemaldamist.
+
 ## tulemustepank (48 rida)
 
 *Testivastuste logi. TP kirjutab siia iga vastuse järel; kalibreerimise

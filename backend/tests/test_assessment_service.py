@@ -224,6 +224,55 @@ async def test_activation_pool_includes_all_valid_items_above_generation_target(
         ItemId(1), ItemId(2), ItemId(3), ItemId(4),
         ItemId(20), ItemId(21), ItemId(22), ItemId(23), ItemId(24),
     )
+    assert repository.method_counts.get("load_usable_items_by_ids", 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_nine_item_session_uses_one_live_batch_per_answer_and_one_review_batch() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_items(*_items("A", 1, 4), *_items("B", 20, 5))
+    engine = FakeKstEngine(
+        model_results=(_built(),),
+        advance_results=tuple(
+            AdvanceInProgress(
+                posterior=(0.1, 0.3, 0.6),
+                next_candidate=CandidateSelection(
+                    candidate_id=CandidateId(f"yp:{item_id}"),
+                    node="A" if item_id < 20 else "B",
+                ),
+            )
+            for item_id in (2, 3, 4, 20, 21, 22)
+        )
+        + (AdvanceCompleted((0.1, 0.3, 0.6), make_profile()),),
+    )
+    service = _service(repository, engine)
+    created = await service.create_assessment(_command())
+    test_id = TestId(created.test_id)
+
+    for _ in range(7):
+        session = repository.session_snapshot[test_id]
+        state = cast(PlayerState, session.player_state)
+        question = state.current_question
+        assert question is not None
+        await service.submit_answer(
+            test_id, question.submission_id, question.correct_option_id
+        )
+
+    results = await service.get_question_results(test_id)
+    advance_calls = [call for call in engine.calls if call.method == "advance"]
+    assert [len(cast(tuple[ItemCandidate, ...], call.arguments[5])) for call in advance_calls] == [
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2,
+    ]
+    assert repository.method_counts["load_usable_items_by_ids"] == 7
+    assert repository.method_counts["get_items_by_ids"] == 1
+    assert repository.method_counts["commit_answer"] == 7
+    assert len(results) == 7
 
 
 @pytest.mark.asyncio
@@ -293,6 +342,7 @@ async def test_answer_uses_snapshotted_parameters_and_never_reuses_current() -> 
     assert administered.beta == current.beta
     assert administered.eta == current.eta
     assert current.item_id not in {candidate.item_id for candidate in remaining}
+    assert repository.method_counts["load_usable_items_by_ids"] == 1
 
 
 @pytest.mark.asyncio

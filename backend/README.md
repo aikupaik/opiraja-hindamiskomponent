@@ -367,6 +367,15 @@ Answer persistence is intentionally sequential and retry-safe:
 These PostgREST calls are not one database transaction. The explicit
 submission token and persisted player state provide the recovery mechanism.
 
+Active-answer selection refreshes the fixed session pool with one live,
+status-filtered item-bank batch before each R advance. This preserves the
+withdrawal check while avoiding per-candidate reads; the selected item's row
+is reused to build the next question. Completed-question review uses one
+unfiltered historical batch, so archived answered items remain reviewable.
+For a newly inserted answer, usage telemetry is incremented by the atomic
+`public.increment_ylesande_kasutus(bigint, timestamptz)` RPC. Recovered,
+replayed, stale, and conflicting submissions do not invoke it again.
+
 ## Module responsibilities
 
 ### Application modules

@@ -17,6 +17,8 @@ from app.domain.models import (
     GraphDefinition,
     KnowledgeState,
     KstModelCacheEntry,
+    ItemId,
+    ItemStatus,
     YgOrder,
     YgStatus,
 )
@@ -25,6 +27,7 @@ from app.observability import collect_dependency_metrics
 from app.persistence.supabase_mapping import (
     ANSWER_TABLE,
     INCREMENT_INADEQUATE_COUNT_FUNCTION,
+    INCREMENT_ITEM_USAGE_FUNCTION,
     ITEM_TABLE,
     KST_MODEL_CACHE_TABLE,
     SESSION_TABLE,
@@ -119,9 +122,9 @@ def test_reads_use_exact_filters_stable_order_and_request_metrics() -> None:
         table = _path_table(request)
         if table == ITEM_TABLE:
             item_filter = request.url.params.get("yp_id")
-            if item_filter == f"eq.{int(NEXT_ITEM_ID)}":
+            if item_filter == f"in.({int(NEXT_ITEM_ID)})":
                 return _response([encode_item(second)])
-            if item_filter == f"eq.{int(ITEM_ID)}":
+            if item_filter == f"in.({int(ITEM_ID)})":
                 return _response([encode_item(first)])
             node = request.url.params.get("graafi_objekt")
             assert request.url.params.get("staatus") == "eq.kasutatav"
@@ -138,8 +141,8 @@ def test_reads_use_exact_filters_stable_order_and_request_metrics() -> None:
         with collect_dependency_metrics() as metrics:
             session = await repository.get_session(TEST_ID)
             items = await repository.list_usable_items_for_nodes(("A", "missing"))
-            exact = await repository.load_items_by_ids((NEXT_ITEM_ID,))
-            item = await repository.get_item(ITEM_ID)
+            exact = await repository.load_usable_items_by_ids((NEXT_ITEM_ID,))
+            item = (await repository.get_items_by_ids((ITEM_ID,)))[0]
 
         assert session == make_session()
         assert [candidate.item_id for candidate in items] == [ITEM_ID, NEXT_ITEM_ID]
@@ -163,6 +166,70 @@ def test_lists_answers_for_exact_test() -> None:
 
     async def scenario(repository: SupabaseAssessmentRepository) -> None:
         assert await repository.list_answers_for_test(TEST_ID) == (answer,)
+
+    asyncio.run(_with_repository(handler, scenario))
+
+
+def test_item_batches_preserve_input_order_and_split_deterministically() -> None:
+    item_ids = tuple(ItemId(1_000 + offset) for offset in range(101))
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "GET"
+        assert _path_table(request) == ITEM_TABLE
+        assert request.url.params.get("staatus") == "eq.kasutatav"
+        encoded_ids = request.url.params.get("yp_id")
+        assert encoded_ids is not None
+        ids = tuple(
+            ItemId(int(value))
+            for value in encoded_ids.removeprefix("in.(").removesuffix(")").split(",")
+        )
+        return _response([encode_item(make_item(item_id)) for item_id in reversed(ids)])
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        loaded = await repository.load_usable_items_by_ids(item_ids)
+        assert tuple(item.item_id for item in loaded) == item_ids
+        assert await repository.load_usable_items_by_ids(()) == ()
+
+    asyncio.run(_with_repository(handler, scenario))
+    assert len(requests) == 2
+    assert requests[0].url.params.get("yp_id", "").count(",") == 99
+    assert requests[1].url.params.get("yp_id") == "in.(1100)"
+
+
+def test_historical_item_batch_includes_archived_items_without_status_filter() -> None:
+    archived = replace(make_item(), status=ItemStatus.ARCHIVED)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert _path_table(request) == ITEM_TABLE
+        assert request.url.params.get("yp_id") == f"in.({int(ITEM_ID)})"
+        assert request.url.params.get("staatus") is None
+        return _response([encode_item(archived)])
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        assert await repository.get_items_by_ids((ITEM_ID,)) == (archived,)
+
+    asyncio.run(_with_repository(handler, scenario))
+
+
+@pytest.mark.parametrize("result", [[], [{"yp_id": int(NEXT_ITEM_ID)}]])
+def test_usage_telemetry_rejects_empty_or_mismatched_rpc_output(
+    result: list[dict[str, int]],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _path_table(request) == ANSWER_TABLE:
+            return _response([encode_answer(make_answer())])
+        assert request.method == "POST"
+        assert _path_table(request) == INCREMENT_ITEM_USAGE_FUNCTION
+        return _response(result)
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        with pytest.raises(RepositoryDataError):
+            await repository.commit_answer(
+                SUBMISSION_ID, make_answer(), make_transition()
+            )
 
     asyncio.run(_with_repository(handler, scenario))
 
@@ -332,8 +399,8 @@ class _AnswerStore:
             )
         if table == ANSWER_TABLE:
             return self._answers(request)
-        if table == ITEM_TABLE:
-            return self._items(request)
+        if table == INCREMENT_ITEM_USAGE_FUNCTION:
+            return self._telemetry(request)
         if table == SESSION_TABLE:
             return self._sessions(request)
         raise AssertionError(f"unexpected request: {request.method} {request.url}")
@@ -355,16 +422,11 @@ class _AnswerStore:
         assert request.url.params.get("vastus_id") == f"eq.{SUBMISSION_ID}"
         return _response([] if self.answer is None else [self.answer])
 
-    def _items(self, request: httpx.Request) -> httpx.Response:
-        if request.method == "GET":
-            assert request.url.params.get("yp_id") == f"eq.{ITEM_ID}"
-            return _response([self.item])
-        expected = request.url.params.get("kasutamiste_arv")
-        if expected != f"eq.{self.item['kasutamiste_arv']}":
-            return _response([])
-        self.item.update(_body(request))
+    def _telemetry(self, request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert _body(request)["p_yp_id"] == int(ITEM_ID)
         self.telemetry_updates += 1
-        return _response([self.item])
+        return _response([{"yp_id": int(ITEM_ID)}])
 
     def _sessions(self, request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
@@ -405,10 +467,9 @@ def test_answer_commit_is_sequential_exactly_once_and_replays() -> None:
         assert store.session_updates == 1
         assert store.answer is not None
         assert store.answer["vastus_id"] == str(SUBMISSION_ID)
-        assert store.calls[:4] == [
+        assert store.calls[:3] == [
             ("POST", ANSWER_TABLE),
-            ("GET", ITEM_TABLE),
-            ("PATCH", ITEM_TABLE),
+            ("POST", INCREMENT_ITEM_USAGE_FUNCTION),
             ("PATCH", SESSION_TABLE),
         ]
 
@@ -483,7 +544,9 @@ def test_concurrent_duplicate_answers_have_one_result_and_telemetry_update() -> 
     asyncio.run(_with_async_repository(handler, scenario))
 
 
-@pytest.mark.parametrize("table", [ANSWER_TABLE, ITEM_TABLE, SESSION_TABLE])
+@pytest.mark.parametrize(
+    "table", [ANSWER_TABLE, INCREMENT_ITEM_USAGE_FUNCTION, SESSION_TABLE]
+)
 def test_failure_at_each_answer_persistence_stage_is_unavailable(table: str) -> None:
     store = _AnswerStore()
     store.fail_table = table

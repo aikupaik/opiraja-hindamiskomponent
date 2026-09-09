@@ -178,12 +178,12 @@ def test_complete_inventory_reads_and_exact_pool_loading() -> None:
 
         inventory = await repository.list_usable_items_for_nodes(("B", "A", "C"))
         assert [item.item_id for item in inventory] == [ITEM_ID, NEXT_ITEM_ID]
-        exact = await repository.load_items_by_ids(
+        exact = await repository.load_usable_items_by_ids(
             (NEXT_ITEM_ID, ItemId(43), ITEM_ID)
         )
         assert [item.item_id for item in exact] == [NEXT_ITEM_ID, ITEM_ID]
         with pytest.raises(RepositoryDataError, match="unique"):
-            await repository.load_items_by_ids((ITEM_ID, ITEM_ID))
+            await repository.load_usable_items_by_ids((ITEM_ID, ITEM_ID))
 
     asyncio.run(scenario())
 
@@ -324,12 +324,12 @@ def test_seed_and_return_values_are_isolated_and_calls_are_recorded() -> None:
         item = make_item()
         await repository.seed_items(item)
 
-        returned = await repository.get_item(ITEM_ID)
+        returned = (await repository.get_items_by_ids((ITEM_ID,)))[0]
 
         assert returned == item
         assert returned is not item
         assert repository.item_snapshot is not repository.item_snapshot
-        assert repository.calls[-1].method == "get_item"
+        assert repository.calls[-1].method == "get_items_by_ids"
 
     asyncio.run(scenario())
 

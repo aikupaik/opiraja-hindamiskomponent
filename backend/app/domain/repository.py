@@ -58,13 +58,17 @@ class AssessmentRepository(Protocol):
         """Return every domain-valid usable item in node then item-ID order."""
         ...
 
-    async def load_items_by_ids(
+    async def load_usable_items_by_ids(
         self, item_ids: tuple[ItemId, ...]
     ) -> tuple[AssessmentItem, ...]:
-        """Load exact usable pool members in the caller's order."""
+        """Load usable pool members in the caller's order."""
         ...
 
-    async def get_item(self, item_id: ItemId) -> AssessmentItem | None: ...
+    async def get_items_by_ids(
+        self, item_ids: tuple[ItemId, ...]
+    ) -> tuple[AssessmentItem, ...]:
+        """Load historical item-bank records in the caller's order."""
+        ...
 
     async def increment_inadequate_count(self, item_id: ItemId) -> None:
         """Atomically record one player report for an item-bank question."""
