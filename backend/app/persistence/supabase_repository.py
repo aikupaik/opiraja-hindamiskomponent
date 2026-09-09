@@ -253,6 +253,19 @@ class SupabaseAssessmentRepository:
         row = self._zero_or_one(response, ITEM_TABLE)
         return None if row is None else decode_item(row)
 
+    async def increment_inadequate_count(self, item_id: ItemId) -> None:
+        response = await self._execute(
+            self._client.rpc(
+                INCREMENT_INADEQUATE_COUNT_FUNCTION,
+                {"p_yp_id": int(item_id)},
+            ),
+            operation="ylesandepank.increment_inadequate_count",
+        )
+        row = self._exactly_one(response, INCREMENT_INADEQUATE_COUNT_FUNCTION)
+        updated_item_id = row.get(ITEM_ID_COLUMN)
+        if updated_item_id != int(item_id):
+            raise RepositoryDataError("inadequate-count RPC returned another item")
+
     async def list_answers_for_test(
         self, test_id: TestId
     ) -> tuple[AnswerRecord, ...]:

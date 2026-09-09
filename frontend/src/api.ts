@@ -106,6 +106,11 @@ export interface PlayerApi {
     payload: SubmissionPayload,
     signal: AbortSignal,
   ): Promise<AnswerResult>
+  reportQuestion(
+    testId: string,
+    submissionId: string,
+    signal: AbortSignal,
+  ): Promise<void>
 }
 
 interface PlayerApiOptions {
@@ -175,6 +180,20 @@ export function createPlayerApi(options: PlayerApiOptions = {}): PlayerApi {
         throw malformed(202, null)
       }
       return result
+    },
+    reportQuestion: async (testId, submissionId, signal) => {
+      let response: Response
+      try {
+        response = await client.request(
+          `/api/v1/player/tests/${testId}/questions/${submissionId}/report`,
+          { method: 'POST', signal },
+        )
+      } catch (error) {
+        throw playerError(error)
+      }
+      if (response.status !== 204) {
+        throw malformed(response.status, response.headers.get('X-Request-ID'))
+      }
     },
   }
 }

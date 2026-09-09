@@ -378,6 +378,9 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
         "link": paths["/api/v1/tests/{test_id}/player-token"]["post"],
         "start": paths["/api/v1/player/tests/{test_id}/start"]["post"],
         "answer": paths["/api/v1/player/tests/{test_id}/answers"]["post"],
+        "report": paths[
+            "/api/v1/player/tests/{test_id}/questions/{submission_id}/report"
+        ]["post"],
     }
 
     assert set(operations["create"]["responses"]) == {
@@ -421,6 +424,16 @@ def test_public_assessment_openapi_matches_response_contract() -> None:
     }
     assert set(operations["answer"]["responses"]) == {
         "200",
+        "401",
+        "403",
+        "404",
+        "409",
+        "422",
+        "500",
+        "503",
+    }
+    assert set(operations["report"]["responses"]) == {
+        "204",
         "401",
         "403",
         "404",
@@ -530,6 +543,33 @@ async def test_player_completion_exposes_only_public_question_results() -> None:
             "status": "completed",
             "feedback": completed.json()["feedback"],
         }
+
+
+@pytest.mark.asyncio
+async def test_player_can_report_only_the_current_question() -> None:
+    repository = InMemoryAssessmentRepository()
+    async with _client(_app(repository, FakeKstEngine(), seed_active=True)) as client:
+        headers = _authorization(_player_token(UUID(str(TEST_ID))))
+        report = await client.post(
+            f"/api/v1/player/tests/{TEST_ID}/questions/{SUBMISSION_ID}/report",
+            headers=headers,
+        )
+        stale = await client.post(
+            "/api/v1/player/tests/"
+            f"{TEST_ID}/questions/00000000-0000-4000-8000-000000000099/report",
+            headers=headers,
+        )
+        admin = await client.post(
+            f"/api/v1/player/tests/{TEST_ID}/questions/{SUBMISSION_ID}/report",
+            headers=_authorization(_admin_token()),
+        )
+
+    assert report.status_code == 204
+    assert report.content == b""
+    assert stale.status_code == 409
+    assert admin.status_code == 403
+    assert repository.inadequate_count_snapshot == {ItemId(41): 1}
+    assert repository.method_counts.get("commit_answer", 0) == 0
 
 
 @pytest.mark.asyncio

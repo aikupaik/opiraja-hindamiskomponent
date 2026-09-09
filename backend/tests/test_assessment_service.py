@@ -17,7 +17,14 @@ from app.services.assessment import (
     QuestionResult,
     feedback_from_profile,
 )
-from tests.factories import TEST_ID, make_item, make_model, make_profile
+from tests.factories import (
+    SUBMISSION_ID,
+    TEST_ID,
+    make_item,
+    make_model,
+    make_profile,
+    make_session,
+)
 from tests.fakes.assessment_repository import InMemoryAssessmentRepository
 from tests.fakes.kst_engine import FakeKstEngine
 
@@ -48,6 +55,34 @@ def _service(
         max_graph_nodes=10,
         configuration_repository=configuration_repository,
     )
+
+
+@pytest.mark.asyncio
+async def test_reporting_the_current_question_only_increments_its_counter() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_session(make_session())
+    await repository.seed_items(make_item())
+
+    await _service(repository, FakeKstEngine()).report_question(TEST_ID, SUBMISSION_ID)
+
+    assert repository.inadequate_count_snapshot == {ItemId(41): 1}
+    assert repository.method_counts["increment_inadequate_count"] == 1
+    assert repository.method_counts.get("commit_answer", 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_reporting_a_stale_question_does_not_increment_its_counter() -> None:
+    repository = InMemoryAssessmentRepository()
+    await repository.seed_session(make_session())
+    await repository.seed_items(make_item())
+
+    with pytest.raises(AssessmentConflict, match="stale submission"):
+        await _service(repository, FakeKstEngine()).report_question(
+            TEST_ID,
+            SubmissionId(UUID("00000000-0000-4000-8000-000000000099")),
+        )
+
+    assert repository.inadequate_count_snapshot == {}
 
 
 class _ActiveConfigurationRepository:

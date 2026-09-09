@@ -24,6 +24,7 @@ from app.domain.repository import RepositoryDataError, RepositoryUnavailable
 from app.observability import collect_dependency_metrics
 from app.persistence.supabase_mapping import (
     ANSWER_TABLE,
+    INCREMENT_INADEQUATE_COUNT_FUNCTION,
     ITEM_TABLE,
     KST_MODEL_CACHE_TABLE,
     SESSION_TABLE,
@@ -164,6 +165,32 @@ def test_lists_answers_for_exact_test() -> None:
         assert await repository.list_answers_for_test(TEST_ID) == (answer,)
 
     asyncio.run(_with_repository(handler, scenario))
+
+
+def test_increment_inadequate_count_calls_the_atomic_rpc() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert _path_table(request) == INCREMENT_INADEQUATE_COUNT_FUNCTION
+        assert _body(request) == {"p_yp_id": int(ITEM_ID)}
+        return _response([{"yp_id": int(ITEM_ID)}])
+
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        await repository.increment_inadequate_count(ITEM_ID)
+
+    asyncio.run(_with_repository(handler, scenario))
+
+
+def test_increment_inadequate_count_rejects_an_unmatched_rpc_result() -> None:
+    async def scenario(repository: SupabaseAssessmentRepository) -> None:
+        with pytest.raises(RepositoryDataError, match="another item"):
+            await repository.increment_inadequate_count(ITEM_ID)
+
+    asyncio.run(
+        _with_repository(
+            lambda _request: _response([{"yp_id": int(NEXT_ITEM_ID)}]),
+            scenario,
+        )
+    )
 
 
 def test_graph_cache_ignores_conflicts_and_reloads_canonical_row() -> None:

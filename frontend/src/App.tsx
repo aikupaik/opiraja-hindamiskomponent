@@ -218,6 +218,9 @@ function TestPlayer({
 
         {(state.kind === 'question' || state.kind === 'submitting') && (
           <QuestionView
+            key={state.question.submission_id}
+            api={api}
+            testId={testId}
             question={state.question}
             selection={state.selection}
             submitting={state.kind === 'submitting'}
@@ -359,18 +362,55 @@ function StatusPanel({
 }
 
 function QuestionView({
+  api,
+  testId,
   question,
   selection,
   submitting,
   onSelect,
   onSubmit,
 }: {
+  api: PlayerApi
+  testId: string
   question: PlayerQuestion
   selection: string | null
   submitting: boolean
   onSelect: (selection: string) => void
   onSubmit: () => void
 }) {
+  const [reportStatus, setReportStatus] = useState<
+    'idle' | 'pending' | 'reported' | 'failed'
+  >(() => (
+    hasReportedQuestion(testId, question.submission_id) ? 'reported' : 'idle'
+  ))
+  const reportController = useRef<AbortController | null>(null)
+
+  useEffect(() => () => reportController.current?.abort(), [])
+
+  const reportQuestion = () => {
+    if (reportStatus === 'pending' || reportStatus === 'reported') return
+
+    const controller = new AbortController()
+    reportController.current = controller
+    setReportStatus('pending')
+    void api
+      .reportQuestion(testId, question.submission_id, controller.signal)
+      .then(() => {
+        if (controller.signal.aborted) return
+        rememberReportedQuestion(testId, question.submission_id)
+        setReportStatus('reported')
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || isAborted(error)) return
+        setReportStatus('failed')
+      })
+      .finally(() => {
+        if (reportController.current === controller) {
+          reportController.current = null
+        }
+      })
+  }
+
   return (
     <form
       onSubmit={(event) => {
@@ -378,7 +418,22 @@ function QuestionView({
         onSubmit()
       }}
     >
-      <p className="eyebrow">Küsimus</p>
+      <div className="question-heading">
+        <p className="eyebrow">Küsimus</p>
+        <button
+          className="question-report"
+          type="button"
+          disabled={submitting || reportStatus === 'pending' || reportStatus === 'reported'}
+          onClick={reportQuestion}
+        >
+          <span aria-hidden="true">⚑</span>
+          {reportStatus === 'pending'
+            ? 'Teavitust saadetakse…'
+            : reportStatus === 'reported'
+              ? 'Teavitus saadetud'
+              : 'Teavita probleemist'}
+        </button>
+      </div>
       {question.instruction && (
         <p className="instruction">{question.instruction}</p>
       )}
@@ -405,6 +460,11 @@ function QuestionView({
           Vastust salvestatakse…
         </p>
       )}
+      {reportStatus === 'failed' && (
+        <p className="report-status" role="alert">
+          Teavitust ei saadetud. Proovi uuesti.
+        </p>
+      )}
       <div className="actions">
         <button type="submit" disabled={selection === null || submitting}>
           {submitting ? 'Saadan…' : 'Edasi'}
@@ -412,6 +472,20 @@ function QuestionView({
       </div>
     </form>
   )
+}
+
+const QUESTION_REPORT_STORAGE_PREFIX = 'opiraja:question-report:'
+
+function questionReportStorageKey(testId: string, submissionId: string): string {
+  return `${QUESTION_REPORT_STORAGE_PREFIX}${testId}:${submissionId}`
+}
+
+function hasReportedQuestion(testId: string, submissionId: string): boolean {
+  return sessionStorage.getItem(questionReportStorageKey(testId, submissionId)) === '1'
+}
+
+function rememberReportedQuestion(testId: string, submissionId: string): void {
+  sessionStorage.setItem(questionReportStorageKey(testId, submissionId), '1')
 }
 
 function Feedback({

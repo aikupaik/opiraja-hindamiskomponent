@@ -265,6 +265,14 @@ accepted submission returns the current persisted view without advancing R or
 incrementing item usage again. A stale UUID, a conflicting concurrent commit,
 or an option ID that does not belong to the current question returns `409`.
 
+#### `POST /api/v1/player/tests/{test_id}/questions/{submission_id}/report`
+
+Records a student report for the active question and returns `204 No Content`.
+The player-bound submission UUID must match the persisted current question. The
+request atomically increments only `ylesandepank.ebaadekvaatne_arv`; it does not
+write an answer, advance the assessment, or accept the admin-simulation
+exception.
+
 ### Status codes
 
 | Status | Meaning |
@@ -272,6 +280,7 @@ or an option ID that does not belong to the current question returns `409`.
 | `200` | Successful read, start, answer, liveness, or readiness request. |
 | `201` | Assessment created. |
 | `202` | Assessment is still preparing; poll after the `Retry-After` interval. |
+| `204` | Question report recorded. |
 | `403` | Authorization dependency denied the operation. |
 | `404` | Assessment does not exist. |
 | `409` | Persisted state conflicts with the requested operation. |

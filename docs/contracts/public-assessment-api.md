@@ -17,8 +17,9 @@ This contract covers:
 
 - `POST /api/v1/tests`;
 - `GET /api/v1/tests/{test_id}`;
-- `POST /api/v1/player/tests/{test_id}/start`; and
-- `POST /api/v1/player/tests/{test_id}/answers`.
+- `POST /api/v1/player/tests/{test_id}/start`;
+- `POST /api/v1/player/tests/{test_id}/answers`; and
+- `POST /api/v1/player/tests/{test_id}/questions/{submission_id}/report`.
 
 Admin endpoints, the internal R service, and persistence schemas are outside
 this contract. Player-link issuance is included in the public launch flow.
@@ -62,6 +63,9 @@ this contract. Player-link issuance is included in the public launch flow.
   retained diagnostics independently requires `admin:diagnostics`.
 - A dependency-supplied valid identity without the required actor, scope, or
   test binding receives `403` before assessment processing.
+
+Question reporting is deliberately player-only; it does not accept the
+admin-simulation exception.
 
 JWT authorization is active. Enforced edge controls and the remaining
 deployment acceptance checks remain mandatory pilot gates.
@@ -339,6 +343,21 @@ that persisted question:
 - `500`: persisted or dependency data violated an invariant.
 
 The answer endpoint never returns `202` or a `preparing` response.
+
+## `POST /api/v1/player/tests/{test_id}/questions/{submission_id}/report`
+
+Records an issue report for the current active question. It requires a
+`tests:play` player token bound to the path `test_id`; unlike start and answer,
+it does not accept an admin-simulation credential.
+
+There is no request body. `submission_id` is the UUID of the current question's
+opaque submission token. A successful request returns `204 No Content` and
+atomically increments only `ylesandepank.ebaadekvaatne_arv`; it does not change
+the session, record an answer, or advance the test.
+
+Failures use the standard contract: `404` for an unknown test, `409` when the
+question is stale or the assessment is not active, `422` for malformed path
+identifiers, and `503` when persistence is unavailable.
 
 ## Error formats
 

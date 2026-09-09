@@ -493,6 +493,23 @@ class AssessmentService:
             )
         return self._view(committed.session)
 
+    async def report_question(
+        self, test_id: TestId, submission_id: SubmissionId
+    ) -> None:
+        """Record a report for only the persisted current player question."""
+
+        session = await self._require_session(test_id)
+        if session.is_legacy:
+            raise AssessmentConflict("v1 assessment cannot be resumed")
+        if session.status is not SessionStatus.ACTIVE:
+            raise AssessmentConflict("assessment has no reportable question")
+        question = self._player_state(session).current_question
+        if question is None:
+            raise AssessmentConflict("assessment has no current question")
+        if question.submission_id != submission_id:
+            raise AssessmentConflict("stale submission")
+        await self._repository.increment_inadequate_count(question.item_id)
+
     async def _first_question(
         self,
         model: KstModel,

@@ -60,6 +60,25 @@ describe('player API client', () => {
     expect(answerInit.headers.get('Content-Type')).toBe('application/json')
   })
 
+  it('reports the current question with an empty authenticated POST', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    const api = createPlayerApi({
+      fetcher,
+      credentialSource: { getCredential: () => 'player-token' },
+    })
+
+    await api.reportQuestion(testId, submissionId, new AbortController().signal)
+
+    const [url, init] = fetcher.mock.calls[0]
+    expect(url).toBe(
+      `/api/v1/player/tests/${testId}/questions/${submissionId}/report`,
+    )
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeUndefined()
+    expect(init.headers.get('Authorization')).toBe('Bearer player-token')
+    expect(init.headers.get('Content-Type')).toBeNull()
+  })
+
   it('conditionally attaches the credential supplied at request time', async () => {
     let credential: string | null = 'short-lived-token'
     const fetcher = vi.fn().mockImplementation(() => jsonResponse(active))

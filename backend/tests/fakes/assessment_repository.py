@@ -50,6 +50,7 @@ class InMemoryAssessmentRepository:
         self._items: dict[ItemId, AssessmentItem] = {}
         self._yg_orders: dict[TestId, list[YgOrder]] = {}
         self._answers: dict[SubmissionId, AnswerRecord] = {}
+        self._inadequate_counts: Counter[ItemId] = Counter()
         self._calls: list[RepositoryCall] = []
         self._method_counts: Counter[str] = Counter()
         self._failures: dict[str, BaseException] = {}
@@ -252,6 +253,14 @@ class InMemoryAssessmentRepository:
             self._raise_injected("get_item")
             return deepcopy(self._items.get(item_id))
 
+    async def increment_inadequate_count(self, item_id: ItemId) -> None:
+        async with self._lock:
+            self._record("increment_inadequate_count", item_id)
+            self._raise_injected("increment_inadequate_count")
+            if item_id not in self._items:
+                raise RepositoryDataError(f"unknown item: {item_id}")
+            self._inadequate_counts[item_id] += 1
+
     async def get_latest_yg_order(self, test_id: TestId) -> YgOrder | None:
         async with self._lock:
             self._record("get_latest_yg_order", test_id)
@@ -435,6 +444,10 @@ class InMemoryAssessmentRepository:
     @property
     def item_snapshot(self) -> dict[ItemId, AssessmentItem]:
         return deepcopy(self._items)
+
+    @property
+    def inadequate_count_snapshot(self) -> dict[ItemId, int]:
+        return dict(self._inadequate_counts)
 
     @property
     def yg_order_snapshot(self) -> dict[TestId, tuple[YgOrder, ...]]:

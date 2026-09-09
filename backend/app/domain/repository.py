@@ -66,6 +66,10 @@ class AssessmentRepository(Protocol):
 
     async def get_item(self, item_id: ItemId) -> AssessmentItem | None: ...
 
+    async def increment_inadequate_count(self, item_id: ItemId) -> None:
+        """Atomically record one player report for an item-bank question."""
+        ...
+
     async def list_answers_for_test(
         self, test_id: TestId
     ) -> tuple[AnswerRecord, ...]: ...

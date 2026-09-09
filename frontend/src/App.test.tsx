@@ -49,8 +49,9 @@ const completed: CompletedResult = {
 function mockApi(
   start: PlayerApi['start'] = vi.fn().mockResolvedValue(active()),
   submit: PlayerApi['submit'] = vi.fn().mockResolvedValue(completed),
+  reportQuestion: PlayerApi['reportQuestion'] = vi.fn().mockResolvedValue(undefined),
 ): PlayerApi {
-  return { start, submit }
+  return { start, submit, reportQuestion }
 }
 
 function beginTest() {
@@ -224,6 +225,60 @@ describe('preparation polling', () => {
 })
 
 describe('question interaction and submission', () => {
+  it('reports the current question once without changing answer interaction', async () => {
+    const reportQuestion = vi.fn<PlayerApi['reportQuestion']>().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<App api={mockApi(undefined, undefined, reportQuestion)} pathname={path} />)
+    beginTest()
+
+    const report = await screen.findByRole('button', { name: 'Teavita probleemist' })
+    await user.click(report)
+
+    expect(reportQuestion).toHaveBeenCalledWith(
+      testId,
+      '11111111-1111-4111-8111-111111111111',
+      expect.any(AbortSignal),
+    )
+    expect(await screen.findByRole('button', { name: 'Teavitus saadetud' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edasi' })).toBeDisabled()
+
+    await user.click(screen.getByLabelText('Neli'))
+    expect(screen.getByRole('button', { name: 'Edasi' })).toBeEnabled()
+  })
+
+  it('allows retrying an unsuccessful question report', async () => {
+    const reportQuestion = vi
+      .fn<PlayerApi['reportQuestion']>()
+      .mockRejectedValueOnce(new PlayerApiError('network'))
+      .mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    render(<App api={mockApi(undefined, undefined, reportQuestion)} pathname={path} />)
+    beginTest()
+
+    await user.click(await screen.findByRole('button', { name: 'Teavita probleemist' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Teavitust ei saadetud')
+    await user.click(screen.getByRole('button', { name: 'Teavita probleemist' }))
+
+    expect(reportQuestion).toHaveBeenCalledTimes(2)
+    expect(await screen.findByRole('button', { name: 'Teavitus saadetud' })).toBeDisabled()
+  })
+
+  it('remembers a successful report after remounting in the same browser session', async () => {
+    const reportQuestion = vi.fn<PlayerApi['reportQuestion']>().mockResolvedValue(undefined)
+    const first = render(
+      <App api={mockApi(undefined, undefined, reportQuestion)} pathname={path} />,
+    )
+    beginTest()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Teavita probleemist' }))
+    await screen.findByRole('button', { name: 'Teavitus saadetud' })
+    first.unmount()
+
+    render(<App api={mockApi()} pathname={path} />)
+    beginTest()
+    expect(await screen.findByRole('button', { name: 'Teavitus saadetud' })).toBeDisabled()
+  })
+
   it('preserves option order and supports native keyboard radio interaction', async () => {
     const user = userEvent.setup()
     render(<App api={mockApi()} pathname={path} />)

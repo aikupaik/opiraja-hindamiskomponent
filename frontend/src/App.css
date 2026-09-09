@@ -195,6 +195,44 @@ legend {
   gap: 12px;
 }
 
+.question-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.question-heading .eyebrow { margin: 0; }
+
+.question-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  color: var(--ink-muted);
+  background: transparent;
+  font-size: 0.84rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.question-report:hover:not(:disabled) {
+  color: var(--forest-dark);
+  background: transparent;
+  transform: none;
+}
+
+.question-report:disabled { background: transparent; }
+
+.report-status {
+  margin: 16px 0 -10px;
+  color: #9d392f;
+  text-align: right;
+}
+
 .option {
   display: flex;
   align-items: center;

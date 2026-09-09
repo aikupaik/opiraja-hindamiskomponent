@@ -3,10 +3,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import JSONResponse
 
-from app.domain.models import TestId
+from app.domain.models import SubmissionId, TestId
 from app.services.assessment import AssessmentService
 
 from .auth import AuthContext, authorize_player, require_player
@@ -92,3 +92,28 @@ async def submit_answer(
         else ()
     )
     return to_player_ready_response(view, question_results)
+
+
+@router.post(
+    "/{test_id}/questions/{submission_id}/report",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    response_description="Question report recorded.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Bearer token is invalid."},
+        403: {"model": ErrorResponse, "description": "Operation is forbidden."},
+        404: {"model": ErrorResponse, "description": "Assessment was not found."},
+        409: {"model": ErrorResponse, "description": "Question is no longer current."},
+        503: {"model": ErrorResponse, "description": "Persistence is unavailable."},
+        500: {"model": ErrorResponse, "description": "Request could not be completed."},
+    },
+)
+async def report_question(
+    test_id: UUID,
+    submission_id: UUID,
+    service: Annotated[AssessmentService, Depends(get_assessment_service)],
+    auth: Annotated[AuthContext, Depends(authorize_player)],
+) -> Response:
+    require_player(auth, test_id)
+    await service.report_question(TestId(test_id), SubmissionId(submission_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

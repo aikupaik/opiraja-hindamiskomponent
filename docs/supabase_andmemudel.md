@@ -136,12 +136,20 @@ täpsustatud eraldi peatükis "testi_loogika ja lopp_profiil struktuur".*
 | beeta_error, g_guess | numeric | pks/BLIM parameetrid (vaikeväärtus 0.05 / 0.25 — fiktiivsed algväärtused, kalibreerimata) |
 | staatus | text | kavand / kasutatav / läbi vaatamisel / arhiivis (CHECK piirang) |
 | kasutamiste_arv | integer | Vaikeväärtus: 0 — kalibreerimise läve jälgimiseks |
+| ebaadekvaatne_arv | integer | Vaikeväärtus: 0 — õppijate teatatud ebaloogiliste küsimuste loendur; suureneb ainult atomaarse `increment_ebaadekvaatne_arv` RPC kaudu |
 | viimane_kasutus | timestamptz | Nullable |
 
 *Valdaval osal ridadest (nähtud nt füüsika ülesannete puhul, 7/9) on
 stiimul tühi — YG prompt ei nõua praegu järjekindlalt kontekstilauset,
 nt pole reeglina vajalik lünktekst-tüüpi ülesannete puhul (vt ka
 "Lahtised küsimused").*
+
+### Ebapiisava küsimuse raport
+
+Testipleieri raport suurendab ainult `ebaadekvaatne_arv` väärtust. Backend
+kasutab selleks atomaarset `public.increment_ebaadekvaatne_arv(bigint)` RPC-d;
+anonüümsetel ja autentitud Supabase'i klientidel puudub funktsiooni käivitamise
+õigus ning seda kasutab ainult `service_role`.
 
 ## tulemustepank (48 rida)
 
