@@ -22,8 +22,8 @@ from .questions import QuestionOutput, RandomSource, build_question, to_question
 
 logger = logging.getLogger(__name__)
 
-MINIMUM_VALID_ITEMS_PER_NODE = 3
-MAX_GENERATED_ITEMS_PER_NODE_REQUEST = 5
+MINIMUM_VALID_ITEMS_PER_NODE = 5
+MAX_GENERATED_ITEMS_PER_NODE_REQUEST = 7
 
 
 class AssessmentServiceError(RuntimeError):
