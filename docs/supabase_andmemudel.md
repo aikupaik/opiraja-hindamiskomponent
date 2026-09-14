@@ -194,6 +194,7 @@ tulemuse järel vajadusel väiksema järeltellimuse.*
 | test_id | text | Vaba viide (mitte FK) |
 | kursus | text | — |
 | graafi_objektid | jsonb | Puuduvate sõlmede loend |
+| graafi_ema_objekt | text | Valikuline ühine emasõlme kontekst YG genereeritud ülesannetele |
 | kognitiivne_tase | text | Sama valikute loend, mis ylesandepank |
 | maht | integer | Pärandühilduvus; uutes tellimustes pole autoriteetne |
 | ylesande_taotlused | jsonb | Uute tellimuste autoriteetne massiiv: `[{"node":"A","amount":1}]` |

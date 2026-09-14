@@ -48,13 +48,16 @@ curl --fail-with-body -X POST "$API_BASE_URL/api/v1/tests" \
     "course": "ICM0016",
     "goal": "trial_run",
     "method": "kst",
-    "cognitive_level": "mõistab"
+    "cognitive_level": "mõistab",
+    "parent_node": "project management"
   }'
 ```
 
 Required fields are `user_id`, `learning_path_id`, and `nodes`. `nodes` must
 contain 1–`MAX_GRAPH_NODES` unique, non-whitespace strings. Relation endpoints
 must be present in `nodes`. `method` currently supports only `kst`.
+`parent_node` is optional and provides the shared parent context for
+YG-generated items.
 
 A successful request returns `201 Created`, a `Location` header, and:
 
@@ -143,4 +146,3 @@ Application errors use this envelope:
 Every API response contains `X-Request-ID`. Preserve it in logs and support
 requests, but never log bearer tokens, player URLs, JWT payloads containing
 credentials, or request bodies containing secrets.
-

@@ -33,7 +33,13 @@ from app.api.auth import (
 from app.api.dependencies import get_kst_engine, get_repository
 from app.api.tokens import TokenService
 from app.config import Settings
-from app.domain.models import AdvanceCompleted, ItemId, ModelBuildResult, SessionStatus
+from app.domain.models import (
+    AdvanceCompleted,
+    ItemId,
+    ModelBuildResult,
+    SessionStatus,
+    TestId,
+)
 from app.domain.repository import AssessmentRepository
 from app.domain.repository import RepositoryUnavailable
 from app.integrations.kst_engine import KstEngine
@@ -304,6 +310,7 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
                 "nodes": ["B", "A"],
                 "relations": [{"from": "A", "to": "B"}],
                 "goal": "Understand the graph",
+                "parent_node": "Foundations",
             },
         )
         assert created.status_code == 201
@@ -321,6 +328,8 @@ async def test_create_preparing_get_and_player_poll_have_exact_public_shapes() -
         player_token = body["player_url"].split("#token=", 1)[1]
         assert created.headers["cache-control"] == "no-store"
         assert created.headers["location"] == f"/api/v1/tests/{test_id}"
+        order = repository.yg_order_snapshot[TestId(test_id)][0]
+        assert order.parent_node == "Foundations"
 
         status_response = await client.get(
             f"/api/v1/tests/{test_id}", headers=_authorization(_or_token())

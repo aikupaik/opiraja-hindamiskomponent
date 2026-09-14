@@ -100,7 +100,7 @@ the implemented authorization section below.
 
 - `POST /api/v1/tests`
   - OR-facing; pre-pilot permission: `tests:create`.
-  - Input: `user_id`, `learning_path_id`, optional `course`/`goal`, `method="kst"`, optional `cognitive_level`, `nodes: string[]`, and `relations: {from,to}[]`.
+  - Input: `user_id`, `learning_path_id`, optional `course`/`goal`/`parent_node`, `method="kst"`, optional `cognitive_level`, `nodes: string[]`, and `relations: {from,to}[]`.
   - Output: `test_id`, `status`, `player_url`, and `missing_nodes`.
   - Builds/caches the graph, creates the session, checks item coverage, and either activates immediately or creates one non-duplicate `yg_tellimused` row.
 

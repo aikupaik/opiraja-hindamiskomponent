@@ -373,6 +373,7 @@ class YgOrder:
     cognitive_level: str | None
     volume: int
     status: YgStatus
+    parent_node: str | None = None
     created_at: datetime | None = None
     item_requests: tuple[InventoryRequest, ...] = ()
     fulfillment_results: tuple[InventoryResult, ...] = ()

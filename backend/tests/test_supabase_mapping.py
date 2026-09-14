@@ -130,7 +130,10 @@ def test_kst_model_cache_round_trip() -> None:
     assert decode_kst_model_cache_entry(encode_kst_model_cache_entry(entry)) == entry
 
 
-def test_yg_order_round_trip_preserves_course_only_on_order() -> None:
+@pytest.mark.parametrize("parent_node", ("Mechanics", None))
+def test_yg_order_round_trip_preserves_generation_context(
+    parent_node: str | None,
+) -> None:
     order = YgOrder(
         order_id=YgOrderId(5),
         test_id=TEST_ID,
@@ -139,6 +142,7 @@ def test_yg_order_round_trip_preserves_course_only_on_order() -> None:
         cognitive_level="mõistab",
         volume=3,
         status=YgStatus.PENDING,
+        parent_node=parent_node,
         item_requests=(
             InventoryRequest(node="A", amount=3),
             InventoryRequest(node="B", amount=3),

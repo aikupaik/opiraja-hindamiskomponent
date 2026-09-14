@@ -281,7 +281,9 @@ async def test_partial_failed_generation_retries_only_remaining_deficit() -> Non
     await repository.seed_items(*_items("A", 1, 3), *_items("B", 20, 1))
     engine = FakeKstEngine(model_results=(_built(),))
     service = _service(repository, engine)
-    created = await service.create_assessment(_command())
+    created = await service.create_assessment(
+        replace(_command(), parent_node="Mechanics")
+    )
     test_id = TestId(created.test_id)
     await repository.set_latest_yg_status(test_id, YgStatus.FAILED)
     await repository.seed_items(
@@ -295,6 +297,8 @@ async def test_partial_failed_generation_retries_only_remaining_deficit() -> Non
 
     assert view.status is SessionStatus.PREPARING
     assert len(orders) == 2
+    assert orders[0].parent_node == "Mechanics"
+    assert orders[-1].parent_node == "Mechanics"
     assert orders[-1].item_requests == (
         InventoryRequest(node="B", amount=1),
     )

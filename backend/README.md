@@ -168,7 +168,8 @@ Request:
   "course": "Matemaatika",
   "goal": "Check prerequisite knowledge",
   "method": "kst",
-  "cognitive_level": "mõistab"
+  "cognitive_level": "mõistab",
+  "parent_node": "Arithmetic"
 }
 ```
 
@@ -176,7 +177,8 @@ Request:
 between 1 and `MAX_GRAPH_NODES` unique, non-whitespace nodes, and every
 relation endpoint must occur in `nodes`. Duplicate relations are collapsed.
 Only the `kst` method is supported. `relations`, `course`, `goal`, `method`,
-and `cognitive_level` are optional.
+`cognitive_level`, and `parent_node` are optional. `parent_node` is passed to
+YG as the shared parent context for generated items.
 
 Response:
 

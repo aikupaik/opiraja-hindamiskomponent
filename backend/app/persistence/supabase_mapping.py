@@ -42,7 +42,7 @@ ITEM_COLUMNS = (
 )
 ANSWER_COLUMNS = "vastus_id,test_id,yp_id,skoor,valitud_vastus,vastatud_ajal"
 YG_ORDER_COLUMNS = (
-    "id,test_id,kursus,graafi_objektid,kognitiivne_tase,maht,staatus,loodud,"
+    "id,test_id,kursus,graafi_objektid,graafi_ema_objekt,kognitiivne_tase,maht,staatus,loodud,"
     "ylesande_taotlused,taitmise_tulemus"
 )
 
@@ -367,6 +367,7 @@ def encode_yg_order(order: YgOrder) -> EncodedRow:
         "test_id": str(order.test_id),
         "kursus": order.course,
         "graafi_objektid": list(order.nodes),
+        "graafi_ema_objekt": order.parent_node,
         "kognitiivne_tase": order.cognitive_level,
         "maht": order.volume,
         "staatus": _YG_TO_DB[order.status],
@@ -416,6 +417,7 @@ def decode_yg_order(row: Row) -> YgOrder:
         test_id=TestId(_uuid(row, "test_id")),
         course=_string(row, "kursus"),
         nodes=effective_nodes,
+        parent_node=_optional_string(row, "graafi_ema_objekt"),
         cognitive_level=_optional_string(row, "kognitiivne_tase"),
         volume=effective_volume,
         status=_enum_value(_YG_FROM_DB, row, "staatus"),

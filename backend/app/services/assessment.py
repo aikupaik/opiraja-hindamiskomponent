@@ -48,6 +48,7 @@ class CreateAssessmentCommand:
     goal: str | None = None
     method: AssessmentMethod = AssessmentMethod.KST
     cognitive_level: str = "mõistab"
+    parent_node: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +225,7 @@ class AssessmentService:
                     test_id,
                     command.course,
                     command.cognitive_level,
+                    command.parent_node,
                     plan.requests,
                 )
             )
@@ -362,6 +364,7 @@ class AssessmentService:
                             test_id,
                             "" if latest is None else latest.course,
                             None if latest is None else latest.cognitive_level,
+                            None if latest is None else latest.parent_node,
                             plan.requests,
                         )
                     )
@@ -697,6 +700,7 @@ class AssessmentService:
         test_id: TestId,
         course: str,
         cognitive_level: str | None,
+        parent_node: str | None,
         requests: tuple[InventoryRequest, ...],
     ) -> YgOrder:
         if any(
@@ -714,6 +718,7 @@ class AssessmentService:
             cognitive_level=cognitive_level,
             volume=max((request.amount for request in requests), default=0),
             status=YgStatus.PENDING,
+            parent_node=parent_node,
             item_requests=requests,
         )
 

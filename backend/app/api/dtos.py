@@ -53,6 +53,7 @@ class CreateTestRequest(PublicModel):
     goal: str | None = None
     method: Literal["kst"] = "kst"
     cognitive_level: str = "mõistab"
+    parent_node: str | None = None
 
     def to_command(self) -> CreateAssessmentCommand:
         return CreateAssessmentCommand(
@@ -67,6 +68,7 @@ class CreateTestRequest(PublicModel):
             goal=self.goal,
             method=AssessmentMethod(self.method),
             cognitive_level=self.cognitive_level,
+            parent_node=self.parent_node,
         )
 
 

@@ -170,7 +170,8 @@ Creates one assessment and requires the logical scope `tests:create`.
   "course": "Matemaatika",
   "goal": "Check prerequisite knowledge",
   "method": "kst",
-  "cognitive_level": "mõistab"
+  "cognitive_level": "mõistab",
+  "parent_node": "Arithmetic"
 }
 ```
 
@@ -184,6 +185,7 @@ Creates one assessment and requires the logical scope `tests:create`.
 | `goal` | no | String or `null`; defaults to `null`. |
 | `method` | no | Must be `"kst"`; defaults to `"kst"`. |
 | `cognitive_level` | no | String; defaults to `"mõistab"`. |
+| `parent_node` | no | String or `null`; defaults to `null`. Passed to YG as shared parent context for generated items. |
 
 Graph normalization sorts nodes and relations by their UTF-8 byte order. It
 does not trim node text. The public boundary does not add further cycle or
