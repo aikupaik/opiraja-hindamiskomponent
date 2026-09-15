@@ -431,7 +431,7 @@ function QuestionView({
             ? 'Teavitust saadetakse…'
             : reportStatus === 'reported'
               ? 'Teavitus saadetud'
-              : 'Teavita probleemist'}
+              : 'Vigane või arusaamatu ülesanne'}
         </button>
       </div>
       {question.instruction && (
