@@ -21,6 +21,8 @@ describe('MathText', () => {
       String.raw`\frac{5}{6}`,
     )
     expect(container.querySelectorAll('math')).toHaveLength(2)
+    expect(container.querySelector('[style]')).toBeNull()
+    expect(container.querySelector('.katex-html')).toBeNull()
     expect(container).toHaveTextContent('First')
     expect(container).toHaveTextContent('then')
   })

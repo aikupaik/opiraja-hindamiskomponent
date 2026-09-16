@@ -28,9 +28,11 @@
   - Leave unmatched delimiters as ordinary text.
   - If KaTeX rejects a formula, show its original source instead of breaking
     the page.
-- Render with accessible HTML and MathML, `trust: false`, bounded macro
-  expansion, and no user-defined persistent macros. Plain content remains
-  React text rather than injected HTML.
+- Render with accessible native MathML, `trust: false`, bounded macro
+  expansion, and no user-defined persistent macros. MathML-only output avoids
+  KaTeX's inline HTML styles and font assets so it remains compatible with the
+  deployment's strict CSP. Plain content remains React text rather than
+  injected HTML.
 - Apply rendering to:
   - `frontend/` active-question instruction, stimulus, prompt, and all answer
     options.

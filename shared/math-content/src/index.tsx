@@ -1,6 +1,5 @@
 import katex from 'katex'
 import 'katex/contrib/mhchem'
-import 'katex/dist/katex.min.css'
 import './math-content.css'
 
 export type MathTextProps = {
@@ -46,7 +45,7 @@ export function MathText({ text }: MathTextProps) {
         displayMode: false,
         globalGroup: false,
         maxExpand: 1000,
-        output: 'htmlAndMathml',
+        output: 'mathml',
         strict: 'warn',
         throwOnError: true,
         trust: false,
