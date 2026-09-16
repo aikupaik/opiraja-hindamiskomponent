@@ -231,7 +231,9 @@ describe('question interaction and submission', () => {
     render(<App api={mockApi(undefined, undefined, reportQuestion)} pathname={path} />)
     beginTest()
 
-    const report = await screen.findByRole('button', { name: 'Teavita probleemist' })
+    const report = await screen.findByRole('button', {
+      name: 'Vigane või arusaamatu ülesanne',
+    })
     await user.click(report)
 
     expect(reportQuestion).toHaveBeenCalledWith(
@@ -255,9 +257,17 @@ describe('question interaction and submission', () => {
     render(<App api={mockApi(undefined, undefined, reportQuestion)} pathname={path} />)
     beginTest()
 
-    await user.click(await screen.findByRole('button', { name: 'Teavita probleemist' }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Vigane või arusaamatu ülesanne',
+      }),
+    )
     expect(await screen.findByRole('alert')).toHaveTextContent('Teavitust ei saadetud')
-    await user.click(screen.getByRole('button', { name: 'Teavita probleemist' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Vigane või arusaamatu ülesanne',
+      }),
+    )
 
     expect(reportQuestion).toHaveBeenCalledTimes(2)
     expect(await screen.findByRole('button', { name: 'Teavitus saadetud' })).toBeDisabled()
@@ -270,7 +280,11 @@ describe('question interaction and submission', () => {
     )
     beginTest()
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Teavita probleemist' }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Vigane või arusaamatu ülesanne',
+      }),
+    )
     await screen.findByRole('button', { name: 'Teavitus saadetud' })
     first.unmount()
 
@@ -299,6 +313,40 @@ describe('question interaction and submission', () => {
     await user.keyboard(' ')
     expect(radios[0]).toBeChecked()
     expect(submit).toBeEnabled()
+  })
+
+  it('renders math and chemistry throughout an active question', async () => {
+    const result = active()
+    result.question = {
+      ...result.question,
+      instruction: String.raw`Choose \(x^2\).`,
+      stimulus: String.raw`Reaction: \(\ce{2H2 + O2 -> 2H2O}\).`,
+      prompt: String.raw`Simplify \(\frac{15}{21}\).`,
+      options: [
+        {
+          id: 'option-formula',
+          text: String.raw`Double escaped \\(\\frac{5}{6}\\)`,
+        },
+        { id: 'option-plain', text: 'Plain text' },
+      ],
+    }
+    const { container } = render(
+      <App api={mockApi(vi.fn().mockResolvedValue(result))} pathname={path} />,
+    )
+    beginTest()
+
+    await screen.findAllByRole('radio')
+    expect(container.querySelectorAll('.math-content-formula')).toHaveLength(4)
+    expect(
+      Array.from(container.querySelectorAll('annotation')).map(
+        (annotation) => annotation.textContent,
+      ),
+    ).toEqual([
+      'x^2',
+      String.raw`\ce{2H2 + O2 -> 2H2O}`,
+      String.raw`\frac{15}{21}`,
+      String.raw`\frac{5}{6}`,
+    ])
   })
 
   it('captures opaque IDs, disables controls, and prevents double submission', async () => {
@@ -537,5 +585,40 @@ describe('completion and reload recovery', () => {
           element.textContent === longStimulus,
       ),
     ).toBeVisible()
+  })
+
+  it('renders formulas in completed question and answer review fields', async () => {
+    const result: CompletedResult = {
+      ...completed,
+      question_results: [
+        {
+          item_id: 43,
+          stimulus: String.raw`Given \(x^2\).`,
+          prompt: String.raw`Choose \(\frac{1}{2}\).`,
+          student_answer: String.raw`\(\frac{2}{4}\)`,
+          correct_answer: String.raw`\\(\\frac{1}{2}\\)`,
+          is_correct: true,
+        },
+      ],
+    }
+    const { container } = render(
+      <App api={mockApi(vi.fn().mockResolvedValue(result))} pathname={path} />,
+    )
+    beginTest()
+
+    await screen.findByRole('heading', { name: 'Sinu tagasiside' })
+    expect(
+      container.querySelectorAll('.question-results .math-content-formula'),
+    ).toHaveLength(4)
+    expect(
+      Array.from(
+        container.querySelectorAll('.question-results annotation'),
+      ).map((annotation) => annotation.textContent),
+    ).toEqual([
+      'x^2',
+      String.raw`\frac{1}{2}`,
+      String.raw`\frac{2}{4}`,
+      String.raw`\frac{1}{2}`,
+    ])
   })
 })

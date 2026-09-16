@@ -1,0 +1,11 @@
+{
+  "name": "@opiraja/math-content",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.tsx",
+  "peerDependencies": {
+    "katex": "^0.18.1",
+    "react": "^19.0.0"
+  }
+}

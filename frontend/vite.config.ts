@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/test/' : '/',
   plugins: [react()],
+  resolve: { preserveSymlinks: true },
   server: {
     proxy: {
       '/api': {

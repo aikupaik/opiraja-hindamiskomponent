@@ -1307,7 +1307,7 @@
   background: #f1f5ed;
 }
 
-.options button span {
+.options button .option-marker {
   width: 27px;
   height: 27px;
   display: grid;
@@ -1318,6 +1318,10 @@
   color: var(--al-color-forest-800);
   font-family: var(--al-font-mono);
   font-size: 0.65rem;
+}
+
+.options button .option-text {
+  min-width: 0;
 }
 
 .feedback-group {

@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@opiraja/frontend-api": "file:../shared/frontend-api",
+    "@opiraja/math-content": "file:../shared/math-content",
+    "katex": "^0.18.1",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

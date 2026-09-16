@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { MathText, truncateMathText } from '@opiraja/math-content'
 import {
   PlayerApiError,
   playerApi,
@@ -435,11 +436,13 @@ function QuestionView({
         </button>
       </div>
       {question.instruction && (
-        <p className="instruction">{question.instruction}</p>
+        <p className="instruction"><MathText text={question.instruction} /></p>
       )}
-      {question.stimulus && <div className="stimulus">{question.stimulus}</div>}
+      {question.stimulus && (
+        <div className="stimulus"><MathText text={question.stimulus} /></div>
+      )}
       <fieldset disabled={submitting}>
-        <legend>{question.prompt}</legend>
+        <legend><MathText text={question.prompt} /></legend>
         <div className="options">
           {question.options.map((option) => (
             <label className="option" key={option.id}>
@@ -450,7 +453,7 @@ function QuestionView({
                 checked={selection === option.id}
                 onChange={() => onSelect(option.id)}
               />
-              <span>{option.text}</span>
+              <span><MathText text={option.text} /></span>
             </label>
           ))}
         </div>
@@ -561,8 +564,8 @@ function QuestionResults({ results }: { results: PlayerQuestionResult[] }) {
                   </span>
                   <ResultQuestion result={result} />
                 </td>
-                <td>{result.student_answer}</td>
-                <td>{result.correct_answer}</td>
+                <td><MathText text={result.student_answer} /></td>
+                <td><MathText text={result.correct_answer} /></td>
               </tr>
             ))}
           </tbody>
@@ -578,26 +581,25 @@ const PROMPT_PREVIEW_LENGTH = 160
 function ResultQuestion({ result }: { result: PlayerQuestionResult }) {
   const [expanded, setExpanded] = useState(false)
   const contentId = useId()
-  const stimulusIsLong =
-    result.stimulus !== null &&
-    Array.from(result.stimulus).length > STIMULUS_PREVIEW_LENGTH
-  const promptIsLong = Array.from(result.prompt).length > PROMPT_PREVIEW_LENGTH
-  const canExpand = stimulusIsLong || promptIsLong
+  const stimulusPreview =
+    result.stimulus === null
+      ? null
+      : truncateMathText(result.stimulus, STIMULUS_PREVIEW_LENGTH)
+  const promptPreview = truncateMathText(result.prompt, PROMPT_PREVIEW_LENGTH)
+  const canExpand = stimulusPreview?.truncated === true || promptPreview.truncated
   const stimulus =
     result.stimulus === null || expanded
       ? result.stimulus
-      : truncateText(result.stimulus, STIMULUS_PREVIEW_LENGTH)
-  const prompt = expanded
-    ? result.prompt
-    : truncateText(result.prompt, PROMPT_PREVIEW_LENGTH)
+      : stimulusPreview?.text ?? result.stimulus
+  const prompt = expanded ? result.prompt : promptPreview.text
 
   return (
     <div className="result-question">
       <div id={contentId} className="result-question-copy">
         {stimulus !== null && (
-          <p className="result-question-stimulus">{stimulus}</p>
+          <p className="result-question-stimulus"><MathText text={stimulus} /></p>
         )}
-        <p className="result-question-prompt">{prompt}</p>
+        <p className="result-question-prompt"><MathText text={prompt} /></p>
       </div>
       {canExpand && (
         <button
@@ -612,12 +614,6 @@ function ResultQuestion({ result }: { result: PlayerQuestionResult }) {
       )}
     </div>
   )
-}
-
-function truncateText(value: string, maximumLength: number): string {
-  const characters = Array.from(value)
-  if (characters.length <= maximumLength) return value
-  return `${characters.slice(0, maximumLength).join('').trimEnd()}…`
 }
 
 function FeedbackSection({

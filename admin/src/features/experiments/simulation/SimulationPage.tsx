@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MathText } from '@opiraja/math-content'
 import {
   api,
   apiResponse,
@@ -287,11 +288,15 @@ export function SimulationPage({
               )}
               {view?.status === 'active' && runState === 'active' && (
                 <div className="question">
-                  <p className="instruction">{view.question.instruction}</p>
+                  <p className="instruction">
+                    <MathText text={view.question.instruction} />
+                  </p>
                   {view.question.stimulus && (
-                    <blockquote>{view.question.stimulus}</blockquote>
+                    <blockquote>
+                      <MathText text={view.question.stimulus} />
+                    </blockquote>
                   )}
-                  <h3>{view.question.prompt}</h3>
+                  <h3><MathText text={view.question.prompt} /></h3>
                   <div className="options">
                     {view.question.options.map((option, index) => (
                       <button
@@ -300,8 +305,12 @@ export function SimulationPage({
                         disabled={submitting}
                         onClick={() => void submitAnswer(option.id)}
                       >
-                        <span>{String.fromCharCode(65 + index)}</span>
-                        {option.text}
+                        <span className="option-marker">
+                          {String.fromCharCode(65 + index)}
+                        </span>
+                        <span className="option-text">
+                          <MathText text={option.text} />
+                        </span>
                       </button>
                     ))}
                   </div>

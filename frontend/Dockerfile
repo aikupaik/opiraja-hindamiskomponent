@@ -3,6 +3,7 @@ FROM node:24.13.1-alpine3.23 AS build
 WORKDIR /build/frontend
 
 COPY shared/frontend-api /build/shared/frontend-api
+COPY shared/math-content /build/shared/math-content
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 

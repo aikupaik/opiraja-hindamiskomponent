@@ -273,10 +273,10 @@ it('opens item editing with a deliberate save choice and readable distractors', 
             parent_graph_node: null,
             cognitive_level: 'mõistab',
             instruction: 'Choose one.',
-            prompt: 'What is force?',
+            prompt: String.raw`What is \(F = ma\)?`,
             stimulus: null,
-            answer_key: 'A',
-            distractor_1: 'B',
+            answer_key: String.raw`\(F = ma\)`,
+            distractor_1: String.raw`\\(\\frac{m}{a}\\)`,
             distractor_2: 'C',
             distractor_3: 'D',
             score: 1,
@@ -303,9 +303,12 @@ it('opens item editing with a deliberate save choice and readable distractors', 
   await user.type(screen.getByLabelText('Täpne kursuse kood'), 'FÜS101')
   await user.click(screen.getByRole('button', { name: 'Otsi ülesandeid' }))
   await user.click(await screen.findByRole('button', { name: 'Vaata' }))
-  expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('B')
+  expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent(
+    String.raw`\\(\\frac{m}{a}\\)`,
+  )
   expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('C')
   expect(screen.getByRole('list', { name: 'Segajad' })).toHaveTextContent('D')
+  expect(document.querySelector('.item-answer-options .katex')).toBeNull()
   await user.click(screen.getByRole('button', { name: 'Muuda ülesannet' }))
 
   expect(screen.getByLabelText(/Loo uus ülesanne/)).not.toBeChecked()
@@ -479,10 +482,15 @@ it('automatically loads a completed report after the final answer', async () => 
         question: {
           submission_id: '20000000-0000-4000-8000-000000000001',
           item_id: 41,
-          instruction: 'Choose one.',
-          prompt: 'Safe player-only question',
-          stimulus: null,
-          options: [{ id: 'option-1', text: 'Correct' }],
+          instruction: String.raw`Choose \(x^2\).`,
+          prompt: String.raw`Simplify \(\frac{15}{21}\).`,
+          stimulus: String.raw`Reaction: \(\ce{2H2 + O2 -> 2H2O}\).`,
+          options: [
+            {
+              id: 'option-1',
+              text: String.raw`Correct \\(\\frac{5}{7}\\)`,
+            },
+          ],
         },
       })
     }
@@ -522,9 +530,25 @@ it('automatically loads a completed report after the final answer', async () => 
     'Motion',
   )
   await user.click(screen.getByRole('button', { name: 'Käivita katse' }))
-  await user.click(
-    await screen.findByRole('button', { name: /Correct/ }),
+  await waitFor(() => {
+    expect(document.querySelector('.player-card .options button')).not.toBeNull()
+  })
+  const answer = document.querySelector<HTMLButtonElement>(
+    '.player-card .options button',
   )
+  if (answer === null) throw new Error('expected simulated answer button')
+  expect(document.querySelectorAll('.player-card .math-content-formula')).toHaveLength(4)
+  expect(
+    Array.from(document.querySelectorAll('.player-card annotation')).map(
+      (annotation) => annotation.textContent,
+    ),
+  ).toEqual([
+    'x^2',
+    String.raw`\ce{2H2 + O2 -> 2H2O}`,
+    String.raw`\frac{15}{21}`,
+    String.raw`\frac{5}{7}`,
+  ])
+  await user.click(answer)
 
   expect((await screen.findAllByText('Lõpetatud')).length).toBeGreaterThan(0)
   expect(

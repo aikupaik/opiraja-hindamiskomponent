@@ -273,7 +273,8 @@ legend {
   accent-color: var(--forest);
 }
 
-.option span {
+.option > span {
+  min-width: 0;
   line-height: 1.35;
 }
 

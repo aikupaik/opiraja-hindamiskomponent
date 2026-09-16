@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
+  resolve: { preserveSymlinks: true },
   test: {
     environment: 'jsdom',
     environmentOptions: {

@@ -1,0 +1,14 @@
+.math-content-formula {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.math-content-formula > .katex {
+  font-size: 1em;
+  white-space: nowrap;
+}
