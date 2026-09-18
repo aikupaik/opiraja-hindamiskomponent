@@ -1,105 +1,36 @@
-import {
-  createClient,
-  type SupabaseClient,
-} from "https://esm.sh/@supabase/supabase-js";
-import { GoogleGenAI } from "https://esm.sh/@google/genai";
+import { createClient } from "https://esm.sh/@supabase/supabase-js";
 
-// ADAPTIVE INVENTORY CHANGE (manual deployment required):
-// This reference now consumes exact per-node `ylesande_taotlused`, claims an
-// order only while it is `ootel`, and records `taitmise_tulemus`. The deployed
-// Supabase Edge Function is not updated by changing this repository file.
-type UlesandeTaotlus = { node: string; amount: number };
-type TaitmiseTulemus = {
-  node: string;
-  requested: number;
-  baseline_usable: number;
-  created: number;
-  usable_after: number;
-  remaining: number;
-};
-
-function loeTaotlused(tellimus: Record<string, unknown>): UlesandeTaotlus[] {
-  const uusVorming = tellimus.ylesande_taotlused;
-  const raw =
-    Array.isArray(uusVorming) && uusVorming.length > 0
-      ? uusVorming
-      : Array.isArray(tellimus.graafi_objektid)
-        ? tellimus.graafi_objektid.map((node) => ({
-            node,
-            amount: tellimus.maht ?? 1,
-          }))
-        : [];
-  const seen = new Set<string>();
-  return raw.map((value, index) => {
-    if (typeof value !== "object" || value === null) {
-      throw new Error(`ylesande_taotlused[${index}] peab olema objekt`);
-    }
-    const node = (value as Record<string, unknown>).node;
-    const amount = (value as Record<string, unknown>).amount;
-    if (typeof node !== "string" || node.trim().length === 0) {
-      throw new Error(
-        `ylesande_taotlused[${index}].node peab olema mittetühi string`,
-      );
-    }
-    if (!Number.isInteger(amount) || Number(amount) < 1) {
-      throw new Error(
-        `ylesande_taotlused[${index}].amount peab olema positiivne täisarv`,
-      );
-    }
-    if (seen.has(node)) {
-      throw new Error(`ylesande_taotlused sisaldab korduvat sõlme: ${node}`);
-    }
-    seen.add(node);
-    return { node, amount: Number(amount) };
-  });
-}
-
-function onStruktuurseltKehtiv(
-  value: unknown,
-): value is Record<string, string | null> {
-  if (typeof value !== "object" || value === null) return false;
-  const row = value as Record<string, unknown>;
-  const required = [
-    "juhis",
-    "tyvi",
-    "voti",
-    "distraktor_1",
-    "distraktor_2",
-    "distraktor_3",
-  ];
-  if (
-    !required.every(
-      (field) =>
-        typeof row[field] === "string" && String(row[field]).trim().length > 0,
-    )
-  )
-    return false;
-  if (
-    row.stiimul !== null &&
-    row.stiimul !== undefined &&
-    typeof row.stiimul !== "string"
-  ) {
-    return false;
+// LLM (GPT) kipub JSON-väljundis LaTeX-i backslash'e üle-escapima (nt kirjutab
+// "\\(" ühe backslashi asemel kaks), isegi kui prompt näitab õiget kuju - see
+// on tuntud mudelite käitumine. Selle asemel, et üritada prompti sõnastust
+// täpselt "õigeks" saada (habras, kuna sõltub mitmest escaping-kihist meie
+// enda koodis), normaliseerime väljundi SIIN, käitusajal. Kasutame
+// String.fromCharCode(92)-t backslashi tähistamiseks (mitte kirjapandud \\ ),
+// et välistada TÄIELIKULT võimalus, et see fail ISE lisab kogemata veel ühe
+// escaping-kihi - char code on escaping-kihtidest sõltumatu.
+function normeeriLatex(sisend: unknown): string {
+  if (typeof sisend !== "string" || sisend.length === 0) return (sisend as string) ?? "";
+  const kaksBackslashi = String.fromCharCode(92, 92); // "\\" kaks korda = topelt backslash
+  const uksBackslash = String.fromCharCode(92);        // üks backslash
+  let tulemus = sisend;
+  // Kordame, kuni topelt-backslashe enam ei leidu - katab ka 4x/8x
+  // üle-escapimise (nt kui viga oleks korduvalt kuhjunud).
+  let korduseid = 0;
+  while (tulemus.indexOf(kaksBackslashi) !== -1 && korduseid < 5) {
+    tulemus = tulemus.split(kaksBackslashi).join(uksBackslash);
+    korduseid++;
   }
-  const options = [
-    row.voti,
-    row.distraktor_1,
-    row.distraktor_2,
-    row.distraktor_3,
-  ];
-  return new Set(options).size === 4;
-}
-
-function veaSonum(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function veaStaatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null || !("status" in error)) {
-    return undefined;
+  // LLM kirjutab mõnikord kogemata nähtamatuid kontrollmärke (nt backspace,
+  // kood 8) tavateksti sisse - need kuvatakse brauseris "□"-na. Eemaldame
+  // kõik ASCII kontrollmärgid (kood 0-31), v.a tab(9)/newline(10)/CR(13),
+  // mis on tekstis endas kahjutud.
+  let puhastatud = "";
+  for (let i = 0; i < tulemus.length; i++) {
+    const kood = tulemus.charCodeAt(i);
+    if (kood < 32 && kood !== 9 && kood !== 10 && kood !== 13) continue;
+    puhastatud += tulemus[i];
   }
-  const status = (error as { status?: unknown }).status;
-  return typeof status === "number" ? status : undefined;
+  return puhastatud;
 }
 
 export default {
@@ -107,13 +38,12 @@ export default {
     console.log("FUNKTSIOON KÄIVITUS: Päring jõudis kohale!");
 
     let tellimus_id = null;
-    let supabase: SupabaseClient | null = null;
+    let supabase = null;
 
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
       const supabaseAnonKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-      const database = createClient(supabaseUrl, supabaseAnonKey);
-      supabase = database;
+      supabase = createClient(supabaseUrl, supabaseAnonKey);
 
       console.log("Hakkan lugema sissetulevat payloadit...");
       try {
@@ -121,10 +51,7 @@ export default {
         console.log("Payload edukalt loetud:", JSON.stringify(payload));
         tellimus_id = payload.record?.id;
       } catch (jsonError) {
-        console.error(
-          "VIGA: Päringu JSON-i lugemine ebäonnestus või oli tühi!",
-          veaSonum(jsonError),
-        );
+        console.error("VIGA: Päringu JSON-i lugemine ebaonnestus või oli tühi!", jsonError.message);
         return Response.json({ error: "Vigane JSON" }, { status: 400 });
       }
 
@@ -133,9 +60,7 @@ export default {
         return Response.json({ error: "Tellimuse ID puudub" }, { status: 400 });
       }
 
-      console.log(
-        `Edukalt kätte saadud ID: ${tellimus_id}. Otsin andmebaasist ootel rida...`,
-      );
+      console.log(`Edukalt kätte saadud ID: ${tellimus_id}. Otsin andmebaasist ootel rida...`);
 
       const { data: tellimus, error: tError } = await supabase
         .from("yg_tellimused")
@@ -144,34 +69,22 @@ export default {
         .single();
 
       if (tError || !tellimus) {
-        console.error(
-          `Andmebaasist ei leitud tellimust ID-ga: ${tellimus_id}`,
-          tError,
-        );
+        console.error(`Andmebaasist ei leitud tellimust ID-ga: ${tellimus_id}`, tError);
         return Response.json({ error: "Tellimust ei leitud" }, { status: 404 });
       }
 
-      // ADAPTIVE INVENTORY CHANGE: conditional claim makes duplicate webhook
-      // deliveries harmless. Only one invocation can move `ootel` to work.
-      const { data: claimed, error: uError } = await supabase
+      console.log(`Rida leitud! Praegune staatus andmebaasis: ${tellimus.staatus}. Muudan staatuse -> tootmises`);
+
+      const { error: uError } = await supabase
         .from("yg_tellimused")
         .update({ staatus: "tootmises" })
-        .eq("id", tellimus_id)
-        .eq("staatus", "ootel")
-        .select("*")
-        .maybeSingle();
+        .eq("id", tellimus_id);
 
-      if (uError) throw uError;
-      if (!claimed) {
-        console.log(
-          `Tellimus ${tellimus_id} oli juba vastu võetud; uut genereerimist ei alustata.`,
-        );
-        return Response.json({ message: "Tellimus oli juba vastu võetud." });
+      if (uError) {
+        console.error("VIGA: Staatuse muutmine ebäonnestus!", uError);
+      } else {
+        console.log(`Tellimuse ${tellimus_id} staatus muudetud edukalt: TOOTMISES`);
       }
-      Object.assign(tellimus, claimed);
-      console.log(
-        `Tellimuse ${tellimus_id} staatus muudetud edukalt: TOOTMISES`,
-      );
 
       const { data: repoRead, error: rError } = await supabase
         .from("repo_materjalid")
@@ -187,9 +100,7 @@ export default {
             try {
               const controller = new AbortController();
               const id = setTimeout(() => controller.abort(), 3000);
-              const res = await fetch(repo.allika_url, {
-                signal: controller.signal,
-              });
+              const res = await fetch(repo.allika_url, { signal: controller.signal });
               clearTimeout(id);
               if (res.ok) {
                 osaTekst = await res.text();
@@ -212,33 +123,36 @@ export default {
       console.log(
         referentTekst
           ? `Referentmaterjal leitud (${referentTekst.length} tähemärki).`
-          : "Referentmaterjali ei leitud - AI loob ülesande oma üldteadmiste põhjal.",
+          : "Referentmaterjali ei leitud - AI loob ülesande oma üldteadmiste põhjal."
       );
 
       const emaObjekt = tellimus.graafi_ema_objekt ?? "";
 
-      // ADAPTIVE INVENTORY CHANGE: new rows use exact per-node amounts.
-      // The legacy columns remain a temporary fallback for old rows.
-      const taotlused = loeTaotlused(tellimus);
-      const koikSolmed = taotlused.map((taotlus) => taotlus.node);
+      const koikSolmed: string[] = Array.isArray(tellimus.graafi_objektid)
+        ? tellimus.graafi_objektid
+        : [];
 
       if (koikSolmed.length === 0) {
-        throw new Error("Tellimuses puuduvad kehtivad ülesandetaotlused");
+        console.error("VIGA: graafi_objektid on tühi või mitte-massiiv!", tellimus.graafi_objektid);
+        throw new Error("Tellimuses puuduvad sõlmed (graafi_objektid tühi)");
       }
 
-      console.log("Valmistun Gemini API poole pöördumiseks...");
-      const aiApiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
-      if (!aiApiKey) {
-        console.error(
-          "KRIITILINE VIGA: GEMINI_API_KEY on keskkonnamuutujates tühi!",
-        );
+      console.log("Valmistun Azure OpenAI (Foundry) API poole pöördumiseks...");
+      const azureEndpoint = (Deno.env.get("AZURE_OPENAI_ENDPOINT") ?? "").replace(/\/+$/, "");
+      const azureApiKey = Deno.env.get("AZURE_OPENAI_API_KEY") ?? "";
+      const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") ?? "gpt-5.4-mini";
+
+      if (!azureEndpoint) {
+        console.error("KRIITILINE VIGA: AZURE_OPENAI_ENDPOINT on keskkonnamuutujates tühi!");
+        throw new Error("Azure endpoint puudub");
+      }
+      if (!azureApiKey) {
+        console.error("KRIITILINE VIGA: AZURE_OPENAI_API_KEY on keskkonnamuutujates tühi!");
         throw new Error("API võti puudub");
       }
 
-      const ai = new GoogleGenAI({ apiKey: aiApiKey });
-      const mudel = "gemini-3.1-flash-lite";
-
       const metoodilisedReeglid = `
+        Oled õpitulemuste testidega hindamise ja psühhomeetria asjatundja, kes valdab head eesti keelt. 
         Sinu ülesandeks on luua valikvastusega küsimus.
         KONTEKST: Objekt on osa suuremast valdkonnast (${emaObjekt}), mis määrab terminoloogia täpse tähenduse.
 
@@ -299,56 +213,41 @@ export default {
 			- Kui allpool ALUSMATERJAL sisaldab otseselt seda õpiväljundit käsitlevat sisu, TUGINE sellele rangelt - kasuta sealt terminoloogiat, käsitlusviisi ja rõhuasetusi.
 			- Kui ALUSMATERJAL puudub, või ei käsitle otseselt just seda konkreetset õpiväljundit (nt õppejõud käsitleb seda teemat kursusel mõnel muul viisil, mida siin materjalis pole), on SINU KOHUS luua ülesanne enda ainealaste üldteadmiste põhjal. See EI OLE viga ega põhjus ülesande loomisest loobuda - see on oodatud ja normaalne käitumine. Ülesanne peab siiski vastama kursuse tasemele, õpiväljundi sõnastusele ja kognitiivsele tasemele.
 			- Ära kunagi keeldu ülesannet loomast materjali puudumise tõttu.
+
+		11. MATEMAATILISTE JA KEEMIA LAUSENDITE KIRJAPANEK (LaTeX):
+			- Kui ülesanne (tüvi, stiimul, võti või mõni distraktor) sisaldab matemaatilist sümbolit, tehet, võrrandit, valemit või keemilist lausendit, kirjuta see LaTeX-süntaksis.
+			- Piiritlejad: kasuta AINULT \\( ... \\) lühikese, teksti sees oleva avaldise jaoks (nt üksik sümbol, muutuja, lühike valem) ja \\[ ... \\] pikema, eraldi reale kuuluva avaldise jaoks (nt terve võrrand, mitmeliikmeline avaldis, maatriks). ÄRA KUNAGI kasuta $ ega $$ piiritlejana - $ võib ülesannetes tähistada valuutat (nt dollarit) ja seetõttu ei tohi seda matemaatika piiritlejana kasutada.
+			- Keemiavalemite ja -reaktsioonide jaoks (nt H2O, Fe^3+, reaktsioonivõrrandid, agregaatolekud) kasuta \\ce{...} süntaksit (nt \\( \\ce{2H2 + O2 -> 2H2O} \\)) - mitte tavalist LaTeX-i indeksite/astendajate käsitsi kirjapanekut.
+			- JAGAMISMÄRK: Eesti koolimatemaatikas kasutatakse jagamise tähistamiseks koolonit ":" (nt "6 : 2 = 3"), MITTE \\div käsku (mis annab sümboli "÷", levinud pigem Ameerika/Suurbritannia õpikutes). Kirjuta jagamine LaTeX-is kujul \\( 6 : 2 \\), ÄRA kasuta \\div käsku kunagi.
+			- Ühikud kirjuta standard-LaTeX süntaksis otse (nt \\( 9{,}8\\ \\mathrm{m/s^2} \\)) - ÄRA eelda ega kasuta kohandatud makrosid ega väliseid pakette (nt siunitx, physics), kuna neid renderdussüsteem ei toeta.
+			- KUI väärtus on LIHTNE ARV (nt vastusevariant "42" või "3,14") ILMA mistahes matemaatilise sümboli, tehte, murru, muutuja või ühikuta, ÄRA mähi seda LaTeX-piiritlejatesse - kirjuta see puhta tekstina (nt "42", mitte "\\( 42 \\)"). LaTeX-i kasuta ainult siis, kui avaldises on tegelikult matemaatilist sümbolistikat.
+			- See reegel kehtib võrdselt tüve, stiimuli, võtme JA kõigi distraktorite kohta - kui üks vastusevariant vajab LaTeX-i, ei tähenda see, et ka teised peavad seda saama (nt kui võti on "\\( \\frac{1}{2} \\)" aga mõni distraktor on lihtsalt "0", jääb "0" LaTeX-ita).
+			- JÄRJEPIDEVUS SAMA TÜÜPI AVALDISE JAOKS: kui SAMA LIIKI matemaatiline avaldis (nt murd) esineb mitmes ülesande osas (tüvi, stiimul, võti, distraktorid), kasuta seda LÄBIVALT SAMAS vormis kogu ülesande piires - ÄRA kirjuta ühte kohta tavatekstina (nt "2/5 + 1/5") ja teise kohta LaTeX-is (nt "\\( \\frac{2}{5} \\)"). Kui otsustad ühe murru/avaldise LaTeX-i panna, pane KÕIK sama liiki avaldised samas ülesandes samamoodi.
+
+		12. ARVUTUSKÄIGU LÄBIMÕTLEMINE KVANTITATIIVSETE ÜLESANNETE JAOKS:
+			- Kui ülesanne nõuab arvulise vastuse VÄLJA ARVUTAMIST valemi rakendamise teel (nt füüsika, keemia, inseneriteaduste, statistika ülesanded - rõhk, koormustaluvus, hõõrdumistegur, kontsentratsioon vms), pead ENNE võtme (voti) kirjapanekut kirjutama JSON-välja "arvutuskaik" täis arvutuskäigu: milliseid valemeid kasutad, milliseid väärtuseid sisestad, milline on vahetulemus, milline on lõplik vastus koos ühikuga. See väli PEAB JSON-is paiknema ENNE "voti" välja.
+			- "arvutuskaik" väli VÕIB SAADA HILJEM ÕPPIJALE KUVATAVAKS (tagasiside osana pärast testi lõppu) - seega kirjuta see SELGES, ARUSAADAVAS, SAMM-SAMMULISES eesti keeles, mitte lühendatud sisemiste märkmetena. Kasuta sama LaTeX-süntaksit, mis reeglis 11 kirjeldatud (\\( \\), \\[ \\], mitte $ $).
+			- Kasuta "arvutuskaik" välja ka distraktorite teadlikuks tuletamiseks: kaalu, millised on TÜÜPILISED vead selle arvutuse juures (vale valem, ühiku unustamine/vale teisendus, märgiviga, tegur 10 või 2 võrra vale) ja tuleta vähemalt osa distraktoritest just nendest tüüpilistest vigadest, mitte suvalistest usutavatest arvudest - see annab pedagoogiliselt sisukamad valed vastused.
+			- Kui ülesanne EI ole kvantitatiivne/arvutuslik (enamik õpiväljundeid - definitsioonid, mõisted, tõlgendamine, klassifitseerimine), jäta "arvutuskaik" väli tühjaks stringiks "". ÄRA leiuta arvutuskäiku, kui ülesanne seda ei nõua.
       `;
 
-      // Iga sõlme jaoks salvestame kohe pärast loomist (mitte alles kõige
-      // lõpus koos) - kui midagi katki läheb poole peal, jääb juba tehtud
-      // töö alles, mitte ei kao.
-      // ADAPTIVE INVENTORY CHANGE: snapshot a usable baseline before any
-      // inserts. Completion is measured against baseline + requested, not
-      // merely "at least one item exists".
-      const baselineByNode = new Map<string, number>();
-      for (const taotlus of taotlused) {
-        const { count, error: countError } = await supabase
-          .from("ylesandepank")
-          .select("yp_id", { count: "exact", head: true })
-          .eq("graafi_objekt", taotlus.node)
-          .eq("staatus", "kasutatav");
-        if (countError) throw countError;
-        baselineByNode.set(taotlus.node, count ?? 0);
-      }
-      console.log(
-        `Alustan täpsete sõlmepõhiste taotluste genereerimist. Sõlmi: ${koikSolmed.length}.`,
-      );
+      const mitu_vaja_solme_kohta = tellimus.maht ?? 1;
+      console.log(`Alustan ülesannete genereerimist. Sõlmi: ${koikSolmed.length}, ülesandeid sõlme kohta: ${mitu_vaja_solme_kohta}.`);
 
-      // Ühe sõlme kogu töö (genereeri + salvesta KÕIK selle maht ülesannet
-      // järjestikku - järjestikkus on siin TAHTLIK, et iga järgmine ülesanne
-      // näeks sama sõlme eelmisi ülesandeid eristuvuse tagamiseks).
-      async function tootleSolm(
-        objekt: string,
-        mitu_vaja_solme_kohta: number,
-      ): Promise<number> {
+      async function tootleSolm(objekt: string): Promise<number> {
         console.log(`=== Sõlm: "${objekt}" ===`);
-        const { data: vanadUlesanded } = await database
+        const { data: vanadUlesanded } = await supabase
           .from("ylesandepank")
           .select("tyvi")
           .eq("graafi_objekt", objekt)
           .limit(5);
 
-        let vanadeKontekst =
-          vanadUlesanded && vanadUlesanded.length > 0
-            ? vanadUlesanded
-                .map((u: { tyvi: string | null }) => u.tyvi)
-                .join("\n---\n")
-            : "Selle objekti kohta pole veel ülesandeid loodud.";
+        let vanadeKontekst = vanadUlesanded && vanadUlesanded.length > 0
+          ? vanadUlesanded.map(u => u.tyvi).join("\n---\n")
+          : "Selle objekti kohta pole veel ülesandeid loodud.";
 
         let loodudArv = 0;
 
-        // NB: varem küsiti SIIN eraldi Gemini kutsega IGA üksik ülesanne
-        // (maht korda), mis saatis sama (pikka) alusmaterjali maht korda -
-        // see oli otsene põhjus TPM (tokens-per-minute) kvoodi ületamisele.
-        // Nüüd küsitakse KÕIK maht ülesannet ÜHE kutsega, JSON massiivina -
-        // materjal saadetakse ainult 1 kord sõlme kohta, mitte maht korda.
         let ulesandedMassiiv: Record<string, unknown>[] | null = null;
         let ring = 0;
         const maxRinge = 2;
@@ -371,83 +270,97 @@ SENI LOODUD ÜLESANDED ERISTUVUSE TAGAMISEKS:
 ${vanadeKontekst}
 """
 
-VÄLJASTA TULEMUS RANGELT JÄRGMISE JSON MASSIIVINA - täpselt ${mitu_vaja_solme_kohta} elementi, igaüks erineva ülesandetüübi/lähenemisega, et need omavahel ei korduks (ära lisa ühtegi muud teksti ega markdown tähist, ainult puhas JSON massiiv):
-[
-  {
-    "juhis": "juhise tekst",
-    "tyvi": "tüve tekst",
-    "stiimul": "stiimuli tekst või null kui puudub",
-    "voti": "õige vastus",
-    "distraktor_1": "esimene vale vastus",
-    "distraktor_2": "teine vale vastus",
-    "distraktor_3": "kolmas vale vastus"
-  }
-]`;
+VÄLJASTA TULEMUS RANGELT JÄRGMISE JSON OBJEKTINA - väli "ulesanded" peab sisaldama täpselt ${mitu_vaja_solme_kohta} elementi, igaüks erineva ülesandetüübi/lähenemisega, et need omavahel ei korduks (ära lisa ühtegi muud teksti ega markdown tähist, ainult puhas JSON):
+{
+  "ulesanded": [
+    {
+      "juhis": "juhise tekst",
+      "tyvi": "tüve tekst",
+      "stiimul": "stiimuli tekst või null kui puudub",
+      "arvutuskaik": "täis arvutuskäik kvantitatiivse ülesande jaoks, või tühi string \"\" kui ülesanne pole arvutuslik",
+      "voti": "õige vastus",
+      "distraktor_1": "esimene vale vastus",
+      "distraktor_2": "teine vale vastus",
+      "distraktor_3": "kolmas vale vastus"
+    }
+  ]
+}`;
 
           try {
-            const kResponse = await ai.models.generateContent({
-              model: mudel,
-              contents: koostajaPrompt,
-              config: { responseMimeType: "application/json" },
-            });
-            const tekst = kResponse.text ?? "[]";
-            const parsitud = JSON.parse(tekst);
-            // ADAPTIVE INVENTORY CHANGE: do not accept a short, long, or
-            // partially malformed Gemini response as fulfillment.
-            if (
-              !Array.isArray(parsitud) ||
-              parsitud.length !== mitu_vaja_solme_kohta ||
-              !parsitud.every(onStruktuurseltKehtiv)
-            ) {
-              throw new Error(
-                `Gemini peab tagastama täpselt ${mitu_vaja_solme_kohta} kehtivat ülesannet (sõlm "${objekt}")`,
-              );
-            }
-            ulesandedMassiiv = parsitud;
-            kvaliteetHeaksKiidetud = true;
-          } catch (geminiError) {
-            const on_kvoodiviga =
-              veaStaatus(geminiError) === 429 ||
-              veaSonum(geminiError).includes("RESOURCE_EXHAUSTED");
-            if (on_kvoodiviga) {
-              console.error(
-                `KVOODI VIGA (sõlm "${objekt}") - EI proovita uuesti, väldime kvoodi raiskamist:`,
-                veaSonum(geminiError),
-              );
-              throw geminiError;
-            }
-            console.error(
-              `VIGA koostaja päringul (sõlm "${objekt}", ring ${ring}):`,
-              geminiError,
+            const azureRes = await fetch(
+              `${azureEndpoint}/openai/v1/chat/completions?api-version=preview`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "api-key": azureApiKey
+                },
+                body: JSON.stringify({
+                  model: azureDeployment,
+                  messages: [
+                    { role: "user", content: koostajaPrompt }
+                  ],
+                  response_format: { type: "json_object" }
+                })
+              }
             );
-            if (ring >= maxRinge) throw geminiError;
+
+            if (!azureRes.ok) {
+              const veaTekst = await azureRes.text();
+              const on_kvoodiviga = azureRes.status === 429;
+              if (on_kvoodiviga) {
+                console.error(`KVOODI VIGA (sõlm "${objekt}") - EI proovita uuesti, väldime kvoodi raiskamist:`, veaTekst);
+                throw new Error(`Azure kvoot ületatud (429): ${veaTekst}`);
+              }
+              throw new Error(`Azure OpenAI viga (HTTP ${azureRes.status}): ${veaTekst}`);
+            }
+
+            const azureData = await azureRes.json();
+            const tekst = azureData.choices?.[0]?.message?.content ?? "{}";
+            const parsitud = JSON.parse(tekst);
+            const ulesanded = Array.isArray(parsitud?.ulesanded) ? parsitud.ulesanded : null;
+
+            if (!ulesanded || ulesanded.length === 0) {
+              throw new Error(`Azure OpenAI ei tagastanud oodatud "ulesanded" massiivi (sõlm "${objekt}")`);
+            }
+            ulesandedMassiiv = ulesanded;
+            kvaliteetHeaksKiidetud = true;
+          } catch (azureError) {
+            const on_kvoodiviga = String(azureError?.message ?? "").includes("429");
+            if (on_kvoodiviga) {
+              throw azureError; // EI proovita uuesti kvoodivea korral
+            }
+            console.error(`VIGA koostaja päringul (sõlm "${objekt}", ring ${ring}):`, azureError);
+            if (ring >= maxRinge) throw azureError;
           }
         }
 
         if (ulesandedMassiiv) {
           for (const ul of ulesandedMassiiv) {
-            const { error: insError } = await database
-              .from("ylesandepank")
-              .insert({
-                kursus: tellimus.kursus,
-                graafi_objekt: objekt,
-                graafi_ema_objekt: emaObjekt,
-                kognitiivne_tase: tellimus.kognitiivne_tase,
-                juhis: ul.juhis,
-                tyvi: ul.tyvi,
-                stiimul:
-                  ul.stiimul === "Puudub" ||
-                  ul.stiimul === "null" ||
-                  !ul.stiimul
-                    ? null
-                    : ul.stiimul,
-                voti: ul.voti,
-                distraktor_1: ul.distraktor_1,
-                distraktor_2: ul.distraktor_2,
-                distraktor_3: ul.distraktor_3,
-                skoor: 1,
-                staatus: "kasutatav",
-              });
+            const tyviN = normeeriLatex(ul.tyvi);
+            const stiimulN = normeeriLatex(ul.stiimul);
+            const arvutuskaikN = normeeriLatex(ul.arvutuskaik);
+            const votiN = normeeriLatex(ul.voti);
+            const d1N = normeeriLatex(ul.distraktor_1);
+            const d2N = normeeriLatex(ul.distraktor_2);
+            const d3N = normeeriLatex(ul.distraktor_3);
+
+            const { error: insError } = await supabase.from("ylesandepank").insert({
+              kursus: tellimus.kursus,
+              graafi_objekt: objekt,
+              graafi_ema_objekt: emaObjekt,
+              kognitiivne_tase: tellimus.kognitiivne_tase,
+              juhis: ul.juhis,
+              tyvi: tyviN,
+              stiimul: stiimulN === "Puudub" || stiimulN === "null" || !stiimulN ? null : stiimulN,
+              arvutuskaik: arvutuskaikN === "Puudub" || arvutuskaikN === "null" || !arvutuskaikN ? null : arvutuskaikN,
+              voti: votiN,
+              distraktor_1: d1N,
+              distraktor_2: d2N,
+              distraktor_3: d3N,
+              skoor: 1,
+              staatus: "kasutatav"
+            });
             if (insError) {
               console.error(`VIGA kirjutamisel (sõlm "${objekt}"):`, insError);
             } else {
@@ -455,100 +368,51 @@ VÄLJASTA TULEMUS RANGELT JÄRGMISE JSON MASSIIVINA - täpselt ${mitu_vaja_solme
             }
           }
         }
-        console.log(
-          `Sõlm "${objekt}" valmis: ${loodudArv}/${mitu_vaja_solme_kohta} ülesannet.`,
-        );
+        console.log(`Sõlm "${objekt}" valmis: ${loodudArv}/${mitu_vaja_solme_kohta} ülesannet.`);
         return loodudArv;
       }
 
-      // Sõlmed töödeldakse PARTIIDENA paralleelselt (mitte kõik korraga ja
-      // mitte täiesti järjestikku) - see hoiab ära Edge Function'i 150s
-      // ajapiiri ületamise suuremate graafide puhul (nt 12 sõlme x 3
-      // ülesannet = 36 järjestikust Gemini kutset oleks kindlasti timeout'inud).
       const PARTII_SUURUS = 3;
       let kokkuLoodud = 0;
-      const loodudByNode = new Map<string, number>();
       for (let algus = 0; algus < koikSolmed.length; algus += PARTII_SUURUS) {
-        const partii = taotlused.slice(algus, algus + PARTII_SUURUS);
-        console.log(
-          `--- Partii: sõlmed ${algus + 1}-${algus + partii.length}/${koikSolmed.length} paralleelselt ---`,
-        );
-        const tulemused = await Promise.allSettled(
-          partii.map((taotlus) => tootleSolm(taotlus.node, taotlus.amount)),
-        );
-        tulemused.forEach((t, index) => {
-          const node = partii[index].node;
-          if (t.status === "fulfilled") {
-            kokkuLoodud += t.value;
-            loodudByNode.set(node, t.value);
-          } else {
-            loodudByNode.set(node, 0);
-            console.error("Sõlme töötlus ebaõnnestus täielikult:", t.reason);
-          }
-        });
+        const partii = koikSolmed.slice(algus, algus + PARTII_SUURUS);
+        console.log(`--- Partii: sõlmed ${algus + 1}-${algus + partii.length}/${koikSolmed.length} paralleelselt ---`);
+        const tulemused = await Promise.allSettled(partii.map(tootleSolm));
+        for (const t of tulemused) {
+          if (t.status === "fulfilled") kokkuLoodud += t.value;
+          else console.error("Sõlme töötlus ebaõnnestus täielikult:", t.reason);
+        }
       }
 
-      // ADAPTIVE INVENTORY CHANGE: recount the database and persist a detailed
-      // result for Python. YG never creates retry orders itself.
-      const taitmiseTulemus: TaitmiseTulemus[] = [];
-      for (const taotlus of taotlused) {
-        const { count, error: countError } = await supabase
-          .from("ylesandepank")
-          .select("yp_id", { count: "exact", head: true })
-          .eq("graafi_objekt", taotlus.node)
-          .eq("staatus", "kasutatav");
-        if (countError) throw countError;
-        const baseline = baselineByNode.get(taotlus.node) ?? 0;
-        const usableAfter = count ?? 0;
-        const created = loodudByNode.get(taotlus.node) ?? 0;
-        taitmiseTulemus.push({
-          node: taotlus.node,
-          requested: taotlus.amount,
-          baseline_usable: baseline,
-          created,
-          usable_after: usableAfter,
-          remaining: Math.max(0, baseline + taotlus.amount - usableAfter),
-        });
-      }
-      const puuduSolmed = taitmiseTulemus
-        .filter((value) => value.remaining > 0)
-        .map((value) => value.node);
+      const { data: kaetusKontroll } = await supabase
+        .from("ylesandepank")
+        .select("graafi_objekt")
+        .eq("staatus", "kasutatav")
+        .in("graafi_objekt", koikSolmed);
+
+      const kaetudSolmed = new Set((kaetusKontroll ?? []).map((r) => r.graafi_objekt));
+      const puuduSolmed = koikSolmed.filter((s) => !kaetudSolmed.has(s));
       const loppStaatus = puuduSolmed.length === 0 ? "tehtud" : "viga";
-      const kokkuTellitud = taotlused.reduce(
-        (sum, taotlus) => sum + taotlus.amount,
-        0,
-      );
 
       console.log(
-        `Märgin tellimuse staatuse andmebaasis -> ${loppStaatus}. Kokku loodud: ${kokkuLoodud}/${kokkuTellitud}. ` +
-          `Katmata sõlmi: ${puuduSolmed.length}/${koikSolmed.length}${puuduSolmed.length > 0 ? " (" + puuduSolmed.join(", ") + ")" : ""}.`,
+        `Märgin tellimuse staatuse andmebaasis -> ${loppStaatus}. Kokku loodud: ${kokkuLoodud}/${koikSolmed.length * mitu_vaja_solme_kohta}. ` +
+        `Katmata sõlmi: ${puuduSolmed.length}/${koikSolmed.length}${puuduSolmed.length > 0 ? " (" + puuduSolmed.join(", ") + ")" : ""}.`
       );
-      await supabase
-        .from("yg_tellimused")
-        .update({
-          staatus: loppStaatus,
-          taitmise_tulemus: taitmiseTulemus,
-        })
-        .eq("id", tellimus_id)
-        .eq("staatus", "tootmises");
+      await supabase.from("yg_tellimused").update({ staatus: loppStaatus }).eq("id", tellimus_id);
 
       return Response.json({
         message: `Genereeritud ${kokkuLoodud} ülesannet ${koikSolmed.length} sõlme kohta. Katmata sõlmi: ${puuduSolmed.length}.`,
         staatus: loppStaatus,
         puuduvad_solmed: puuduSolmed,
-        taitmise_tulemus: taitmiseTulemus,
-        alusmaterjal_kasutati: referentTekst.length > 0,
+        alusmaterjal_kasutati: referentTekst.length > 0
       });
+
     } catch (error) {
-      console.error("KRIITILINE GLOBAALNE VIGA FUNKTSIOONIS:", veaSonum(error));
+      console.error("KRIITILINE GLOBAALNE VIGA FUNKTSIOONIS:", error.message);
       if (supabase && tellimus_id) {
-        await supabase
-          .from("yg_tellimused")
-          .update({ staatus: "viga" })
-          .eq("id", tellimus_id)
-          .eq("staatus", "tootmises");
+        await supabase.from("yg_tellimused").update({ staatus: "viga" }).eq("id", tellimus_id);
       }
-      return Response.json({ error: veaSonum(error) }, { status: 500 });
+      return Response.json({ error: error.message }, { status: 500 });
     }
-  },
+  }
 };

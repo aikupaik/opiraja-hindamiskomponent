@@ -128,6 +128,11 @@ services:
       edge:
         gw_priority: 1
       compute: {}
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.overwrite_keys: "false"
     logging:
       driver: json-file
       options:
@@ -174,6 +179,46 @@ services:
       start_period: 20s
     networks:
       - compute
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.overwrite_keys: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    stop_grace_period: 20s
+
+  filebeat:
+    # Reviewed Elastic Stack 8.17.10 manifest list; update version and digest
+    # together when a later Elasticsearch deployment selects its Stack version.
+    image: docker.elastic.co/beats/filebeat:8.17.10@sha256:c37f089797779fc588a56e0e2db444e9b7e76f3e747d9f5175fa8f383c83a1e2
+    user: "0:0"
+    command:
+      - filebeat
+      - -e
+      - --strict.perms=false
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    network_mode: none
+    volumes:
+      - ./observability/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # The read-only bind does not make the Docker socket API read-only;
+      # its host-root-equivalent access still requires explicit VM approval.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${OBSERVABILITY_ARCHIVE_DIR:-./.runtime/observability/archive}:/var/log/opiraja/filebeat
+      - ${OBSERVABILITY_REGISTRY_DIR:-./.runtime/observability/registry}:/usr/share/filebeat/data
     logging:
       driver: json-file
       options:

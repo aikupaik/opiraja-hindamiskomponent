@@ -1,0 +1,36 @@
+# API/R structured-log archive collector. Keep the application event schema in
+# the message: the Docker container parser unwraps json-file records first and
+# the hint-based JSON decoder then promotes the application event fields.
+path.data: /usr/share/filebeat/data
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      host: unix:///var/run/docker.sock
+      hints.enabled: true
+      # Discovery is opt-in: only services with co.elastic.logs/enabled: "true"
+      # receive this input. Do not replace this with a service-name allowlist.
+      hints.default_config:
+        enabled: false
+        type: filestream
+        id: container-${data.docker.container.id}
+        parsers:
+          - container:
+              format: docker
+        paths:
+          - /var/lib/docker/containers/${data.docker.container.id}/*.log
+
+# JSON hints on the opted-in containers decode message into the event root.
+# json.add_error_key preserves a non-JSON message and adds error metadata rather
+# than discarding the source line. json.overwrite_keys remains false, retaining
+# Filebeat/Docker metadata if an application field collides with it.
+
+output.file:
+  path: /var/log/opiraja/filebeat
+  filename: api-r
+  rotate_every_kb: 25600
+  number_of_files: 20
+  permissions: 0640
+  rotate_on_startup: true
+  codec.json:
+    pretty: false

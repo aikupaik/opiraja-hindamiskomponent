@@ -46,3 +46,12 @@ Samad käsud sobivad lokaalseks Compose kontrolliks. Reaalne VM-i uuendamine,
 hosti Nginxi seadistus ja avaliku HTTPS-i kontroll tuleb endiselt teha
 deployment VM-is; player'i rakenduse ja sisemise Compose marsruutimise saab
 täielikult kontrollida kohalikus Dockeris.
+
+## API ja R struktureeritud logiarhiiv
+
+Compose'i `filebeat` kogub ainult `api` ja `r-service` konteinerite olemasolevad
+Docker `json-file` logid ning kirjutab normaliseeritud NDJSON-arhiivi. Arhiiv
+on operaatorite tööliides, mitte avalik API; säilitus on suuruspõhine (kuni 20
+umbes 25 MB faili), mitte kindel päevade arv. VM-i paigalduse, turvakontrolli,
+kontrollimise ja tagasipööramise juhised on
+[`docs/structured-log-archive-runbook.md`](docs/structured-log-archive-runbook.md).
