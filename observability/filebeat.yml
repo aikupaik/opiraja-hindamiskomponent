@@ -18,7 +18,7 @@ filebeat.autodiscover:
           - container:
               format: docker
         paths:
-          - /var/lib/docker/containers/${data.docker.container.id}/*.log
+          - /var/lib/docker/containers/${data.container.id}/*.log
 
 # JSON hints on the opted-in containers decode message into the event root.
 # json.add_error_key preserves a non-JSON message and adds error metadata rather
