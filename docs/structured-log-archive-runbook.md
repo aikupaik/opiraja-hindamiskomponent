@@ -48,7 +48,9 @@ git status --short
 git rev-parse HEAD
 docker compose config --quiet
 docker compose pull filebeat
-docker compose run --rm --no-deps filebeat filebeat test config -c /usr/share/filebeat/filebeat.yml
+# `compose run` replaces the service command, so repeat strict.perms here for
+# the intentionally read-only repository-mounted configuration.
+docker compose run --rm --no-deps filebeat filebeat --strict.perms=false test config -c /usr/share/filebeat/filebeat.yml
 docker compose up -d
 docker compose ps
 ```
@@ -60,14 +62,48 @@ Filebeat containers must not have `co.elastic.logs/enabled=true`. Existing
 application `json-file` rotation remains five 10 MB files per service.
 
 Make a controlled API request that invokes R, then inspect only sanitized output
-and counts. The following commands find failures, slow requests, and correlated
-API/R events without treating the archive as an API:
+and counts. Set the archive location once for the following commands:
 
 ```sh
 ARCHIVE_DIR=/var/log/opiraja/filebeat
-jq -c 'select(.service == "api" or .service == "r-service") | select(.status >= 500)' "$ARCHIVE_DIR"/api-r*
-jq -c 'select((.duration_ms? // 0) >= 1000)' "$ARCHIVE_DIR"/api-r*
-jq -c --arg request_id 'REDACTED_REQUEST_ID' 'select(.request_id == $request_id)' "$ARCHIVE_DIR"/api-r*
+```
+
+The following `jq` workflow works directly with the NDJSON stream. It is for
+operator diagnosis, not an application interface. Do not paste raw output into
+Git, tickets, or deployment evidence.
+
+```sh
+# Archive files, size, modification time, and permissions. Expect at most 20
+# files and root:opiraja-logs with mode 0640 on the VM.
+find "$ARCHIVE_DIR" -maxdepth 1 -type f -name 'api-r*' -printf '%TY-%Tm-%Td %TH:%TM %10s %m %u:%g %f\n' | sort
+find "$ARCHIVE_DIR" -maxdepth 1 -type f -name 'api-r*' | wc -l
+
+# Verify each NDJSON line parses to an object; malformed input makes jq fail.
+jq -n 'reduce inputs as $event (true; . and ($event | type == "object"))' "$ARCHIVE_DIR"/api-r*
+
+# Event volumes grouped by service and event name.
+jq -r '[(.service // "unknown"), (.event // "unknown")] | @tsv' "$ARCHIVE_DIR"/api-r* | sort | uniq -c | sort -nr
+
+# HTTP-status distribution for events that have a status field.
+jq -r 'select(.status? != null) | [(.service // "unknown"), .status] | @tsv' "$ARCHIVE_DIR"/api-r* | sort | uniq -c | sort -nr
+
+# Server failures, reduced to useful and normally safe correlation fields.
+jq -c 'select((.status? // 0) >= 500) | {timestamp, service, event, request_id, status, duration_ms, error_type}' "$ARCHIVE_DIR"/api-r*
+
+# Slow events (example threshold: 1,000 ms).
+jq -c --argjson minimum_ms 1000 'select((.duration_ms? // 0) >= $minimum_ms) | {timestamp, service, event, request_id, status, duration_ms}' "$ARCHIVE_DIR"/api-r*
+
+# Every API/R event for one controlled request. Substitute a real request ID;
+# do not place production IDs in command history or shared evidence.
+jq -c --arg request_id 'REDACTED_REQUEST_ID' 'select(.request_id == $request_id) | {timestamp, service, event, status, duration_ms, level}' "$ARCHIVE_DIR"/api-r*
+
+# Events at or after an ISO-8601 UTC timestamp. Application timestamps sort
+# lexicographically in this format, so no date conversion is required.
+jq -c --arg since '2026-01-01T00:00:00Z' 'select((.timestamp // "") >= $since) | {timestamp, service, event, request_id, status, duration_ms}' "$ARCHIVE_DIR"/api-r*
+
+# Count JSON-decoding/parser errors without printing the retained original
+# message. Investigate the source locally only after confirming it is safe.
+jq -n 'reduce inputs as $event (0; if ($event.error.type? == "json" or (($event.error.message? // "") | test("json"; "i"))) then . + 1 else . end)' "$ARCHIVE_DIR"/api-r*
 ```
 
 For the controlled request, verify one parseable event from each service shares

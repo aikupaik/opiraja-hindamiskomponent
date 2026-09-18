@@ -13,7 +13,7 @@ filebeat.autodiscover:
       hints.default_config:
         enabled: false
         type: filestream
-        id: container-${data.docker.container.id}
+        id: container-${data.container.id}
         parsers:
           - container:
               format: docker
