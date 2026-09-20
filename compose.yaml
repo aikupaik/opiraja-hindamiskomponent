@@ -363,5 +363,11 @@ networks:
   observability:
     driver: bridge
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.2.0/24
   grafana-host:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.3.0/24
