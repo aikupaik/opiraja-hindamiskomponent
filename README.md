@@ -15,12 +15,15 @@ Hindamiskomponent luuakse autonoomselt töötavana. Kasutajad saavad hindamist t
 
 ## Rakendused ja marsruutimine
 
-Compose käivitab neli eraldi teenust:
+Compose käivitab seitse eraldi teenust:
 
-- `web` – administraatori Reacti rakendus ja ainus avaldatud port;
+- `web` – administraatori Reacti rakendus ja ainus avaldatud rakenduse port;
 - `player` – õppija Reacti testirakendus, kuhu `web` suunab `/test/*`;
 - `api` – FastAPI, kuhu `web` suunab `/api/*`; ja
-- `r-service` – sisemine KST arvutusteenus.
+- `r-service` – sisemine KST arvutusteenus;
+- `loki` – sisemine 14-päevase säilitusega logihoidla;
+- `alloy` – ainult API ja R Dockeri logide koguja; ning
+- `grafana` – loopback-pordil avaldatud operatiivvaade hosti Nginxi jaoks.
 
 `/` avab administraatori rakenduse, `/test/{test_id}` õppija rakenduse ning
 paljas `/test` tagastab `404`. Brauser suhtleb API-ga samal origin'il. Enne JWT
@@ -47,11 +50,14 @@ hosti Nginxi seadistus ja avaliku HTTPS-i kontroll tuleb endiselt teha
 deployment VM-is; player'i rakenduse ja sisemise Compose marsruutimise saab
 täielikult kontrollida kohalikus Dockeris.
 
-## API ja R struktureeritud logiarhiiv
+## API ja R logide jälgimine
 
-Compose'i `filebeat` kogub ainult `api` ja `r-service` konteinerite olemasolevad
-Docker `json-file` logid ning kirjutab normaliseeritud NDJSON-arhiivi. Arhiiv
-on operaatorite tööliides, mitte avalik API; säilitus on suuruspõhine (kuni 20
-umbes 25 MB faili), mitte kindel päevade arv. VM-i paigalduse, turvakontrolli,
-kontrollimise ja tagasipööramise juhised on
-[`docs/structured-log-archive-runbook.md`](docs/structured-log-archive-runbook.md).
+Compose'i Grafana Alloy kogub ainult märgendatud `api` ja `r-service`
+konteinerite struktureeritud Docker `json-file` logid. Loki säilitab neid VM-i
+failisüsteemis 14 päeva ning Grafana pakub CIDR-piiratud `/grafana/` töölaua ja
+Explore'i vaate. Loki ja Alloy ei avalda hosti porte; Grafana on hostil
+kättesaadav ainult loopback-aadressil Nginxi pöördproksi jaoks.
+
+VM-i ettevalmistuse, paigalduse, päringute, varunduse, kontrollimise ja
+tagasipööramise juhised on
+[`docs/observability-runbook.md`](docs/observability-runbook.md).

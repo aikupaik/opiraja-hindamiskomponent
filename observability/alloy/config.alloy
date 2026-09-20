@@ -1,0 +1,79 @@
+discovery.docker "opiraja" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "5s"
+}
+
+discovery.relabel "opiraja" {
+	targets = discovery.docker.opiraja.targets
+
+	// Collection is opt-in. The Compose label is present only on api and
+	// r-service; do not replace this with a container-name allowlist.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_opiraja_logs_enabled"]
+		regex         = "true"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_opiraja_logs_service"]
+		target_label  = "service"
+	}
+}
+
+// Docker exposes stdout/stderr only when the source starts tailing each log
+// stream, so apply this rule inside loki.source.docker rather than to the
+// container discovery target.
+discovery.relabel "opiraja_stream" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+}
+
+loki.source.docker "opiraja" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.relabel.opiraja.output
+	relabel_rules    = discovery.relabel.opiraja_stream.rules
+	refresh_interval = "5s"
+	forward_to       = [loki.process.opiraja.receiver]
+}
+
+loki.process "opiraja" {
+	// loki.source.docker unwraps the Docker API record. The line entering this
+	// pipeline is the exact application JSON written to stdout/stderr.
+
+	// Defaults deliberately identify malformed or non-schema lines without
+	// dropping or rewriting them. Successfully parsed application JSON replaces
+	// these two bounded values in the following stages.
+	stage.static_labels {
+		values = {
+			level = "UNKNOWN",
+			event = "parser_error",
+		}
+	}
+
+	stage.json {
+		expressions = {
+			level = "level",
+			event = "event",
+		}
+		drop_malformed = false
+	}
+
+	stage.labels {
+		values = {
+			level = "",
+			event = "",
+		}
+	}
+
+	forward_to = [loki.write.opiraja.receiver]
+}
+
+loki.write "opiraja" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
