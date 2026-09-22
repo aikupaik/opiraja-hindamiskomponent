@@ -1,0 +1,13 @@
+[Unit]
+Description=Validate the Opiraja public IP certificate and renewal path
+After=network-online.target nginx.service snap.certbot.renew.timer
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/opiraja-certificate-health 193.40.157.124 /etc/letsencrypt/live/193.40.157.124/fullchain.pem snap.certbot.renew.timer
+
+[Install]
+WantedBy=multi-user.target

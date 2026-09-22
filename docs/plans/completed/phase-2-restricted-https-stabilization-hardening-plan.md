@@ -1,5 +1,9 @@
 # Phase 2 — Restricted HTTPS Stabilization and Hardening
 
+> Historical completed plan: its self-signed certificate schedule and
+> CIDR-only boundary were superseded on 2026-09-22 by the trusted Let's Encrypt
+> IP deployment. The text below remains unchanged as execution history.
+
 ## Summary
 
 Harden the existing allowlisted HTTPS deployment without changing its network

@@ -93,3 +93,38 @@ def test_grafana_login_limit_and_csp_separation_are_present() -> None:
     assert "$request_uri" not in config.split("log_format opiraja", maxsplit=1)[1].split(
         ";", maxsplit=1
     )[0]
+
+
+def test_http_acme_webroot_and_redirect_policy_are_present() -> None:
+    config = (
+        Path(__file__).parents[2] / "deploy" / "nginx" / "opiraja.conf"
+    ).read_text(encoding="utf-8")
+
+    assert "location ^~ /.well-known/acme-challenge/ {" in config
+    assert "root /var/lib/letsencrypt;" in config
+    assert "try_files $uri =404;" in config
+    assert "return 308 https://193.40.157.124$request_uri;" in config
+    assert config.index("location ^~ /.well-known/acme-challenge/ {") < config.index(
+        "location / {"
+    )
+
+
+def test_production_ip_certificate_is_used_by_both_tls_servers() -> None:
+    config = (
+        Path(__file__).parents[2] / "deploy" / "nginx" / "opiraja.conf"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        config.count(
+            "ssl_certificate /etc/letsencrypt/live/193.40.157.124/fullchain.pem;"
+        )
+        == 2
+    )
+    assert (
+        config.count(
+            "ssl_certificate_key "
+            "/etc/letsencrypt/live/193.40.157.124/privkey.pem;"
+        )
+        == 2
+    )
+    assert "/etc/nginx/tls/opiraja/self-signed" not in config

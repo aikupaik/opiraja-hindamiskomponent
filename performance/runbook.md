@@ -15,8 +15,9 @@ cleans up credentials.
    backups, clock synchronization, log capacity, and dependency health.
 2. Obtain short-lived OR credentials outside k6 and provide them only through
    protected environment input.
-3. For public HTTPS tests, record and approve the self-signed certificate
-   fingerprint before allowing the narrowly scoped k6 verification exception.
+3. For public HTTPS tests, confirm the trusted IP certificate has SAN
+   `193.40.157.124` and normal system verification succeeds. Do not disable
+   certificate verification in k6.
 4. Prepare a unique `perf-<timestamp>-<random>` run ID, run-owned data, and a
    results directory. Do not reuse a prior run ID.
 5. Start monitoring and log streaming before any traffic. Record five-second
@@ -840,7 +841,7 @@ docker run --rm \
     -v "$PWD/performance/k6:/scripts:ro" \
     -v "$PWD/performance/results/$RUN_ID:/results" \
     grafana/k6:1.5.0 \
-    run --insecure-skip-tls-verify /scripts/static-edge-smoke.js
+    run /scripts/static-edge-smoke.js
 ```
 
 ## Real Static Edge test
@@ -876,7 +877,6 @@ docker run --rm \
       -v "$PWD/performance/results/$RUN_ID:/results" \
       grafana/k6:1.5.0 \
       run \
-      --insecure-skip-tls-verify \
       --out json=/results/raw-k6.json \
       /scripts/static-edge.js
 ```

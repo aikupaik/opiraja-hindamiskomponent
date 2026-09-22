@@ -1,5 +1,11 @@
 # Self-Signed HTTPS Implementation Plan
 
+> Historical plan: the self-signed deployment was superseded on 2026-09-22 by
+> the trusted Let's Encrypt IP certificate recorded in
+> `docs/plans/agent-logs/lets-encrypt-ip-certificate-production-https-change-log.md`.
+> The commands and evidence below describe the earlier phase and are retained
+> unchanged for audit history.
+
 ## Purpose and Exit Condition
 
 Implement the first HTTPS phase without waiting for a domain:
@@ -476,7 +482,7 @@ not solve a TLS failure by exposing the application over public HTTP.
 ## Deferred Domain and Public-Access Work
 
 The parent
-[`https-public-deployment-hardening-plan.md`](https-public-deployment-hardening-plan.md)
+[`https-public-deployment-hardening-plan.md`](../active/https-public-deployment-hardening-plan.md)
 tracks the later work:
 
 - implement and verify JWT authorization;

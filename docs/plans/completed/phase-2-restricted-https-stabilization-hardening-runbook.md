@@ -1,5 +1,9 @@
 # Phase 2 — Restricted HTTPS Stabilization and Hardening Runbook
 
+> Historical runbook: its self-signed certificate reminders and restricted
+> ingress procedures were superseded on 2026-09-22. Use
+> `docs/public-vpn-access-runbook.md` for current operations.
+
 This runbook is for the restricted HTTPS deployment of Opiraja on the
 approved VM. It supplements the implementation plan and the sanitized
 [Phase 2 change log](../agent-logs/phase-2-restricted-https-stabilization-hardening-change-log.md).

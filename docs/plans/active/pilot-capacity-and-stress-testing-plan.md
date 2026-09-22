@@ -60,9 +60,9 @@ Capacity is the highest repeatable 10-minute plateau that meets all of these:
   ports through the performance Compose overlay and reach them through SSH
   tunnels from the remote generator. Verify those listeners disappear after
   the run.
-- Because HTTPS uses a self-signed certificate, verify and record its
-  fingerprint first; only then allow k6's certificate-verification exception
-  for that exact pilot endpoint.
+- HTTPS uses a browser-trusted Let's Encrypt IP certificate. Verify its IP SAN,
+  issuer, fingerprint, expiry, and system trust during preflight; do not allow
+  a k6 certificate-verification exception for the production endpoint.
 - Establish abort rules: stop on any integrity error, readiness failure twice
   consecutively, container restart/OOM, more than 5% unexpected failures for 30
   seconds, p99 above 10 seconds for two minutes, VM/Supabase CPU above 90% for

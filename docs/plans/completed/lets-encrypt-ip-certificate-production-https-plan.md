@@ -1,5 +1,8 @@
 # Production Let's Encrypt HTTPS for `193.40.157.124`
 
+Status: completed on 2026-09-22. Deployment and acceptance evidence is in
+`docs/plans/agent-logs/lets-encrypt-ip-certificate-production-https-change-log.md`.
+
 ## Summary
 
 Replace the self-signed certificate with a Let's Encrypt short-lived IP

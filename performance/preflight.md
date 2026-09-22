@@ -66,15 +66,15 @@ sudo nginx -t
 sudo sha256sum /etc/nginx/sites-enabled/opiraja.conf
 sudo grep -E '^[[:space:]]*(limit_req_zone|limit_conn_zone|limit_req |limit_conn |limit_req_dry_run|limit_conn_dry_run)' \
   /etc/nginx/sites-enabled/opiraja.conf
-sudo openssl x509 -in /etc/nginx/tls/opiraja/self-signed.crt \
-  -noout -fingerprint -sha256 -subject -issuer -dates
+sudo openssl x509 \
+  -in /etc/letsencrypt/live/193.40.157.124/cert.pem \
+  -noout -fingerprint -sha256 -issuer -dates -ext subjectAltName
 ```
 
 Expected healthy state includes running/healthy Compose services, host Nginx
 listening on `80`/`443`, Docker publishing only `127.0.0.1:8080`, and no host
-listener for API or R port `8000`. If the certificate has moved to a trusted
-FQDN certificate, replace the final certificate path with its actual public
-certificate path; never reference a private-key file.
+listener for API or R port `8000`. The certificate must be the trusted IP
+lineage above; never reference a private-key file in evidence.
 
 ## 2. Non-secret API settings and dependency health
 
@@ -201,12 +201,12 @@ Fill every field before proceeding to the static-edge scenario.
 | Disk/storage capacity and free space | 200G disk; `/` ext4 193G, 59G used, 135G available (31%) |
 | Network interfaces/routes and known bandwidth | `ens3` 192.168.42.72/24; default via 192.168.42.1; Docker bridges `172.18.0.0/16` and `172.30.0.0/24`; link detected, negotiated bandwidth unavailable (`ethtool` reports unknown) |
 | Public HTTPS base URL | https://193.40.157.124/ |
-| Current ingress policy (approved CIDR or temporary public access) | UFW active: SSH/HTTP/HTTPS from 172.20.0.0/16 and 193.40.0.0/16; temporary public HTTP and HTTPS from Anywhere |
+| Current ingress policy | UFW active with permanent `ens3` IPv4 public rules for HTTP/HTTPS plus retained CIDR-specific rules; OpenStack permits public IPv4 TCP 80/443 only; SSH and internal ports remain restricted |
 | Generator public IP/CIDR | 193.40.250.119 |
 | Docker-published ports | `127.0.0.1:8080->web:8080/tcp`; no host publish for API, R, or player |
 | Host listeners on `80`/`443` | Nginx on `0.0.0.0:80` and `0.0.0.0:443` |
 | No host listener on `8000` confirmed | yes; `ss -ltnp` showed no host listener on 8000 |
-| Certificate SHA-256 fingerprint, subject, and expiry | SHA-256 `73:EA:4F:30:DB:F4:23:41:4A:FA:85:52:E6:B8:5F:48:36:C9:F4:DD:48:A1:81:6C:D9:F6:C3:2A:76:20:CB:21`; subject/issuer `CN=193.40.157.124`; expires 2026-10-29 13:43:59 UTC |
+| Certificate SHA-256 fingerprint, SAN, issuer, and expiry | SHA-256 `C0:01:41:36:56:3D:71:D5:97:59:70:8E:13:C1:3D:7F:4D:CC:FA:B6:FF:FE:BC:7E:A1:60:A1:20:88:C9:E2:63`; SAN `IP:193.40.157.124`; issuer Let's Encrypt `YE1`; expires 2026-09-29 06:35:11 UTC |
 | VM clock synchronization state | synchronized; NTP active; Europe/Tallinn (EEST, UTC+03:00) |
 | Backup location, owner, and last successful backup time | data.sql, roles.sql, schema.sql, 2026-08-24T19:08:53Z, owner: Andreas, verification done, SHA-256 recorded |
 | Log/disk headroom | Journald 115.8M; `/` 135G available (31% used); Docker images 15.48G and build cache 38.26G (20.59G reclaimable) |

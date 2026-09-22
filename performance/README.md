@@ -69,9 +69,9 @@ not only the mutable tag. A scenario receives its non-secret configuration
 through protected environment input; secrets are never written into this
 directory, a command line, k6 output, or a report.
 
-The public endpoint and certificate fingerprint are supplied only after the
-preflight stage has approved them. Until then, the smoke script remains a
-checked-in template and must not be run with a guessed target.
+The public endpoint and trusted certificate identity are confirmed during
+preflight. k6 must use normal certificate verification; do not add
+`--insecure-skip-tls-verify` for the production IP endpoint.
 
 ## API-only image boundary
 

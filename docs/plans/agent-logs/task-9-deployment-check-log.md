@@ -1,5 +1,10 @@
 # Task 9 Deployment Check Log
 
+> Historical evidence: the restricted self-signed HTTPS state documented here
+> was superseded on 2026-09-22 by the trusted Let's Encrypt IP deployment.
+> Preserve the evidence below; use `docs/public-vpn-access-runbook.md` for
+> current operations.
+
 Date: 2026-07-31
 
 ## Scope

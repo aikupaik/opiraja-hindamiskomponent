@@ -1,5 +1,9 @@
 # Task 3 Certificate Change Log
 
+> Historical evidence: this self-signed certificate was superseded on
+> 2026-09-22 by the trusted Let's Encrypt IP lineage. It remains on the VM only
+> as a temporary rollback artifact until one successful real renewal.
+
 Date started: 2026-07-31
 
 This log records the self-signed certificate generation and verification

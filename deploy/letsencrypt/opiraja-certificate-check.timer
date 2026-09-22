@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Opiraja certificate health check every six hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:15:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=opiraja-certificate-check.service
+
+[Install]
+WantedBy=timers.target

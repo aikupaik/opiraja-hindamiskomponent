@@ -1,5 +1,9 @@
 # Task 2 Network Change Log
 
+> Historical evidence: the CIDR-restricted ingress state documented here was
+> superseded on 2026-09-22 by permanent public IPv4 TCP 80/443 ingress. Current
+> controls are documented in `docs/public-vpn-access-runbook.md`.
+
 Date started: 2026-07-31
 
 This log records the main read-only checks and host-firewall commands used
