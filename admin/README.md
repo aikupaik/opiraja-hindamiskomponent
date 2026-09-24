@@ -14,12 +14,12 @@ It uses plain React state, CSS, and hash navigation:
 
 ## Local development
 
-First start FastAPI on port `8001`:
+First start FastAPI on port `8000`:
 
 ```sh
 cd backend
 source .venv/bin/activate
-uvicorn app.main:create_app --factory --reload --port 8001 --env-file ../.env
+uvicorn app.main:create_app --factory --reload --port 8000 --env-file ../.env
 ```
 
 Configure `ADMIN_ACCESS_KEY` only in the backend `.env`. Never create a Vite
@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-Vite proxies same-origin `/api` requests to `http://127.0.0.1:8001`, so broad
+Vite proxies same-origin `/api` requests to `http://127.0.0.1:8000`, so broad
 CORS is not required. The operator enters the key on the unlock screen; after
 FastAPI exchanges it at `/api/v1/admin/login`, only the returned JWT is kept in
 `sessionStorage`. Locking or an authenticated `401` removes the JWT. The raw

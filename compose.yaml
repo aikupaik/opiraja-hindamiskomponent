@@ -95,7 +95,9 @@ services:
     tmpfs:
       - /tmp:size=256m,mode=1777
     env_file:
-      - path: ./.env
+      # The deployment continues to use .env by default. Local Compose uses
+      # APP_ENV_FILE from its explicitly selected .env.local file instead.
+      - path: ${APP_ENV_FILE:-./.env}
         required: true
     environment:
       R_SERVICE_URL: http://r-service:8000
@@ -190,6 +192,8 @@ services:
   loki:
     image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
     user: "10001:10001"
+    profiles:
+      - observability
     command:
       - -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
@@ -226,6 +230,8 @@ services:
   alloy:
     image: grafana/alloy:v1.19.2@sha256:b8ec653c44235fbe910879145dac3597d66b0aaecf60bcbbe82580767771a839
     user: "0:0"
+    profiles:
+      - observability
     command:
       - run
       - --disable-reporting
@@ -278,6 +284,8 @@ services:
   grafana:
     image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
     user: "472:0"
+    profiles:
+      - observability
     restart: unless-stopped
     init: true
     read_only: true

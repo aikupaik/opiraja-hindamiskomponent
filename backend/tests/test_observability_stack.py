@@ -26,6 +26,26 @@ def test_compose_uses_pinned_private_observability_services() -> None:
     assert compose.count("max-file: \"5\"") == 7
 
 
+def test_observability_requires_an_explicit_compose_profile() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+
+    assert compose.count("    profiles:\n      - observability") == 3
+    service_boundaries = {
+        "loki": ("  loki:\n", "  alloy:\n"),
+        "alloy": ("  alloy:\n", "  grafana:\n"),
+        "grafana": ("  grafana:\n", "secrets:\n"),
+    }
+    for start, end in service_boundaries.values():
+        service_block = compose[compose.index(start) : compose.index(end)]
+        assert "profiles:\n      - observability" in service_block
+
+
+def test_api_environment_file_has_a_safe_production_default() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+
+    assert "path: ${APP_ENV_FILE:-./.env}" in compose
+
+
 def test_only_alloy_has_docker_socket_and_only_apps_opt_in() -> None:
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
 

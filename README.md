@@ -15,12 +15,15 @@ Hindamiskomponent luuakse autonoomselt töötavana. Kasutajad saavad hindamist t
 
 ## Rakendused ja marsruutimine
 
-Compose käivitab seitse eraldi teenust:
+Compose'i vaikimisi käivitus sisaldab nelja rakendusteenust:
 
 - `web` – administraatori Reacti rakendus ja ainus avaldatud rakenduse port;
 - `player` – õppija Reacti testirakendus, kuhu `web` suunab `/test/*`;
 - `api` – FastAPI, kuhu `web` suunab `/api/*`; ja
-- `r-service` – sisemine KST arvutusteenus;
+- `r-service` – sisemine KST arvutusteenus.
+
+VM-is lisab `observability` Compose'i profiil veel kolm logiteenust:
+
 - `loki` – sisemine 14-päevase säilitusega logihoidla;
 - `alloy` – ainult API ja R Dockeri logide koguja; ning
 - `grafana` – loopback-pordil avaldatud operatiivvaade hosti Nginxi jaoks.
@@ -34,21 +37,43 @@ ACME kontrolli ja HTTPS-i ümbersuunamist.
 Iseseisva player'i arenduse, taastamise ja testimise juhised on
 [`frontend/README.md`](frontend/README.md).
 
+## Lokaalne Docker-arendus
+
+Lokaalne Compose käivitab tootmislähedase nelja konteineri pinu ilma Loki,
+Alloy ja Grafanata. Kopeeri näidis, sisesta kinnitatud tootmise Supabase'i ja
+serveri võtmed ning käivita:
+
+```sh
+cp .env.local.example .env.local
+# Muuda .env.local väärtused enne jätkamist.
+docker compose --env-file .env.local config --quiet
+docker compose --env-file .env.local up --build
+```
+
+Ava administraatori rakendus aadressil `http://127.0.0.1:8080`; player'i lingid
+kasutavad sama origin'i. Kontrollimiseks kasuta `docker compose --env-file .env.local ps`,
+`/health/live` ja `/health/ready`. Rakenduse logid on saadaval
+`docker compose --env-file .env.local logs api r-service` kaudu. Peata pinu
+`docker compose --env-file .env.local down` käsuga.
+
+`.env.local` on Gitist väljas. See ühendub kasutaja valikul tootmise
+Supabase'iga, seega täismahuline lokaalne testimine võib luua või muuta päris
+andmeid ja käivitada ülesannete genereerimise.
+
 ## Hindamiskomponendi teenuse käivitamine virtuaalmasinas
 Virtuaalmasinasse on kloonitud giti repositoorium `opiraja-hindamiskomponent`.
 
 Arendusfaasis on Andrease arendatud hindamiskomponendi loogika "pilot" harus.
 ```
-docker compose config --quiet
-docker compose build --pull
-docker compose up -d
-docker compose ps
+docker compose --profile observability config --quiet
+docker compose --profile observability build --pull
+docker compose --profile observability up -d
+docker compose --profile observability ps
 ```
 
-Samad käsud sobivad lokaalseks Compose kontrolliks. Reaalne VM-i uuendamine,
-hosti Nginxi seadistus ja avaliku HTTPS-i kontroll tuleb endiselt teha
-deployment VM-is; player'i rakenduse ja sisemise Compose marsruutimise saab
-täielikult kontrollida kohalikus Dockeris.
+Reaalne VM-i uuendamine, hosti Nginxi seadistus ja avaliku HTTPS-i kontroll
+tuleb endiselt teha deployment VM-is. `--profile observability` on VM-is
+kohustuslik, et keskne logikogumine ja Grafana käivituksid.
 
 Avaliku võrgu, sertifikaadi uuendamise, igapäevase kontrolli ja hädaolukorra
 tagasipööramise juhised on
@@ -56,7 +81,7 @@ tagasipööramise juhised on
 
 ## API ja R logide jälgimine
 
-Compose'i Grafana Alloy kogub ainult märgendatud `api` ja `r-service`
+`observability` profiili Compose'i Grafana Alloy kogub ainult märgendatud `api` ja `r-service`
 konteinerite struktureeritud Docker `json-file` logid. Loki säilitab neid VM-i
 failisüsteemis 14 päeva ning Grafana pakub CIDR-piiratud `/grafana/` töölaua ja
 Explore'i vaate. Loki ja Alloy ei avalda hosti porte; Grafana on hostil

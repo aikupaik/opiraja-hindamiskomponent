@@ -1,5 +1,6 @@
 developer_notes.md
 .env
+.env.local
 .vscode/
 .venv/
 __pycache__/

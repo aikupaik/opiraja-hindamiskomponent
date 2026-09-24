@@ -42,9 +42,9 @@ Keep the bootstrap administrator for recovery and provisioning work only.
 Run from the repository root. These checks do not deploy to the VM:
 
 ```sh
-docker compose config --quiet
-docker compose run --rm --no-deps alloy validate /etc/alloy/config.alloy
-docker compose run --rm --no-deps loki \
+docker compose --profile observability config --quiet
+docker compose --profile observability run --rm --no-deps alloy validate /etc/alloy/config.alloy
+docker compose --profile observability run --rm --no-deps loki \
   -config.file=/etc/loki/local-config.yaml -verify-config=true
 python -m json.tool \
   observability/grafana/dashboards/opiraja-api-r-logs.json >/dev/null
@@ -68,7 +68,7 @@ without copying registry credentials or image metadata into Git:
 ```sh
 uname -m
 docker info --format '{{.Architecture}}'
-docker compose pull loki alloy grafana
+docker compose --profile observability pull loki alloy grafana
 docker image inspect --format '{{index .RepoDigests 0}}' \
   grafana/loki:3.7.8
 docker image inspect --format '{{index .RepoDigests 0}}' \
@@ -153,9 +153,9 @@ Run validation with the protected deployment `.env` without printing rendered
 Compose configuration or secret contents:
 
 ```sh
-docker compose config --quiet
-docker compose run --rm --no-deps alloy validate /etc/alloy/config.alloy
-docker compose run --rm --no-deps loki \
+docker compose --profile observability config --quiet
+docker compose --profile observability run --rm --no-deps alloy validate /etc/alloy/config.alloy
+docker compose --profile observability run --rm --no-deps loki \
   -config.file=/etc/loki/local-config.yaml -verify-config=true
 python -m json.tool \
   observability/grafana/dashboards/opiraja-api-r-logs.json >/dev/null
@@ -177,9 +177,9 @@ Start the new stack before removing the orphaned Filebeat container. With the
 old Filebeat container still running from the prior revision:
 
 ```sh
-docker compose up -d loki alloy grafana
-docker compose ps loki alloy grafana api r-service
-docker compose logs --tail=100 loki alloy grafana
+docker compose --profile observability up -d loki alloy grafana
+docker compose --profile observability ps loki alloy grafana api r-service
+docker compose --profile observability logs --tail=100 loki alloy grafana
 ```
 
 After Loki, Alloy, Grafana, `api`, and `r-service` are healthy and initial
@@ -188,7 +188,7 @@ acceptance succeeds, remove the old orphan without deleting its data:
 ```sh
 docker stop opiraja-assessment-filebeat-1
 docker rm opiraja-assessment-filebeat-1
-docker compose up -d --remove-orphans
+docker compose --profile observability up -d --remove-orphans
 ```
 
 Resolve the actual orphan name with `docker ps` instead of assuming it if the
@@ -307,9 +307,9 @@ On the VM, confirm the listener boundary:
 
 ```sh
 ss -lnt
-docker compose port grafana 3000
-docker compose port loki 3100
-docker compose port alloy 12345
+docker compose --profile observability port grafana 3000
+docker compose --profile observability port loki 3100
+docker compose --profile observability port alloy 12345
 sudo ufw status verbose
 ```
 
@@ -359,10 +359,10 @@ observability services, copy all three data directories plus the two secret
 files into the approved encrypted backup location, and restart the services:
 
 ```sh
-docker compose stop alloy grafana loki
+docker compose --profile observability stop alloy grafana loki
 # Perform the approved root-only backup outside the repository.
-docker compose up -d loki alloy grafana
-docker compose ps loki alloy grafana
+docker compose --profile observability up -d loki alloy grafana
+docker compose --profile observability ps loki alloy grafana
 ```
 
 Do not back up by copying a live Grafana SQLite file. Test restore procedures in

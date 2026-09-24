@@ -67,8 +67,8 @@ Run from the deployed repository root:
 ```bash
 git status --short
 git rev-parse HEAD
-docker compose config --quiet
-docker compose ps
+docker compose --profile observability config --quiet
+docker compose --profile observability ps
 sudo nginx -t
 systemctl is-active nginx
 sudo ss -ltnp
@@ -143,7 +143,7 @@ curl --fail --silent --show-error --output /dev/null \
   https://193.40.157.124/
 sudo nginx -t
 systemctl is-active nginx
-docker compose ps
+docker compose --profile observability ps
 ```
 
 The six-hour local check fails and logs to journald when less than 72 hours
