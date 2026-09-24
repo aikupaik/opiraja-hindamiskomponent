@@ -603,11 +603,158 @@
         "type": "loki",
         "uid": "opiraja-loki"
       },
+      "description": "Failed Supabase attempts. Expand a JSON line for request_id, operation, error category/code/message/details/hint, and duration_ms.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "id": 13,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "opiraja-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=\"api\", event=\"supabase_operation\"} | json | __error__=\"\" | outcome=\"failed\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent failed Supabase operations",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "opiraja-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "opiraja-loki"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.50, {service=\"api\", event=\"supabase_operation\"} | json | unwrap duration_ms | __error__=\"\" [$__interval]) by (operation)",
+          "legendFormat": "p50 {{operation}}",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "opiraja-loki"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, {service=\"api\", event=\"supabase_operation\"} | json | unwrap duration_ms | __error__=\"\" [$__interval]) by (operation)",
+          "legendFormat": "p95 {{operation}}",
+          "queryType": "range",
+          "refId": "B"
+        }
+      ],
+      "title": "Supabase operation duration p50 / p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "opiraja-loki"
+      },
+      "description": "The documented slow-operation threshold is 500 ms.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "id": 15,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "opiraja-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=\"api\", event=\"supabase_operation\"} | json | __error__=\"\" | duration_ms >= 500",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Slow Supabase operations (>= 500 ms)",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "opiraja-loki"
+      },
       "gridPos": {
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 56
       },
       "id": 12,
       "links": [

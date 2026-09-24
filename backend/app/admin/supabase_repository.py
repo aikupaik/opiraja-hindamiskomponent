@@ -1,6 +1,5 @@
 """Supabase implementation of the isolated admin repository contract."""
 
-from time import perf_counter
 from typing import cast
 
 import httpx
@@ -9,9 +8,8 @@ from postgrest.types import CountMethod, JSON
 from supabase import AsyncClient
 
 from app.domain.repository import RepositoryDataError, RepositoryUnavailable
-from app.observability import record_supabase_execute
+from app.supabase_observability import execute_supabase
 
-from .diagnostics import emit_diagnostic
 from .mapping import (
     ADMIN_ITEM_COLUMNS,
     ITEM_TABLE,
@@ -200,52 +198,13 @@ class SupabaseAdminRepository:
         return canonical
 
     async def _execute(self, query: object, operation: str) -> APIResponse:
-        started_at = perf_counter()
         try:
             executable = cast("_Executable", query)
-            response = await executable.execute()
-            count = len(response.data)
-            emit_diagnostic(
-                source="supabase",
-                level="info",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": count,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                },
-            )
-            return response
+            return await execute_supabase(executable, operation=operation)
         except APIError as error:
-            emit_diagnostic(
-                source="supabase",
-                level="warning",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": 0,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "outcome": "failed",
-                    "diagnostic": type(error).__name__,
-                },
-            )
             raise RepositoryUnavailable("Supabase request failed") from error
         except (httpx.HTTPError, TimeoutError) as error:
-            emit_diagnostic(
-                source="supabase",
-                level="warning",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": 0,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "outcome": "failed",
-                    "diagnostic": type(error).__name__,
-                },
-            )
             raise RepositoryUnavailable("Supabase request failed") from error
-        finally:
-            record_supabase_execute(started_at)
 
     @staticmethod
     def _zero_or_one(response: APIResponse, table: str) -> Row | None:

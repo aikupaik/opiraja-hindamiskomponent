@@ -3,7 +3,6 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 from collections.abc import Mapping
-from time import perf_counter
 from typing import Protocol, cast
 from uuid import UUID
 
@@ -13,7 +12,7 @@ from postgrest.types import JSON
 from supabase import AsyncClient
 
 from app.domain.repository import RepositoryDataError, RepositoryUnavailable
-from app.observability import record_supabase_execute
+from app.supabase_observability import execute_supabase
 
 KST_VERSIONS_TABLE = "kst_configuration_versions"
 KST_ACTIVATIONS_TABLE = "kst_configuration_activations"
@@ -209,14 +208,12 @@ class SupabaseKstConfigurationRepository:
         )
 
     async def _execute(self, query: object, operation: str) -> APIResponse:
-        started_at = perf_counter()
         try:
-            response = await cast(_Executable, query).execute()
-            return response
+            return await execute_supabase(
+                cast(_Executable, query), operation=operation
+            )
         except (APIError, httpx.HTTPError, TimeoutError) as error:
             raise RepositoryUnavailable("Supabase request failed") from error
-        finally:
-            record_supabase_execute(started_at)
 
 
 class _Executable(Protocol):

@@ -160,6 +160,20 @@ def test_grafana_provisioning_and_dashboard_are_version_controlled() -> None:
         "Recent failures and warnings",
         "Slow requests (>= 1 s)",
         "Correlated API / R request lookup",
+        "Recent failed Supabase operations",
+        "Supabase operation duration p50 / p95",
+        "Slow Supabase operations (>= 500 ms)",
         "Raw structured logs",
     ):
         assert title in panel_titles
+
+    expressions = "\n".join(
+        target["expr"]
+        for panel in dashboard["panels"]
+        for target in panel.get("targets", [])
+    )
+    assert 'event="supabase_operation"' in expressions
+    assert 'outcome="failed"' in expressions
+    assert "by (operation)" in expressions
+    assert "duration_ms >= 500" in expressions
+    assert 'request_id="$request_id"' in expressions

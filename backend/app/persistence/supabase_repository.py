@@ -4,17 +4,15 @@ import asyncio
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from time import perf_counter
 from typing import Protocol, Self, cast
 
 import httpx
 from postgrest import APIError, APIResponse
 from supabase import AsyncClient
 
-from app.admin.diagnostics import emit_diagnostic
 from app.domain.models import *
 from app.domain.repository import *
-from app.observability import record_supabase_execute
+from app.supabase_observability import execute_supabase
 
 from .supabase_mapping import *
 
@@ -465,52 +463,14 @@ class SupabaseAssessmentRepository:
         preserve_unique_violation: bool = False,
         operation: str = "supabase.execute",
     ) -> APIResponse:
-        started_at = perf_counter()
         try:
-            response = await query.execute()
-            emit_diagnostic(
-                source="supabase",
-                level="info",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": len(response.data),
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                },
-            )
-            return response
+            return await execute_supabase(query, operation=operation)
         except APIError as error:
             if preserve_unique_violation and error.code == _UNIQUE_VIOLATION:
                 raise
-            emit_diagnostic(
-                source="supabase",
-                level="warning",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": 0,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "outcome": "failed",
-                    "diagnostic": type(error).__name__,
-                },
-            )
             raise RepositoryUnavailable("Supabase request failed") from error
         except (httpx.HTTPError, TimeoutError) as error:
-            emit_diagnostic(
-                source="supabase",
-                level="warning",
-                event_type="supabase_operation",
-                payload={
-                    "operation": operation,
-                    "count": 0,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "outcome": "failed",
-                    "diagnostic": type(error).__name__,
-                },
-            )
             raise RepositoryUnavailable("Supabase request failed") from error
-        finally:
-            record_supabase_execute(started_at)
 
     @staticmethod
     def _apply_filters[QueryT: _FilterQuery](

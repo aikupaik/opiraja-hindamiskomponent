@@ -1,5 +1,6 @@
 """FastAPI boundary and operational acceptance coverage."""
 
+import hashlib
 import json
 import logging
 import time
@@ -665,6 +666,194 @@ async def test_request_id_completion_event_and_redaction(
     serialized = json.dumps(event, default=str)
     assert _or_token() not in serialized
     assert "super-secret-service-key" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_authorized_create_logs_bounded_allowlist_before_graph_validation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.requests")
+    app = _app(InMemoryAssessmentRepository(), FakeKstEngine())
+
+    async with _client(app) as client:
+        response = await client.post(
+            "/api/v1/tests",
+            headers={
+                "Authorization": f"Bearer {_or_token()}",
+                "X-Request-ID": "request.create-123",
+            },
+            json={
+                "user_id": "excluded-user",
+                "learning_path_id": "excluded-path",
+                "nodes": ["A", "A"],
+                "relations": [{"from": "A", "to": "A"}],
+                "course": "Course",
+                "goal": "Goal",
+                "parent_node": "Parent",
+            },
+        )
+
+    assert response.status_code == 422
+    records = [
+        record
+        for record in caplog.records
+        if record.name == "app.requests"
+        and record.getMessage() == "assessment_create_received"
+    ]
+    assert len(records) == 1
+    event = records[0].__dict__
+    assert event["request_id"] == "request.create-123"
+    assert event["body"] == {
+        "nodes": ["A", "A"],
+        "relations": [{"from": "A", "to": "A"}],
+        "course": "Course",
+        "goal": "Goal",
+        "method": "kst",
+        "cognitive_level": "mõistab",
+        "parent_node": "Parent",
+    }
+    assert event["node_count"] == 2
+    assert event["relation_count"] == 1
+    assert event["body_truncated"] is False
+    assert len(event["body_sha256"]) == 64
+    serialized = json.dumps(event, default=str)
+    assert "excluded-user" not in serialized
+    assert "excluded-path" not in serialized
+    assert "user_id" not in serialized
+    assert "learning_path_id" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_large_create_log_uses_deterministic_bounded_preview(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.requests")
+    nodes = [f"node-{index}-" + ("õ" * 1000) for index in range(26)]
+    relations = [
+        {"from": nodes[index % len(nodes)], "to": nodes[(index + 1) % len(nodes)]}
+        for index in range(60)
+    ]
+    request_body = {
+        "user_id": "excluded-user",
+        "learning_path_id": "excluded-path",
+        "nodes": nodes,
+        "relations": relations,
+        "course": "õ" * 1000,
+    }
+
+    async with _client(_app(InMemoryAssessmentRepository(), FakeKstEngine())) as client:
+        response = await client.post(
+            "/api/v1/tests",
+            headers=_authorization(_or_token()),
+            json=request_body,
+        )
+
+    assert response.status_code == 422
+    record = next(
+        item
+        for item in caplog.records
+        if item.name == "app.requests"
+        and item.getMessage() == "assessment_create_received"
+    )
+    event = record.__dict__
+    preview = cast(object, event["body"])
+    assert isinstance(preview, dict)
+    preview_values = cast(dict[str, object], preview)
+    preview_nodes_value = preview_values["nodes"]
+    preview_relations_value = preview_values["relations"]
+    assert isinstance(preview_nodes_value, list)
+    assert isinstance(preview_relations_value, list)
+    preview_nodes = cast(list[object], preview_nodes_value)
+    preview_relations = cast(list[object], preview_relations_value)
+    assert event["body_truncated"] is True
+    assert event["node_count"] == 26
+    assert event["relation_count"] == 60
+    assert len(preview_nodes) == 25
+    assert len(preview_relations) == 50
+    assert preview_values["omitted_node_count"] == 1
+    assert preview_values["omitted_relation_count"] == 10
+    assert all(
+        isinstance(value, str) and len(value.encode("utf-8")) <= 128
+        for value in preview_nodes
+    )
+
+    allowlisted = {
+        "nodes": nodes,
+        "relations": relations,
+        "course": "õ" * 1000,
+        "goal": None,
+        "method": "kst",
+        "cognitive_level": "mõistab",
+        "parent_node": None,
+    }
+    encoded = json.dumps(
+        allowlisted,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert event["body_bytes"] == len(encoded)
+    assert event["body_sha256"] == hashlib.sha256(encoded).hexdigest()
+    json.dumps(preview, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_and_schema_invalid_creates_do_not_log_body(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.requests")
+    app = _app(InMemoryAssessmentRepository(), FakeKstEngine())
+    valid_body = {
+        "user_id": "excluded-user",
+        "learning_path_id": "excluded-path",
+        "nodes": ["A"],
+    }
+
+    async with _client(app) as client:
+        unauthorized = await client.post("/api/v1/tests", json=valid_body)
+        invalid = await client.post(
+            "/api/v1/tests",
+            headers=_authorization(_or_token()),
+            json={"user_id": "user"},
+        )
+
+    assert unauthorized.status_code == 401
+    assert invalid.status_code == 422
+    assert not any(
+        record.name == "app.requests"
+        and record.getMessage() == "assessment_create_received"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_handled_server_error_logs_safe_failure_chain_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    repository = InMemoryAssessmentRepository()
+    repository.fail_next(
+        "get_session", RepositoryUnavailable("contains super-secret-service-key")
+    )
+    caplog.set_level(logging.INFO, logger="app.requests")
+
+    async with _client(_app(repository, FakeKstEngine())) as client:
+        response = await client.get(
+            f"/api/v1/tests/{TEST_ID}",
+            headers=_authorization(_or_token()),
+        )
+
+    assert response.status_code == 503
+    failures = [
+        record
+        for record in caplog.records
+        if record.name == "app.requests" and record.getMessage() == "request_failed"
+    ]
+    assert len(failures) == 1
+    event = failures[0].__dict__
+    assert event["outcome"] == "supabase_unavailable"
+    assert event["error_type"] == "RepositoryUnavailable"
+    assert event["test_id"] == str(TEST_ID)
+    assert "super-secret-service-key" not in json.dumps(event, default=str)
 
 
 @pytest.mark.asyncio

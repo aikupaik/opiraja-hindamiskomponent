@@ -56,9 +56,16 @@ from app.config import Settings
 from app.domain.graphs import GraphValidationError
 from app.domain.repository import RepositoryDataError, RepositoryUnavailable
 from app.integrations.kst_engine import HttpxKstEngine, RUnavailable, RValidationError
-from app.logging_config import request_log_level, safe_exception_location
+from app.logging_config import (
+    ProductionSanitizer,
+    configure_production_sanitizer,
+    production_sanitizer,
+    request_log_level,
+    safe_exception_chain,
+)
 from app.observability import (
     collect_dependency_metrics,
+    current_request_id,
     reset_request_id,
     set_request_id,
 )
@@ -82,6 +89,8 @@ _SIMULATION_PLAYER_PATH = re.compile(
 
 def build_lifespan(settings: Settings) -> Lifespan[FastAPI]:
     """Build the production lifespan for shared dependency clients."""
+
+    sanitizer = ProductionSanitizer(_settings_secrets(settings))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -125,16 +134,7 @@ def build_lifespan(settings: Settings) -> Lifespan[FastAPI]:
             app.state.diagnostic_hub = DiagnosticHub(
                 max_events=settings.admin_diagnostic_max_events,
                 ttl_seconds=settings.admin_diagnostic_ttl_seconds,
-                secrets=(
-                    settings.supabase_service_key.get_secret_value(),
-                    settings.or_jwt_secret.get_secret_value(),
-                    settings.api_jwt_secret.get_secret_value(),
-                    (
-                        ""
-                        if settings.admin_access_key is None
-                        else settings.admin_access_key.get_secret_value()
-                    ),
-                ),
+                sanitizer=sanitizer,
             )
             app.state.assessment_service = AssessmentService(
                 repository,
@@ -161,6 +161,7 @@ def create_app(
     """Create an independently testable API application."""
 
     resolved_settings = settings or Settings.model_validate({})
+    sanitizer = configure_production_sanitizer(_settings_secrets(resolved_settings))
     app = FastAPI(
         title="Assessment Orchestrator",
         version="1.0.0",
@@ -172,6 +173,7 @@ def create_app(
     )
     app.state.settings = resolved_settings
     app.state.token_service = TokenService(resolved_settings)
+    app.state.log_sanitizer = sanitizer
     app.include_router(health_router)
     app.include_router(or_router)
     app.include_router(player_router)
@@ -280,6 +282,7 @@ async def _remote_source_failure(request: Request, error: Exception) -> Response
     request.state.outcome_code = (
         "source_fetch_timeout" if source_error.timed_out else "source_fetch_failed"
     )
+    _log_request_failed(request, source_error, request.state.outcome_code)
     return _error_response(
         status_code,
         request.state.outcome_code,
@@ -300,6 +303,8 @@ def _failure_handler(
 ) -> Callable[[Request, Exception], Awaitable[Response]]:
     async def handler(request: Request, _error: Exception) -> Response:
         request.state.outcome_code = code
+        if status_code >= 500:
+            _log_request_failed(request, _error, code)
         return _error_response(status_code, code, message, headers=headers)
 
     return handler
@@ -366,16 +371,7 @@ async def _complete_request(
                 ):
                     request.state.outcome_code = _outcome_for_status(status_code)
             except Exception as error:
-                error_event: dict[str, object] = {
-                    "error_type": type(error).__name__,
-                }
-                error_location = safe_exception_location(error)
-                if error_location is not None:
-                    error_event["error_location"] = error_location
-                logger.error(
-                    "unhandled_request_exception",
-                    extra=error_event,
-                )
+                _log_request_failed(request, error, "internal_error")
                 response = _error_response(
                     500, "internal_error", "The request could not be completed."
                 )
@@ -403,6 +399,7 @@ async def _complete_request(
                     "body": cast(object, response_body),
                 },
             )
+    total_ms = round((perf_counter() - started_at) * 1000, 3)
     event: dict[str, object] = {
         "event": "request_completed",
         "request_id": request_id,
@@ -410,7 +407,8 @@ async def _complete_request(
         "path": request.url.path,
         "status": status_code,
         "outcome": request.state.outcome_code,
-        "total_ms": round((perf_counter() - started_at) * 1000, 3),
+        "total_ms": total_ms,
+        "duration_ms": total_ms,
         "supabase_ms": round(metrics.supabase_seconds * 1000, 3),
         "supabase_execute_count": metrics.supabase_execute_count,
         "r_ms": round(metrics.r_seconds * 1000, 3),
@@ -452,6 +450,38 @@ async def _complete_request(
 
 def _successful_health_check(path: str, status_code: int) -> bool:
     return status_code < 400 and path in {"/health/live", "/health/ready"}
+
+
+def _log_request_failed(request: Request, error: Exception, outcome: str) -> None:
+    event: dict[str, object] = {
+        "event": "request_failed",
+        "outcome": outcome,
+        "error_type": type(error).__name__,
+        "cause_chain": safe_exception_chain(error),
+    }
+    request_id = current_request_id()
+    if request_id is not None:
+        event["request_id"] = request_id
+    match = _TEST_ID_PATH.search(request.url.path)
+    if match is not None:
+        event["test_id"] = match.group("test_id")
+    safe_event = production_sanitizer().sanitize(event)
+    if not isinstance(safe_event, dict):
+        raise TypeError("sanitized failure event must remain an object")
+    logger.error("request_failed", extra=safe_event)
+
+
+def _settings_secrets(settings: Settings) -> tuple[str, ...]:
+    return (
+        settings.supabase_service_key.get_secret_value(),
+        settings.or_jwt_secret.get_secret_value(),
+        settings.api_jwt_secret.get_secret_value(),
+        (
+            ""
+            if settings.admin_access_key is None
+            else settings.admin_access_key.get_secret_value()
+        ),
+    )
 
 
 @contextmanager

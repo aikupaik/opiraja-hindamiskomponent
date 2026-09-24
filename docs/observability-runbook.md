@@ -239,6 +239,18 @@ Useful Explore queries include:
 ```
 
 ```logql
+{service="api", event="supabase_operation"}
+| json
+| outcome="failed"
+```
+
+```logql
+{service="api", event="assessment_create_received"}
+| json
+| node_count > 10
+```
+
+```logql
 {event="parser_error", level="UNKNOWN"}
 ```
 
@@ -257,8 +269,17 @@ For acceptance:
 - restart Alloy and confirm persisted positions avoid replay duplication;
 - restart Loki and confirm earlier records remain queryable;
 - restart Grafana and confirm accounts, datasource, and dashboard persist; and
-- confirm no redaction sentinel, authorization header, cookie, request body,
-  configured secret, or sensitive query string is present.
+- confirm no authorization header, cookie, configured secret, sensitive query
+  string, or request body is present except the documented bounded allowlist in
+  `assessment_create_received`; specifically confirm `user_id` and
+  `learning_path_id` are absent.
+
+Grafana Editor users with Loki access can view the allowlisted assessment graph
+and configuration content for the 14-day retention period. The dashboard shows
+failed Supabase calls, per-operation p50/p95 duration, and calls above the
+documented 500 ms slow-operation threshold. Its request-ID view correlates the
+create input, Supabase and R operations, request failure, and terminal completion
+in timestamp order. These values are parsed JSON fields, not Loki labels.
 
 To verify malformed-line retention, run a short-lived, explicitly labelled test
 container outside Compose, then remove it. Use an already approved local image

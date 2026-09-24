@@ -2,39 +2,20 @@
 
 import asyncio
 from collections import deque
-from collections.abc import AsyncGenerator, Generator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
-import re
 from time import monotonic
-from typing import TypeAlias, cast
+from typing import TypeAlias
+
+from app.logging_config import ProductionSanitizer
 
 JsonValue: TypeAlias = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
-
-_SENSITIVE_KEYS = {
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "password",
-    "secret",
-    "token",
-    "access_key",
-    "admin_access_key",
-    "apikey",
-    "api_key",
-    "supabase_service_key",
-}
-_TOKEN_FRAGMENT = re.compile(r"(?i)([#&]token=)[^&\s\"'<>]+")
-_COMPACT_JWT = re.compile(
-    r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."
-    r"[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])"
-)
-
 
 @dataclass(frozen=True, slots=True)
 class DiagnosticEvent:
@@ -86,10 +67,11 @@ class DiagnosticHub:
         max_events: int = 500,
         ttl_seconds: int = 3600,
         secrets: tuple[str, ...] = (),
+        sanitizer: ProductionSanitizer | None = None,
     ) -> None:
         self.max_events = max_events
         self.ttl_seconds = ttl_seconds
-        self._secrets = tuple(value for value in secrets if value)
+        self._sanitizer = sanitizer or ProductionSanitizer(secrets)
         self._experiments: dict[str, _Experiment] = {}
 
     def emit(
@@ -122,7 +104,7 @@ class DiagnosticHub:
             type=event_type,
             request_id=request_id,
             test_id=test_id,
-            payload=self._redact(payload),
+            payload=self._sanitizer.sanitize(payload),
         )
         experiment.next_sequence += 1
         experiment.last_activity = now
@@ -214,42 +196,6 @@ class DiagnosticHub:
     def _serialize(event: DiagnosticEvent) -> str:
         data = json.dumps(event.as_dict(), ensure_ascii=False, separators=(",", ":"))
         return f"id: {event.sequence}\nevent: diagnostic\ndata: {data}\n\n"
-
-    def _redact(self, value: object, *, key: str | None = None) -> JsonValue:
-        if key is not None and _is_sensitive_key(key):
-            return "[REDACTED]"
-        if value is None or isinstance(value, (bool, int, float)):
-            return value
-        if isinstance(value, str):
-            result = value
-            for secret in self._secrets:
-                result = result.replace(secret, "[REDACTED]")
-            result = _TOKEN_FRAGMENT.sub(r"\1[REDACTED]", result)
-            result = _COMPACT_JWT.sub("[REDACTED]", result)
-            return result
-        if isinstance(value, Mapping):
-            mapping = cast(Mapping[object, object], value)
-            return {
-                str(child_key): self._redact(child_value, key=str(child_key))
-                for child_key, child_value in mapping.items()
-            }
-        if isinstance(value, Sequence) and not isinstance(
-            value, (str, bytes, bytearray)
-        ):
-            sequence = cast(Sequence[object], value)
-            return [self._redact(child) for child in sequence]
-        return str(value)
-
-
-def _is_sensitive_key(key: str) -> bool:
-    folded = key.casefold()
-    normalized = folded.replace("-", "_")
-    return (
-        folded in _SENSITIVE_KEYS
-        or normalized.endswith("_token")
-        or normalized.endswith("_secret")
-    )
-
 
 @dataclass(frozen=True, slots=True)
 class DiagnosticContext:

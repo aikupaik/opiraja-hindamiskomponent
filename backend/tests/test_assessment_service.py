@@ -146,7 +146,7 @@ async def test_reuses_complete_model_for_same_graph_and_active_configuration() -
 async def test_exact_partially_stocked_deficits_are_ordered_per_node() -> None:
     repository = InMemoryAssessmentRepository()
     await repository.seed_items(
-        *_items("A", 1, 3),
+        *_items("A", 1, 5),
         replace(make_item(ItemId(9), node="A"), prompt=""),
         *_items("B", 20, 1),
     )
@@ -159,11 +159,11 @@ async def test_exact_partially_stocked_deficits_are_ordered_per_node() -> None:
     assert result.status is SessionStatus.PREPARING
     assert result.missing_nodes == ("B",)
     assert order.item_requests == (
-        InventoryRequest(node="B", amount=2),
+        InventoryRequest(node="B", amount=4),
     )
     assert isinstance(session.player_state, PlayerState)
     assert session.player_state.inventory_plan == InventoryPlan(
-        required_per_node=3,
+        required_per_node=5,
         requests=order.item_requests,
     )
     assert isinstance(session.model, KstModel)
@@ -179,17 +179,17 @@ async def test_empty_inventory_requests_at_most_three_items_per_node() -> None:
 
     assert result.status is SessionStatus.PREPARING
     assert order.item_requests == (
-        InventoryRequest(node="A", amount=3),
-        InventoryRequest(node="B", amount=3),
+        InventoryRequest(node="A", amount=5),
+        InventoryRequest(node="B", amount=5),
     )
-    assert all(request.amount <= 3 for request in order.item_requests)
-    assert order.volume == 3
+    assert all(request.amount <= 5 for request in order.item_requests)
+    assert order.volume == 5
 
 
 @pytest.mark.asyncio
 async def test_activation_snapshots_all_items_in_stable_order() -> None:
     repository = InMemoryAssessmentRepository()
-    await repository.seed_items(*_items("B", 20, 3), *_items("A", 1, 3))
+    await repository.seed_items(*_items("B", 20, 5), *_items("A", 1, 5))
     engine = FakeKstEngine(model_results=(_built(),))
 
     result = await _service(repository, engine).create_assessment(_command())
@@ -210,7 +210,7 @@ async def test_activation_snapshots_all_items_in_stable_order() -> None:
 @pytest.mark.asyncio
 async def test_activation_pool_includes_all_valid_items_above_generation_target() -> None:
     repository = InMemoryAssessmentRepository()
-    await repository.seed_items(*_items("B", 20, 5), *_items("A", 1, 4))
+    await repository.seed_items(*_items("B", 20, 5), *_items("A", 1, 5))
     engine = FakeKstEngine(model_results=(_built(),))
 
     result = await _service(repository, engine).create_assessment(_command())

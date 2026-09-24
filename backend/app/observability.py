@@ -53,13 +53,19 @@ def collect_dependency_metrics() -> Generator[DependencyMetrics]:
         _metrics.reset(token)
 
 
-def record_supabase_execute(started_at: float) -> None:
+def record_supabase_execute(
+    started_at: float, *, duration_seconds: float | None = None
+) -> None:
     """Record one completed or failed Supabase execute attempt."""
 
     metrics = _metrics.get()
     if metrics is not None:
         metrics.supabase_execute_count += 1
-        metrics.supabase_seconds += perf_counter() - started_at
+        metrics.supabase_seconds += (
+            perf_counter() - started_at
+            if duration_seconds is None
+            else duration_seconds
+        )
 
 
 def record_r_request(started_at: float) -> None:

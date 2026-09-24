@@ -331,7 +331,12 @@ the participating routes deliberately accept `admin:simulation` rather than
 treating the operator as an OR or player. Only authenticated create, start,
 and answer calls with a valid UUID correlation header capture request/response
 bodies, R exchanges, Supabase operation summaries, completion fields, and
-warnings. Standard production logs remain body-free. Diagnostic buffers are
+warnings. Production logs are separate from this process-local stream. They
+emit `supabase_operation` for every database execution, `request_failed` for
+server-side failures, and `assessment_create_received` for each authorized,
+schema-valid assessment create. The last event contains only the bounded graph
+and configuration allowlist; `user_id` and `learning_path_id` are always
+excluded. No other production event includes a request body. Diagnostic buffers are
 process-local, expire after inactivity, do not survive restarts, and are
 intended for the current single-process experimentation environment. Dynamic
 JWT values, token fields, and token-bearing URL fragments are redacted before
@@ -386,8 +391,9 @@ replayed, stale, and conflicting submissions do not invoke it again.
 |---|---|
 | `app/main.py` | Creates the FastAPI application; constructs and closes shared Supabase and HTTPX clients during lifespan; registers routers and exception mappings; adds request-ID middleware and one structured completion log per request. |
 | `app/config.py` | Defines strict environment-backed settings, required service credentials/URLs, limits, and timeout defaults. |
-| `app/observability.py` | Holds request-local correlation, Supabase/R timing, and request-count metrics accumulated by adapters and emitted by middleware. |
-| `app/logging_config.py` | Defines the versioned one-line JSON log formatter, Uvicorn logging configuration, and safe error metadata. |
+| `app/observability.py` | Holds request-local correlation and dependency timing/count metrics accumulated by adapters and emitted by middleware. |
+| `app/supabase_observability.py` | Executes instrumented Supabase queries and emits sanitized production and experiment operation events. |
+| `app/logging_config.py` | Defines the versioned one-line JSON formatter, shared production/diagnostic sanitizer, Uvicorn logging configuration, and safe error metadata. |
 | `app/server.py` | Starts production Uvicorn with JSON logging and duplicate access logging disabled. |
 | `app/api/auth.py` | Defines the OR/player/admin bearer boundary, immutable auth context, and route-level scope/profile checks. |
 | `app/api/tokens.py` | Issues API JWTs and strictly validates the exact OR, player, and admin claim profiles. |

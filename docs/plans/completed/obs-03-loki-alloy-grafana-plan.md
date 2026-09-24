@@ -255,9 +255,10 @@ operator-readable NDJSON archive. Retention is time-based rather than capped at
   duplication. Restart Loki and confirm earlier records remain queryable.
   Restart Grafana and confirm accounts, the datasource, and the dashboard
   remain available.
-- **[VM]** Confirm no existing redaction sentinel, authorization header,
-  cookie, request body, configured secret, or sensitive query string appears
-  in Loki.
+- **[VM]** Confirm no authorization header, cookie, configured secret,
+  sensitive query string, or request body appears in Loki except the
+  documented bounded allowlist in `assessment_create_received`. Confirm
+  `user_id` and `learning_path_id` remain excluded from that event.
 
 ### Security and network checks
 
