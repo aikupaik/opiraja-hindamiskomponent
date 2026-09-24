@@ -1,83 +1,84 @@
 {
   "meta": {
-    "name": "Assessment Lab admin UI",
-    "source": "assets/HK_disain.png",
+    "name": "Assessment Lab TalTech UI",
+    "source": "TalTech brand guidelines and the Assessment Lab reference image",
     "referenceDimensions": {
       "width": 1536,
       "height": 1024
     }
   },
   "color": {
-    "forest-950": "#0E2D24",
-    "forest-800": "#16533C",
-    "forest-600": "#2E7D5B",
-    "forest-200": "#CFE6DA",
-    "forest-50": "#F2F7F4",
-    "paper-50": "#FAFBF8",
-    "paper-100": "#F1EEE8",
+    "burgundy": "#AA1352",
+    "magenta": "#E4067E",
+    "light-blue": "#4DBED2",
+    "dark-blue": "#342B60",
+    "grey-1": "#9396B0",
+    "grey-2": "#DADAE4",
+    "page": "#F7F7FA",
     "surface": "#FFFFFF",
-    "text-primary": "#1A1F1D",
-    "text-muted": "#66746E",
-    "orange-600": "#E96D2A",
-    "amber-600": "#D97706",
-    "blue-600": "#2563EB",
-    "green-600": "#16A34A",
-    "red-600": "#DC2626",
-    "border": "#E5E9E6",
-    "focus-ring": "#2E7D5B"
+    "text-primary": "#17151A",
+    "text-muted": "#555565",
+    "success": "#2F6F44",
+    "warning": "#8A5A00",
+    "error": "#9B1C31",
+    "border": "#DADAE4",
+    "focus-ring": "#4DBED2"
   },
   "typography": {
     "display": {
-      "family": "Recoleta, Georgia, serif",
+      "family": "Proxima Nova, Verdana, sans-serif",
       "weight": 700,
       "fontSize": "48px",
-      "lineHeight": "56px",
-      "letterSpacing": "normal"
+      "lineHeight": "47px",
+      "letterSpacing": "0.015em",
+      "textTransform": "uppercase"
     },
     "heading-2": {
-      "family": "Recoleta, Georgia, serif",
-      "weight": 600,
+      "family": "Proxima Nova, Verdana, sans-serif",
+      "weight": 700,
       "fontSize": "32px",
-      "lineHeight": "40px",
-      "letterSpacing": "normal"
+      "lineHeight": "29px",
+      "letterSpacing": "0.02em",
+      "textTransform": "uppercase"
     },
     "heading-3": {
-      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
-      "weight": 600,
+      "family": "Proxima Nova, Verdana, sans-serif",
+      "weight": 700,
       "fontSize": "20px",
-      "lineHeight": "28px",
-      "letterSpacing": "normal"
+      "lineHeight": "20px",
+      "letterSpacing": "0.02em",
+      "textTransform": "uppercase"
     },
     "label": {
-      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "family": "Proxima Nova, Verdana, sans-serif",
       "weight": 500,
       "fontSize": "14px",
       "lineHeight": "20px",
       "letterSpacing": "normal"
     },
     "body": {
-      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "family": "Proxima Nova, Verdana, sans-serif",
       "weight": 400,
-      "fontSize": "14px",
-      "lineHeight": "20px",
+      "fontSize": "16px",
+      "lineHeight": "24px",
       "letterSpacing": "normal"
     },
     "caption": {
-      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "family": "Proxima Nova, Verdana, sans-serif",
       "weight": 400,
       "fontSize": "12px",
       "lineHeight": "16px",
       "letterSpacing": "normal"
     },
     "code": {
-      "family": "IBM Plex Mono, ui-monospace, SFMono-Regular, monospace",
+      "family": "IBM Plex Mono, Consolas, monospace",
       "weight": 400,
       "fontSize": "14px",
       "lineHeight": "20px",
       "letterSpacing": "normal"
     },
     "eyebrow": {
-      "family": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "family": "Proxima Nova, Verdana, sans-serif",
       "weight": 600,
       "fontSize": "11px",
       "lineHeight": "16px",
@@ -109,24 +110,24 @@
   },
   "status": {
     "idle": {
-      "text": "#66746E",
-      "background": "#F1EEE8"
+      "text": "#555565",
+      "background": "#DADAE4"
     },
     "running": {
-      "text": "#2563EB",
-      "background": "#EFF6FF"
+      "text": "#342B60",
+      "background": "#EEF0F8"
     },
     "completed": {
-      "text": "#16A34A",
-      "background": "#F2F7F4"
+      "text": "#2F6F44",
+      "background": "#EEF7F0"
     },
     "warning": {
-      "text": "#D97706",
-      "background": "#FFF7ED"
+      "text": "#8A5A00",
+      "background": "#FFF7E8"
     },
     "error": {
-      "text": "#DC2626",
-      "background": "#FEF2F2"
+      "text": "#9B1C31",
+      "background": "#FCEDEF"
     }
   }
 }

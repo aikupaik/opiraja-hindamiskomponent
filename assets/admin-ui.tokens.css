@@ -1,38 +1,53 @@
 :root {
-  /* Assessment Lab admin UI tokens; source: HK_disain.png */
-  --al-color-forest-950: #0e2d24;
-  --al-color-forest-800: #16533c;
-  --al-color-forest-600: #2e7d5b;
-  --al-color-forest-200: #cfe6da;
-  --al-color-forest-50: #f2f7f4;
-  --al-color-paper-50: #fafbf8;
-  --al-color-paper-100: #f1eee8;
+  /* Assessment Lab UI tokens aligned with the TalTech brand system. */
+  --al-color-burgundy: #aa1352;
+  --al-color-magenta: #e4067e;
+  --al-color-light-blue: #4dbed2;
+  --al-color-dark-blue: #342b60;
+  --al-color-grey-1: #9396b0;
+  --al-color-grey-2: #dadae4;
+  --al-color-black: #000000;
+  --al-color-white: #ffffff;
+  --al-color-page: #f7f7fa;
   --al-color-surface: #ffffff;
-  --al-color-text-primary: #1a1f1d;
-  --al-color-text-muted: #66746e;
-  --al-color-orange-600: #e96d2a;
-  --al-color-amber-600: #d97706;
-  --al-color-blue-600: #2563eb;
-  --al-color-green-600: #16a34a;
-  --al-color-red-600: #dc2626;
-  --al-color-border: #e5e9e6;
-  --al-color-focus-ring: #2e7d5b;
+  --al-color-text-primary: #17151a;
+  --al-color-text-muted: #555565;
+  --al-color-border: #dadae4;
+  --al-color-focus-ring: #4dbed2;
+  --al-color-success: #2f6f44;
+  --al-color-warning: #8a5a00;
+  --al-color-error: #9b1c31;
 
-  --al-font-display: "Recoleta", Georgia, serif;
-  --al-font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --al-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  /* Compatibility aliases for the existing admin selectors. */
+  --al-color-forest-950: var(--al-color-dark-blue);
+  --al-color-forest-800: var(--al-color-burgundy);
+  --al-color-forest-200: #f7e8ef;
+  --al-color-forest-50: #fcf2f6;
+  --al-color-paper-50: var(--al-color-page);
+  --al-color-paper-100: var(--al-color-grey-2);
+  --al-color-orange-600: var(--al-color-magenta);
+  --al-color-amber-600: var(--al-color-warning);
+  --al-color-blue-600: var(--al-color-dark-blue);
+  --al-color-green-600: var(--al-color-success);
+  --al-color-red-600: var(--al-color-error);
+
+  --al-font-brand: "Proxima Nova", Verdana, sans-serif;
+  --al-font-body: "Proxima Nova", Verdana, sans-serif;
+  --al-font-mono: "IBM Plex Mono", Consolas, monospace;
+  --al-font-display: var(--al-font-brand);
+  --al-font-sans: var(--al-font-body);
 
   --al-font-size-display: 48px;
   --al-font-size-heading-2: 32px;
   --al-font-size-heading-3: 20px;
-  --al-font-size-body: 14px;
+  --al-font-size-body: 16px;
   --al-font-size-caption: 12px;
   --al-font-size-eyebrow: 11px;
 
-  --al-line-height-display: 56px;
-  --al-line-height-heading-2: 40px;
-  --al-line-height-heading-3: 28px;
-  --al-line-height-body: 20px;
+  --al-line-height-display: 47px;
+  --al-line-height-heading-2: 29px;
+  --al-line-height-heading-3: 20px;
+  --al-line-height-body: 24px;
   --al-line-height-caption: 16px;
 
   --al-space-1: 4px;
@@ -55,13 +70,13 @@
 /* Semantic status aliases keep component CSS independent of raw palette names. */
 :root {
   --al-status-idle-text: var(--al-color-text-muted);
-  --al-status-idle-background: var(--al-color-paper-100);
-  --al-status-running-text: var(--al-color-blue-600);
-  --al-status-running-background: #eff6ff;
-  --al-status-completed-text: var(--al-color-green-600);
-  --al-status-completed-background: var(--al-color-forest-50);
-  --al-status-warning-text: var(--al-color-amber-600);
-  --al-status-warning-background: #fff7ed;
-  --al-status-error-text: var(--al-color-red-600);
-  --al-status-error-background: #fef2f2;
+  --al-status-idle-background: var(--al-color-grey-2);
+  --al-status-running-text: var(--al-color-dark-blue);
+  --al-status-running-background: #eef0f8;
+  --al-status-completed-text: var(--al-color-success);
+  --al-status-completed-background: #eef7f0;
+  --al-status-warning-text: var(--al-color-warning);
+  --al-status-warning-background: #fff7e8;
+  --al-status-error-text: var(--al-color-error);
+  --al-status-error-background: #fcedef;
 }

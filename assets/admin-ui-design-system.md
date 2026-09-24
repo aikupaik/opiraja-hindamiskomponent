@@ -1,74 +1,78 @@
-# Assessment Lab admin UI design system
+# Assessment Lab TalTech UI design system
 
 This document is the implementation brief for the admin UI. It is derived from
-`assets/HK_disain.png` (1536 × 1024). The PNG is a visual reference; the rules
-below are the source of truth for future UI work so an implementer does not
-need to inspect the image.
+`assets/HK_disain.png` (1536 × 1024) and aligned with TalTech’s official brand
+guidelines. The PNG remains a visual reference; this document and the token
+files are the source of truth for future UI work.
+
+The TalTech reference is the [official brand materials](https://taltech.ee/en/brand)
+and its [brand guideline PDF](https://haldus.taltech.ee/sites/default/files/2023-10/TalTech%20CVI_A4_2022_lingitud_small.pdf).
 
 ## Product character
 
-Assessment Lab is a calm, editorial operations console for configuring and
-observing assessments. The visual language combines warm paper surfaces,
-deep-forest navigation, restrained borders, and serif display headings.
+Assessment Lab is a clear, focused assessment experience for configuring,
+delivering, and observing tests. The visual language uses TalTech burgundy and
+magenta as brand signals, light blue and dark blue as supporting accents, white
+surfaces, restrained borders, and geometric sans-serif typography.
 
 - Prefer clarity, whitespace, and strong information hierarchy over decoration.
-- Use forest green for brand, navigation, selected states, and positive status.
-- Use semantic accent colors only for meaning: orange/build, amber/warning,
-  blue/in-progress, green/success, and red/error.
-- Use a white or warm-paper canvas. Avoid gradients, heavy shadows, glassmorphism,
+- Use TalTech burgundy for primary actions and brand emphasis, and magenta only
+  as a deliberate accent.
+- Use TalTech dark blue and light blue for supporting emphasis, links, focus,
+  and information states.
+- Use white and cool-neutral surfaces. Avoid gradients, heavy shadows, glassmorphism,
   saturated backgrounds, and decorative illustrations that compete with data.
 - The overall tone is precise, quiet, and trustworthy.
 
 ## Color palette
 
-These names and hex values are printed in the reference board and must be used
-as the shared token vocabulary.
+These names and hex values are the shared token vocabulary for TalTech-aligned
+Assessment Lab UI work.
 
 | Token | Hex | Intended use |
 | --- | --- | --- |
-| `forest-950` | `#0E2D24` | Brand mark, dark sidebar, primary text on dark surfaces |
-| `forest-800` | `#16533C` | Primary buttons, active navigation, selected controls |
-| `forest-600` | `#2E7D5B` | Links, progress, positive chart series, secondary brand accents |
-| `forest-200` | `#CFE6DA` | Soft green fills, selected/positive backgrounds |
-| `forest-50` | `#F2F7F4` | Very light green tint behind brand states |
-| `paper-50` | `#FAFBF8` | App/page background |
-| `paper-100` | `#F1EEE8` | Warm separators, subtle secondary surfaces |
+| `burgundy` | `#AA1352` | Primary actions, brand mark, selected controls |
+| `magenta` | `#E4067E` | Brand accent and emphasis; use sparingly |
+| `light-blue` | `#4DBED2` | Focus rings, information accents, positive visual highlights |
+| `dark-blue` | `#342B60` | Supporting emphasis, links, running/in-progress states |
+| `grey-1` | `#9396B0` | Secondary muted UI and metadata |
+| `grey-2` | `#DADAE4` | Borders, dividers, neutral status surfaces |
+| `page` | `#F7F7FA` | App/page background |
 | `surface` | `#FFFFFF` | Cards, panels, inputs, tables |
-| `text-primary` | `#1A1F1D` | Main copy and headings |
-| `text-muted` | `#66746E` | Supporting copy, metadata, labels |
-| `orange-600` | `#E96D2A` | Build category, source-added accent, build status |
-| `amber-600` | `#D97706` | Warning status and caution actions |
-| `blue-600` | `#2563EB` | Running/in-progress status and series |
-| `green-600` | `#16A34A` | Completed/success status |
-| `red-600` | `#DC2626` | Failed/error status and destructive feedback |
+| `text-primary` | `#17151A` | Main copy and headings |
+| `text-muted` | `#555565` | Supporting copy, metadata, labels |
+| `success` | `#2F6F44` | Completed/success status |
+| `warning` | `#8A5A00` | Warning status and caution actions |
+| `error` | `#9B1C31` | Failed/error status and destructive feedback |
+| `border` | `#DADAE4` | Card and panel borders |
+| `focus-ring` | `#4DBED2` | Keyboard focus indicator |
 
 Use color with a text or icon label for status. Never rely on color alone to
 communicate success, failure, or progress.
 
 ## Typography
 
-The reference uses three families with deliberately different roles:
+TalTech’s brand typeface is Proxima Nova. Use the following stacks so the UI
+remains usable when the licensed font is unavailable:
 
 | Style | Family | Weight | Size / line height | Use |
 | --- | --- | ---: | ---: | --- |
-| Display heading | Recoleta | 700 | `48px / 56px` | Page hero headings, used sparingly |
-| Section heading | Recoleta | 600 | `32px / 40px` | Primary screen/card headings |
-| Heading 3 | Inter | 600 | `20px / 28px` | Card titles and subsections |
-| Label | Inter | 500 | `14px / 20px` | Field labels, navigation labels, table headings |
-| Body | Inter | 400 | `14px / 20px` | Descriptions and general UI copy |
+| Display heading | Proxima Nova | 700 | `48px / 47px` | Page hero headings, uppercase |
+| Section heading | Proxima Nova | 700 | `32px / 29px` | Primary screen/card headings, uppercase |
+| Heading 3 | Proxima Nova | 700 | `20px / 20px` | Card titles and subsections, uppercase |
+| Label | Proxima Nova | 500 | `14px / 20px` | Field labels, navigation labels, table headings |
+| Body | Proxima Nova | 400 | `16px / 24px` | Descriptions and general UI copy |
 | Code / data | IBM Plex Mono | 400 | `14px / 20px` | JSON, IDs, technical values, compact metrics |
 
-The reference also uses small metadata and captions. Implement these as Inter
-`12px / 16px`, weight 400 or 500, in `text-muted`. Use sentence case for copy;
-use uppercase only for small category eyebrows such as `BUILD`, `OBSERVE`, and
-`TEST`, with letter spacing around `0.12em`.
+Use Proxima Nova `12px / 16px`, weight 400 or 500, in `text-muted` for metadata
+and captions. Keep body copy in sentence case. Headlines and sub-headings use
+uppercase with tight leading, following TalTech guidance.
 
 Fallback stacks:
 
 ```css
-font-family: "Recoleta", Georgia, serif;
-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+font-family: "Proxima Nova", Verdana, sans-serif;
+font-family: "IBM Plex Mono", Consolas, monospace;
 ```
 
 ## Layout and shell
@@ -81,14 +85,14 @@ font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   Each area may have a short secondary descriptor, for example `Materials &
   rules`, `System & quality`, `Experiments`, and `Access & system`.
 - Show the current operator and a compact `Lock` action on the right.
-- The active area uses `forest-800` and a thin underline. Inactive areas use
+- The active area uses `burgundy` and a thin underline. Inactive areas use
   `text-primary` or `text-muted` according to emphasis.
 - Separate the bar from the page with a light bottom border. Keep it compact;
   it is navigation, not a hero area.
 
 ### Page canvas
 
-- Use `paper-50` as the page background and center the content in a spacious
+- Use `page` as the page background and center the content in a spacious
   desktop canvas.
 - Use a 2-column dashboard grid for overview pages. The reference uses a wider
   primary column and a secondary column of approximately equal visual weight;
@@ -103,7 +107,7 @@ font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
 The Experiments screen shows a narrow vertical rail at the left of the content:
 
-- background `forest-950`, white/forest-tinted icons, rounded selected tile;
+- background `dark-blue`, white/light-blue icons, rounded selected tile;
 - one icon per primary destination, with a tooltip or accessible label;
 - keep the rail narrow and visually secondary to the content;
 - do not put text-only navigation in the rail when the top bar already provides
@@ -111,8 +115,7 @@ The Experiments screen shows a narrow vertical rail at the left of the content:
 
 ## Surfaces, borders, and elevation
 
-- Cards and panels use `surface` with a `1px` border in a very light neutral
-  derived from `paper-100` (use `#E5E9E6` as the implementation border).
+- Cards and panels use `surface` with a `1px` `border` (`#DADAE4`).
 - Use `12px` corner radius for cards and dashboard panels; use `8px` for
   controls and compact status elements; use a full pill for statuses.
 - Use minimal elevation: a subtle shadow is acceptable for menus and raised
@@ -125,11 +128,11 @@ The Experiments screen shows a narrow vertical rail at the left of the content:
 
 ### Buttons
 
-- Primary: `forest-800` background, white text, `8px` radius, medium Inter;
+- Primary: `burgundy` background, white text, `8px` radius, medium Proxima Nova;
   use for the page's main action such as `+ New experiment`.
 - Secondary: white surface, neutral border, `text-primary`; use for actions
   such as `View as participant` and `Export report`.
-- Tertiary: text-only, usually `forest-800`, with a visible hover background.
+- Tertiary: text-only, usually `burgundy`, with a visible hover background.
 - Include a clear icon only when it improves scanning. Keep icon and text
   aligned on a `4–8px` gap.
 - Disabled buttons reduce contrast and must not look like active secondary
@@ -138,11 +141,11 @@ The Experiments screen shows a narrow vertical rail at the left of the content:
 ### Inputs and filters
 
 - Inputs and selects use white surface, `1px` neutral border, `8px` radius,
-  `14px / 20px` Inter text, and at least `40px` control height.
+  `14px / 20px` Proxima Nova text, and at least `40px` control height.
 - Placeholder and supporting text use `text-muted`.
 - Filter controls may sit inline in a panel header, as shown by the date range
   and project selector on System & quality.
-- Focus must be visible: use a `2px` forest focus ring with sufficient contrast.
+- Focus must be visible: use a `2px` light-blue focus ring with sufficient contrast.
 
 ### Status chips
 
@@ -150,11 +153,11 @@ Use a pale tint with a semantic border/text pair, plus a text label:
 
 | Status | Accent |
 | --- | --- |
-| Idle / Draft | neutral: `paper-100` + `text-muted` |
-| Running | `blue-600` |
-| Completed | `green-600` with `forest-50`/`forest-200` tint |
-| Warning | `amber-600` |
-| Failed / Error | `red-600` |
+| Idle / Draft | neutral: `grey-2` + `text-muted` |
+| Running | `dark-blue` with a cool-neutral tint |
+| Completed | semantic `success` with a pale green tint |
+| Warning | semantic `warning` |
+| Failed / Error | semantic `error` |
 
 Chips are compact, pill-shaped, and never the only indication of state in a
 table or timeline.
@@ -165,7 +168,7 @@ The Materials & rules overview uses three feature cards: `Sources`, `Item bank`,
 and `Rules`. Each card contains:
 
 1. a small tinted icon circle;
-2. a Recoleta or strong section title;
+2. a strong Proxima Nova section title;
 3. one short explanatory sentence;
 4. a bottom metric such as `12 sources` and a right-facing arrow.
 
@@ -176,7 +179,7 @@ consistent.
 ### Tables
 
 - Use a white table surface inside a bordered panel with a compact header row.
-- Header labels are small Inter medium text in `text-muted`.
+- Header labels are small Proxima Nova medium text in `text-muted`.
 - Body rows use `14px / 20px`; keep row height generous enough to scan.
 - Align numbers and times consistently. Use IBM Plex Mono for IDs and technical
   measurements where that improves comparison.
@@ -218,7 +221,7 @@ tokens.
 
 ### Materials & rules
 
-- Eyebrow: `BUILD` in orange.
+- Eyebrow: `BUILD` in burgundy or magenta.
 - Page title: `Materials & rules`.
 - Supporting text explains that the page creates knowledge context and
   authoring rules for the assessment agent.
@@ -273,4 +276,3 @@ Use `admin-ui.tokens.css` when writing CSS and `admin-ui.tokens.json` when a
 component system, test, or design-token pipeline needs structured values. Do
 not add one-off colors or arbitrary font sizes without first checking these
 files.
-
