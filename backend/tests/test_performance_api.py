@@ -73,8 +73,11 @@ def test_committed_api_fixtures_provide_covered_inventory() -> None:
         "10-independent": 10,
     }
     items = build_item_bank(fixtures)
-    assert len(items) == 30
-    assert all(sum(item.node == node for item in items) == 3 for node in fixtures["10-chain"].graph.nodes)
+    assert len(items) == 50
+    assert all(
+        sum(item.node == node for item in items) == 5
+        for node in fixtures["10-chain"].graph.nodes
+    )
 
 
 @pytest.mark.asyncio
@@ -165,4 +168,3 @@ async def test_concurrent_sessions_complete_and_export_integrity_evidence(
     assert evidence["integrity_errors"] == []
     assert evidence["engine_call_counts"]["advance"] == 5 * fixture.answer_count
     assert evidence["event_loop_lag"]["sample_count"] >= 0
-

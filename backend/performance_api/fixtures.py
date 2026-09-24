@@ -55,7 +55,7 @@ class _Operations(_FixtureModel):
 
 class _FixtureFile(_FixtureModel):
     shape: FixtureShape
-    candidates_per_node: int = Field(ge=3)
+    candidates_per_node: int = Field(ge=5)
     graph: _Graph
     operations: _Operations
 
@@ -115,10 +115,18 @@ def load_fixtures(directory: Path | None = None) -> dict[FixtureShape, ApiFixtur
 
 
 def build_item_bank(fixtures: dict[FixtureShape, ApiFixture]) -> tuple[AssessmentItem, ...]:
-    nodes = sorted({node for fixture in fixtures.values() for node in fixture.graph.nodes})
+    candidates_by_node: dict[str, int] = {}
+    for fixture in fixtures.values():
+        for node in fixture.graph.nodes:
+            candidates_by_node[node] = max(
+                candidates_by_node.get(node, 0), fixture.candidates_per_node
+            )
+
     items: list[AssessmentItem] = []
-    for node_index, node in enumerate(nodes, start=1):
-        for item_index in range(1, 4):
+    for node_index, (node, candidate_count) in enumerate(
+        sorted(candidates_by_node.items()), start=1
+    ):
+        for item_index in range(1, candidate_count + 1):
             item_id = ItemId(node_index * 100 + item_index)
             items.append(
                 AssessmentItem(
@@ -169,4 +177,3 @@ def _model_from_response(response: ModelResponseDto) -> KstModel:
             safety_cap=model.safety_cap,
         ),
     )
-

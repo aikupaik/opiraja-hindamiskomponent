@@ -53,7 +53,7 @@
       }
     ]
   },
-  "candidates_per_node": 3,
+  "candidates_per_node": 5,
   "operations": {
     "model": {
       "method": "POST",

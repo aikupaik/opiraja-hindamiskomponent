@@ -892,8 +892,8 @@ async def test_persistence_and_r_dependencies_can_be_overridden_independently() 
 
     app.dependency_overrides.clear()
     await state_repository.seed_items(
-        *(make_item(ItemId(value), node="A") for value in range(1, 5)),
-        *(make_item(ItemId(value), node="B") for value in range(11, 15)),
+        *(make_item(ItemId(value), node="A") for value in range(1, 6)),
+        *(make_item(ItemId(value), node="B") for value in range(11, 16)),
     )
     override_engine = FakeKstEngine(
         model_results=(

@@ -170,8 +170,8 @@ def make_preparing_session() -> AssessmentSession:
         player_state=PlayerState.new(
             posterior=make_model().uniform_prior,
             inventory_plan=InventoryPlan(
-                required_per_node=3,
-                requests=(InventoryRequest(node="B", amount=3),),
+                required_per_node=5,
+                requests=(InventoryRequest(node="B", amount=5),),
             ),
         ),
     )
