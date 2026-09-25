@@ -1,133 +1,307 @@
 {
   "meta": {
-    "name": "Assessment Lab TalTech UI",
-    "source": "TalTech brand guidelines and the Assessment Lab reference image",
-    "referenceDimensions": {
-      "width": 1536,
-      "height": 1024
-    }
+    "name": "Assessment Lab TalTech digital UI",
+    "version": "2.0.0",
+    "lastReviewed": "2026-09-25",
+    "contract": "assets/admin-ui-design-system.md",
+    "sources": [
+      "TalTech Digital Environments design system (DKS)",
+      "TalTech brand guidelines",
+      "Assessment Lab product decisions documented in the contract"
+    ],
+    "note": "Components consume semanticColor values. Palette values are implementation primitives, not component choices."
   },
-  "color": {
-    "burgundy": "#AA1352",
-    "magenta": "#E4067E",
-    "light-blue": "#4DBED2",
-    "dark-blue": "#342B60",
-    "grey-1": "#9396B0",
-    "grey-2": "#DADAE4",
-    "page": "#F7F7FA",
+  "palette": {
+    "purple": {
+      "100": "#EBEAEF",
+      "500": "#342B60",
+      "600": "#272048"
+    },
+    "pink": {
+      "100": "#FEEBF5",
+      "500": "#E4067E",
+      "600": "#AB055F"
+    },
+    "cyan": {
+      "100": "#EDF9FB",
+      "500": "#4DBED2"
+    },
+    "burgundy": {
+      "100": "#F7E7EE",
+      "500": "#AA1352"
+    },
+    "green": {
+      "500": "#62BB46"
+    },
+    "gray": {
+      "100": "#FBFBFC",
+      "200": "#F6F6F8",
+      "300": "#EDEDF2",
+      "400": "#DADAE4",
+      "500": "#C9CBD8",
+      "600": "#9396B0",
+      "700": "#6E7184",
+      "800": "#4A4B58",
+      "900": "#25262C"
+    },
+    "blue": {
+      "100": "#E9F0F7",
+      "500": "#2468B0",
+      "600": "#1B4E84"
+    },
+    "teal": {
+      "100": "#ECF8F4",
+      "500": "#41BD90",
+      "600": "#277257"
+    },
+    "yellow": {
+      "100": "#FFF9EF",
+      "500": "#FFC75A",
+      "700": "#80642D"
+    },
+    "red": {
+      "100": "#FDEFF1",
+      "500": "#E95D77",
+      "700": "#752E3B"
+    },
+    "black": "#000000",
+    "white": "#FFFFFF"
+  },
+  "semanticColor": {
+    "canvas": "#FBFBFC",
     "surface": "#FFFFFF",
-    "text-primary": "#17151A",
-    "text-muted": "#555565",
-    "success": "#2F6F44",
-    "warning": "#8A5A00",
-    "error": "#9B1C31",
+    "surface-subtle": "#F6F6F8",
+    "border-subtle": "#EDEDF2",
     "border": "#DADAE4",
-    "focus-ring": "#4DBED2"
+    "border-strong": "#C9CBD8",
+    "text": "#25262C",
+    "text-secondary": "#4A4B58",
+    "text-subtle": "#9396B0",
+    "text-disabled": "#6E7184",
+    "text-inverse": "#FFFFFF",
+    "action-primary": "#342B60",
+    "action-primary-hover": "#272048",
+    "action-secondary": "#E4067E",
+    "action-secondary-hover": "#AB055F",
+    "action-light": "#DADAE4",
+    "link": "#E4067E",
+    "link-hover": "#AB055F",
+    "focus": "#4DBED2",
+    "info": "#2468B0",
+    "info-dark": "#1B4E84",
+    "info-surface": "#E9F0F7",
+    "success": "#41BD90",
+    "success-dark": "#277257",
+    "success-surface": "#ECF8F4",
+    "warning": "#FFC75A",
+    "warning-dark": "#80642D",
+    "warning-surface": "#FFF9EF",
+    "danger": "#E95D77",
+    "danger-dark": "#752E3B",
+    "danger-surface": "#FDEFF1"
   },
   "typography": {
-    "display": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 700,
-      "fontSize": "48px",
-      "lineHeight": "47px",
-      "letterSpacing": "0.015em",
-      "textTransform": "uppercase"
+    "family": {
+      "sans": "Proxima Nova, Verdana, sans-serif",
+      "mono": "ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace"
     },
-    "heading-2": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 700,
-      "fontSize": "32px",
-      "lineHeight": "29px",
-      "letterSpacing": "0.02em",
-      "textTransform": "uppercase"
+    "weight": {
+      "light": 300,
+      "regular": 400,
+      "bold": 700,
+      "extra-bold": 800,
+      "black": 900
     },
-    "heading-3": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 700,
-      "fontSize": "20px",
-      "lineHeight": "20px",
-      "letterSpacing": "0.02em",
-      "textTransform": "uppercase"
-    },
-    "label": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 500,
-      "fontSize": "14px",
-      "lineHeight": "20px",
-      "letterSpacing": "normal"
-    },
-    "body": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 400,
-      "fontSize": "16px",
-      "lineHeight": "24px",
-      "letterSpacing": "normal"
-    },
-    "caption": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 400,
-      "fontSize": "12px",
-      "lineHeight": "16px",
-      "letterSpacing": "normal"
-    },
-    "code": {
-      "family": "IBM Plex Mono, Consolas, monospace",
-      "weight": 400,
-      "fontSize": "14px",
-      "lineHeight": "20px",
-      "letterSpacing": "normal"
-    },
-    "eyebrow": {
-      "family": "Proxima Nova, Verdana, sans-serif",
-      "weight": 600,
-      "fontSize": "11px",
-      "lineHeight": "16px",
-      "letterSpacing": "0.12em",
-      "textTransform": "uppercase"
+    "style": {
+      "h1": {
+        "fontSize": "28px",
+        "lineHeight": "36px",
+        "weight": 900,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "h2": {
+        "fontSize": "26px",
+        "lineHeight": "32px",
+        "weight": 800,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "h3": {
+        "fontSize": "24px",
+        "lineHeight": "28px",
+        "weight": 700,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "h4": {
+        "fontSize": "20px",
+        "lineHeight": "24px",
+        "weight": 800,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "h5": {
+        "fontSize": "18px",
+        "lineHeight": "24px",
+        "weight": 700,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "h6": {
+        "fontSize": "16px",
+        "lineHeight": "20px",
+        "weight": 900,
+        "textTransform": "uppercase-short-headings-only"
+      },
+      "lead": {
+        "fontSize": "18px",
+        "lineHeight": "24px",
+        "weight": 400,
+        "boldWeight": 700
+      },
+      "body": {
+        "fontSize": "16px",
+        "lineHeight": "24px",
+        "weight": 400,
+        "boldWeight": 700
+      },
+      "small": {
+        "fontSize": "14px",
+        "lineHeight": "20px",
+        "weight": 400,
+        "boldWeight": 700
+      },
+      "label": {
+        "fontSize": "12px",
+        "lineHeight": "16px",
+        "weight": 400,
+        "boldWeight": 700
+      },
+      "table": {
+        "fontSize": "14px",
+        "lineHeight": "20px",
+        "weight": 400,
+        "headerWeight": 700
+      },
+      "code": {
+        "fontSize": "14px",
+        "lineHeight": "20px",
+        "weight": 400,
+        "scope": "source-code-json-hashes-and-opaque-identifiers-only"
+      }
     }
   },
   "space": {
+    "0": "0",
     "1": "4px",
     "2": "8px",
-    "3": "12px",
-    "4": "16px",
-    "5": "20px",
-    "6": "24px",
-    "8": "32px",
-    "10": "40px",
-    "12": "48px"
+    "3": "16px",
+    "4": "24px",
+    "5": "32px",
+    "6": "48px"
   },
   "radius": {
-    "control": "8px",
-    "card": "12px",
+    "control": "4px",
+    "card": "4px",
+    "layer": "4px",
     "pill": "999px"
   },
+  "elevation": {
+    "0": "none",
+    "1": "0 2px 6px rgb(52 43 96 / 10%)",
+    "2": "0 6px 16px rgb(52 43 96 / 14%)",
+    "3": "0 20px 56px rgb(52 43 96 / 24%)"
+  },
   "size": {
+    "borderWidth": "1px",
+    "focusRingWidth": "2px",
+    "focusRingOffset": "2px",
     "controlMinHeight": "40px",
+    "controlSmallHeight": "32px",
+    "targetMinSize": "40px",
     "iconSmall": "16px",
-    "icon": "20px",
-    "focusRingWidth": "2px"
+    "icon": "20px"
+  },
+  "layout": {
+    "columns": 12,
+    "containerMaxWidth": "1920px",
+    "readingMaxWidth": "720px",
+    "pagePadding": {
+      "xs": "8px",
+      "sm": "16px",
+      "lg": "32px"
+    },
+    "gridGap": {
+      "sm": "16px",
+      "lg": "24px"
+    },
+    "breakpoint": {
+      "xsMax": "576px",
+      "smMin": "577px",
+      "mdMin": "768px",
+      "lgMin": "992px",
+      "xlMin": "1200px",
+      "xxlMin": "1400px",
+      "xxxlMin": "1920px"
+    }
+  },
+  "component": {
+    "button": {
+      "radius": "999px",
+      "defaultHeight": "40px",
+      "smallHeight": "32px"
+    },
+    "field": {
+      "radius": "4px",
+      "minHeight": "40px"
+    },
+    "card": {
+      "radius": "4px",
+      "paddingDefault": "16px",
+      "paddingComfortable": "24px"
+    },
+    "tag": {
+      "radius": "999px"
+    }
   },
   "status": {
     "idle": {
-      "text": "#555565",
-      "background": "#DADAE4"
+      "text": "#4A4B58",
+      "background": "#F6F6F8",
+      "border": "#DADAE4"
     },
     "running": {
-      "text": "#342B60",
-      "background": "#EEF0F8"
+      "text": "#1B4E84",
+      "background": "#E9F0F7",
+      "border": "#2468B0"
     },
     "completed": {
-      "text": "#2F6F44",
-      "background": "#EEF7F0"
+      "text": "#277257",
+      "background": "#ECF8F4",
+      "border": "#41BD90"
     },
     "warning": {
-      "text": "#8A5A00",
-      "background": "#FFF7E8"
+      "text": "#80642D",
+      "background": "#FFF9EF",
+      "border": "#FFC75A"
     },
     "error": {
-      "text": "#9B1C31",
-      "background": "#FCEDEF"
+      "text": "#752E3B",
+      "background": "#FDEFF1",
+      "border": "#E95D77"
     }
+  },
+  "deprecatedAliases": {
+    "note": "Temporary compatibility for current admin CSS. New code must use semantic tokens and remove these aliases during component migration.",
+    "color-forest-950": "action-primary-hover",
+    "color-forest-800": "action-primary",
+    "color-forest-200": "palette.purple.100",
+    "color-forest-50": "surface-subtle",
+    "color-paper-50": "canvas",
+    "color-paper-100": "surface-subtle",
+    "color-orange-600": "action-secondary",
+    "color-amber-600": "warning-dark",
+    "color-blue-600": "info-dark",
+    "color-green-600": "success-dark",
+    "color-red-600": "danger-dark",
+    "space-8": "space.5",
+    "space-10": "40px",
+    "space-12": "space.6"
   }
 }

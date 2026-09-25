@@ -1,82 +1,233 @@
 :root {
-  /* Assessment Lab UI tokens aligned with the TalTech brand system. */
-  --al-color-burgundy: #aa1352;
-  --al-color-magenta: #e4067e;
-  --al-color-light-blue: #4dbed2;
-  --al-color-dark-blue: #342b60;
-  --al-color-grey-1: #9396b0;
-  --al-color-grey-2: #dadae4;
-  --al-color-black: #000000;
-  --al-color-white: #ffffff;
-  --al-color-page: #f7f7fa;
-  --al-color-surface: #ffffff;
-  --al-color-text-primary: #17151a;
-  --al-color-text-muted: #555565;
-  --al-color-border: #dadae4;
-  --al-color-focus-ring: #4dbed2;
-  --al-color-success: #2f6f44;
-  --al-color-warning: #8a5a00;
-  --al-color-error: #9b1c31;
+  /*
+   * Assessment Lab tokens derived from the TalTech Digital Environments
+   * design system. Components should consume semantic tokens, not palette
+   * values. Keep this file in sync with admin-ui.tokens.json.
+   */
 
-  /* Compatibility aliases for the existing admin selectors. */
-  --al-color-forest-950: var(--al-color-dark-blue);
-  --al-color-forest-800: var(--al-color-burgundy);
-  --al-color-forest-200: #f7e8ef;
-  --al-color-forest-50: #fcf2f6;
-  --al-color-paper-50: var(--al-color-page);
-  --al-color-paper-100: var(--al-color-grey-2);
-  --al-color-orange-600: var(--al-color-magenta);
-  --al-color-amber-600: var(--al-color-warning);
-  --al-color-blue-600: var(--al-color-dark-blue);
-  --al-color-green-600: var(--al-color-success);
-  --al-color-red-600: var(--al-color-error);
+  /* Selected TalTech digital palette values. */
+  --al-palette-purple-100: #ebeaef;
+  --al-palette-purple-500: #342b60;
+  --al-palette-purple-600: #272048;
+  --al-palette-pink-100: #feebf5;
+  --al-palette-pink-500: #e4067e;
+  --al-palette-pink-600: #ab055f;
+  --al-palette-cyan-100: #edf9fb;
+  --al-palette-cyan-500: #4dbed2;
+  --al-palette-burgundy-100: #f7e7ee;
+  --al-palette-burgundy-500: #aa1352;
+  --al-palette-green-500: #62bb46;
 
-  --al-font-brand: "Proxima Nova", Verdana, sans-serif;
-  --al-font-body: "Proxima Nova", Verdana, sans-serif;
-  --al-font-mono: "IBM Plex Mono", Consolas, monospace;
-  --al-font-display: var(--al-font-brand);
-  --al-font-sans: var(--al-font-body);
+  --al-palette-gray-100: #fbfbfc;
+  --al-palette-gray-200: #f6f6f8;
+  --al-palette-gray-300: #ededf2;
+  --al-palette-gray-400: #dadae4;
+  --al-palette-gray-500: #c9cbd8;
+  --al-palette-gray-600: #9396b0;
+  --al-palette-gray-700: #6e7184;
+  --al-palette-gray-800: #4a4b58;
+  --al-palette-gray-900: #25262c;
+  --al-palette-black: #000000;
+  --al-palette-white: #ffffff;
 
-  --al-font-size-display: 48px;
-  --al-font-size-heading-2: 32px;
-  --al-font-size-heading-3: 20px;
+  --al-palette-blue-100: #e9f0f7;
+  --al-palette-blue-500: #2468b0;
+  --al-palette-blue-600: #1b4e84;
+  --al-palette-teal-100: #ecf8f4;
+  --al-palette-teal-500: #41bd90;
+  --al-palette-teal-600: #277257;
+  --al-palette-yellow-100: #fff9ef;
+  --al-palette-yellow-500: #ffc75a;
+  --al-palette-yellow-700: #80642d;
+  --al-palette-red-100: #fdeff1;
+  --al-palette-red-500: #e95d77;
+  --al-palette-red-700: #752e3b;
+
+  /* Semantic colour roles shared by admin and learner applications. */
+  --al-color-canvas: var(--al-palette-gray-100);
+  --al-color-surface: var(--al-palette-white);
+  --al-color-surface-subtle: var(--al-palette-gray-200);
+  --al-color-border-subtle: var(--al-palette-gray-300);
+  --al-color-border: var(--al-palette-gray-400);
+  --al-color-border-strong: var(--al-palette-gray-500);
+  --al-color-text: var(--al-palette-gray-900);
+  --al-color-text-secondary: var(--al-palette-gray-800);
+  --al-color-text-subtle: var(--al-palette-gray-600);
+  --al-color-text-disabled: var(--al-palette-gray-700);
+  --al-color-text-inverse: var(--al-palette-white);
+
+  --al-color-action-primary: var(--al-palette-purple-500);
+  --al-color-action-primary-hover: var(--al-palette-purple-600);
+  --al-color-action-secondary: var(--al-palette-pink-500);
+  --al-color-action-secondary-hover: var(--al-palette-pink-600);
+  --al-color-action-light: var(--al-palette-gray-400);
+  --al-color-link: var(--al-palette-pink-500);
+  --al-color-link-hover: var(--al-palette-pink-600);
+  --al-color-focus: var(--al-palette-cyan-500);
+
+  --al-color-info: var(--al-palette-blue-500);
+  --al-color-info-dark: var(--al-palette-blue-600);
+  --al-color-info-surface: var(--al-palette-blue-100);
+  --al-color-success: var(--al-palette-teal-500);
+  --al-color-success-dark: var(--al-palette-teal-600);
+  --al-color-success-surface: var(--al-palette-teal-100);
+  --al-color-warning: var(--al-palette-yellow-500);
+  --al-color-warning-dark: var(--al-palette-yellow-700);
+  --al-color-warning-surface: var(--al-palette-yellow-100);
+  --al-color-danger: var(--al-palette-red-500);
+  --al-color-danger-dark: var(--al-palette-red-700);
+  --al-color-danger-surface: var(--al-palette-red-100);
+
+  /* Typography. Proxima Nova requires an approved, licensed local source. */
+  --al-font-sans: "Proxima Nova", Verdana, sans-serif;
+  --al-font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  --al-font-weight-light: 300;
+  --al-font-weight-regular: 400;
+  --al-font-weight-bold: 700;
+  --al-font-weight-extra-bold: 800;
+  --al-font-weight-black: 900;
+
+  --al-font-size-h1: 28px;
+  --al-font-size-h2: 26px;
+  --al-font-size-h3: 24px;
+  --al-font-size-h4: 20px;
+  --al-font-size-h5: 18px;
+  --al-font-size-h6: 16px;
+  --al-font-size-lead: 18px;
   --al-font-size-body: 16px;
-  --al-font-size-caption: 12px;
-  --al-font-size-eyebrow: 11px;
+  --al-font-size-small: 14px;
+  --al-font-size-label: 12px;
+  --al-font-size-table: 14px;
 
-  --al-line-height-display: 47px;
-  --al-line-height-heading-2: 29px;
-  --al-line-height-heading-3: 20px;
+  --al-line-height-h1: 36px;
+  --al-line-height-h2: 32px;
+  --al-line-height-h3: 28px;
+  --al-line-height-h4: 24px;
+  --al-line-height-h5: 24px;
+  --al-line-height-h6: 20px;
+  --al-line-height-lead: 24px;
   --al-line-height-body: 24px;
-  --al-line-height-caption: 16px;
+  --al-line-height-small: 20px;
+  --al-line-height-label: 16px;
+  --al-line-height-table: 20px;
 
+  /* 8px baseline grid; 4px is reserved for component micro-spacing. */
+  --al-space-0: 0;
   --al-space-1: 4px;
   --al-space-2: 8px;
-  --al-space-3: 12px;
-  --al-space-4: 16px;
-  --al-space-5: 20px;
-  --al-space-6: 24px;
-  --al-space-8: 32px;
-  --al-space-10: 40px;
-  --al-space-12: 48px;
+  --al-space-3: 16px;
+  --al-space-4: 24px;
+  --al-space-5: 32px;
+  --al-space-6: 48px;
 
-  --al-radius-control: 8px;
-  --al-radius-card: 12px;
+  --al-radius-control: 4px;
+  --al-radius-card: 4px;
+  --al-radius-layer: 4px;
   --al-radius-pill: 999px;
-  --al-control-min-height: 40px;
+
+  --al-elevation-0: none;
+  --al-elevation-1: 0 2px 6px rgb(52 43 96 / 10%);
+  --al-elevation-2: 0 6px 16px rgb(52 43 96 / 14%);
+  --al-elevation-3: 0 20px 56px rgb(52 43 96 / 24%);
+
+  --al-border-width: 1px;
   --al-focus-ring-width: 2px;
+  --al-focus-ring-offset: 2px;
+  --al-control-min-height: 40px;
+  --al-control-small-height: 32px;
+  --al-target-min-size: 40px;
+  --al-icon-size-small: 16px;
+  --al-icon-size: 20px;
+
+  --al-layout-columns: 12;
+  --al-layout-container-max: 1920px;
+  --al-layout-reading-max: 720px;
+  --al-layout-page-padding-xs: 8px;
+  --al-layout-page-padding-sm: 16px;
+  --al-layout-page-padding-lg: 32px;
+  --al-layout-grid-gap-sm: 16px;
+  --al-layout-grid-gap-lg: 24px;
+  --al-breakpoint-xs-max: 576px;
+  --al-breakpoint-sm-min: 577px;
+  --al-breakpoint-md-min: 768px;
+  --al-breakpoint-lg-min: 992px;
+  --al-breakpoint-xl-min: 1200px;
+  --al-breakpoint-xxl-min: 1400px;
+  --al-breakpoint-xxxl-min: 1920px;
+
+  --al-button-radius: var(--al-radius-pill);
+  --al-field-radius: var(--al-radius-control);
+  --al-card-radius: var(--al-radius-card);
+  --al-tag-radius: var(--al-radius-pill);
+  --al-card-padding-default: var(--al-space-3);
+  --al-card-padding-comfortable: var(--al-space-4);
 }
 
-/* Semantic status aliases keep component CSS independent of raw palette names. */
 :root {
-  --al-status-idle-text: var(--al-color-text-muted);
-  --al-status-idle-background: var(--al-color-grey-2);
-  --al-status-running-text: var(--al-color-dark-blue);
-  --al-status-running-background: #eef0f8;
-  --al-status-completed-text: var(--al-color-success);
-  --al-status-completed-background: #eef7f0;
-  --al-status-warning-text: var(--al-color-warning);
-  --al-status-warning-background: #fff7e8;
-  --al-status-error-text: var(--al-color-error);
-  --al-status-error-background: #fcedef;
+  /* Status aliases express product state without coupling it to palette names. */
+  --al-status-idle-text: var(--al-color-text-secondary);
+  --al-status-idle-background: var(--al-color-surface-subtle);
+  --al-status-idle-border: var(--al-color-border);
+  --al-status-running-text: var(--al-color-info-dark);
+  --al-status-running-background: var(--al-color-info-surface);
+  --al-status-running-border: var(--al-color-info);
+  --al-status-completed-text: var(--al-color-success-dark);
+  --al-status-completed-background: var(--al-color-success-surface);
+  --al-status-completed-border: var(--al-color-success);
+  --al-status-warning-text: var(--al-color-warning-dark);
+  --al-status-warning-background: var(--al-color-warning-surface);
+  --al-status-warning-border: var(--al-color-warning);
+  --al-status-error-text: var(--al-color-danger-dark);
+  --al-status-error-background: var(--al-color-danger-surface);
+  --al-status-error-border: var(--al-color-danger);
+}
+
+:root {
+  /*
+   * Temporary migration aliases used by the current admin CSS. New code must
+   * not use these names. Remove them as component styles move to semantic
+   * tokens; unlike the previous file, their remapping is explicit here.
+   */
+  --al-color-burgundy: var(--al-palette-burgundy-500);
+  --al-color-magenta: var(--al-palette-pink-500);
+  --al-color-light-blue: var(--al-palette-cyan-500);
+  --al-color-dark-blue: var(--al-palette-purple-500);
+  --al-color-grey-1: var(--al-palette-gray-600);
+  --al-color-grey-2: var(--al-palette-gray-400);
+  --al-color-black: var(--al-palette-black);
+  --al-color-white: var(--al-palette-white);
+  --al-color-page: var(--al-color-canvas);
+  --al-color-text-primary: var(--al-color-text);
+  --al-color-text-muted: var(--al-color-text-secondary);
+  --al-color-focus-ring: var(--al-color-focus);
+  --al-color-error: var(--al-color-danger-dark);
+
+  --al-color-forest-950: var(--al-palette-purple-600);
+  --al-color-forest-800: var(--al-color-action-primary);
+  --al-color-forest-200: var(--al-palette-purple-100);
+  --al-color-forest-50: var(--al-color-surface-subtle);
+  --al-color-paper-50: var(--al-color-canvas);
+  --al-color-paper-100: var(--al-color-surface-subtle);
+  --al-color-orange-600: var(--al-color-action-secondary);
+  --al-color-amber-600: var(--al-color-warning-dark);
+  --al-color-blue-600: var(--al-color-info-dark);
+  --al-color-green-600: var(--al-color-success-dark);
+  --al-color-red-600: var(--al-color-danger-dark);
+
+  --al-font-brand: var(--al-font-sans);
+  --al-font-body: var(--al-font-sans);
+  --al-font-display: var(--al-font-sans);
+  --al-font-size-display: var(--al-font-size-h1);
+  --al-font-size-heading-2: var(--al-font-size-h2);
+  --al-font-size-heading-3: var(--al-font-size-h3);
+  --al-font-size-caption: var(--al-font-size-label);
+  --al-font-size-eyebrow: var(--al-font-size-label);
+  --al-line-height-display: var(--al-line-height-h1);
+  --al-line-height-heading-2: var(--al-line-height-h2);
+  --al-line-height-heading-3: var(--al-line-height-h3);
+  --al-line-height-caption: var(--al-line-height-label);
+
+  --al-space-8: var(--al-space-5);
+  --al-space-10: 40px;
+  --al-space-12: var(--al-space-6);
 }
