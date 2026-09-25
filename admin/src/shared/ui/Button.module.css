@@ -1,8 +1,17 @@
-.button { align-items: center; border-radius: var(--al-radius-control); border: 1px solid transparent; display: inline-flex; gap: var(--al-space-2); justify-content: center; min-height: var(--al-control-min-height); padding: 8px 14px; font: 600 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); text-decoration: none; }
-.primary { background: var(--al-color-burgundy); border-color: var(--al-color-burgundy); color: white; }
-.secondary { background: var(--al-color-surface); border-color: var(--al-color-border); color: var(--al-color-text-primary); }
-.tertiary { background: transparent; color: var(--al-color-burgundy); }
-.icon { background: transparent; border-color: var(--al-color-border); color: var(--al-color-text-primary); padding: 8px; }
-.button:hover:not(:disabled) { background-color: var(--al-color-dark-blue); color: white; }
-.tertiary:hover:not(:disabled), .icon:hover:not(:disabled) { background-color: var(--al-color-forest-50); color: var(--al-color-burgundy); }
-.button:disabled { cursor: not-allowed; opacity: .55; }
+.button { align-items: center; border-radius: var(--al-radius-pill); border: var(--al-border-width) solid transparent; display: inline-flex; gap: var(--al-space-2); justify-content: center; min-height: var(--al-control-min-height); padding: var(--al-space-2) var(--al-space-3); font: var(--al-font-weight-bold) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); text-decoration: none; }
+.primary { background: var(--al-color-action-primary); border-color: var(--al-color-action-primary); color: var(--al-color-text-inverse); }
+.secondary { background: var(--al-color-action-secondary); border-color: var(--al-color-action-secondary); color: var(--al-color-text-inverse); }
+.outlined { background: var(--al-color-surface); border-color: var(--al-color-action-primary); color: var(--al-color-action-primary); }
+.light { background: var(--al-color-surface-subtle); border-color: var(--al-color-border); color: var(--al-color-text); }
+.tertiary { background: transparent; color: var(--al-color-link); }
+.danger { background: var(--al-color-danger-dark); border-color: var(--al-color-danger-dark); color: var(--al-color-text-inverse); }
+.icon { background: transparent; border-color: var(--al-color-border); color: var(--al-color-text); min-width: var(--al-target-min-size); padding: var(--al-space-2); }
+.primary:hover:not(:disabled) { background: var(--al-color-action-primary-hover); border-color: var(--al-color-action-primary-hover); }
+.secondary:hover:not(:disabled) { background: var(--al-color-action-secondary-hover); border-color: var(--al-color-action-secondary-hover); }
+.outlined:hover:not(:disabled), .light:hover:not(:disabled), .icon:hover:not(:disabled) { background: var(--al-color-action-primary-surface); border-color: var(--al-color-action-primary-hover); color: var(--al-color-action-primary-hover); }
+.tertiary:hover:not(:disabled) { color: var(--al-color-link-hover); text-decoration: underline; }
+.danger:hover:not(:disabled) { background: var(--al-color-danger); border-color: var(--al-color-danger-dark); color: var(--al-color-text); }
+.button:active:not(:disabled) { transform: translateY(1px); }
+.button:disabled, .loading { color: var(--al-color-text-disabled); background: var(--al-color-surface-subtle); border-color: var(--al-color-border-strong); cursor: not-allowed; }
+.spinner { width: var(--al-icon-size-small); height: var(--al-icon-size-small); border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: button-spin .8s linear infinite; }
+@keyframes button-spin { to { transform: rotate(1turn); } }

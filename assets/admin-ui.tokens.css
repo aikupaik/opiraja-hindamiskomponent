@@ -58,9 +58,12 @@
 
   --al-color-action-primary: var(--al-palette-purple-500);
   --al-color-action-primary-hover: var(--al-palette-purple-600);
+  --al-color-action-primary-surface: var(--al-palette-purple-100);
   --al-color-action-secondary: var(--al-palette-pink-500);
   --al-color-action-secondary-hover: var(--al-palette-pink-600);
+  --al-color-action-secondary-surface: var(--al-palette-pink-100);
   --al-color-action-light: var(--al-palette-gray-400);
+  --al-color-accent-surface: var(--al-palette-cyan-100);
   --al-color-link: var(--al-palette-pink-500);
   --al-color-link-hover: var(--al-palette-pink-600);
   --al-color-focus: var(--al-palette-cyan-500);
@@ -180,54 +183,4 @@
   --al-status-error-text: var(--al-color-danger-dark);
   --al-status-error-background: var(--al-color-danger-surface);
   --al-status-error-border: var(--al-color-danger);
-}
-
-:root {
-  /*
-   * Temporary migration aliases used by the current admin CSS. New code must
-   * not use these names. Remove them as component styles move to semantic
-   * tokens; unlike the previous file, their remapping is explicit here.
-   */
-  --al-color-burgundy: var(--al-palette-burgundy-500);
-  --al-color-magenta: var(--al-palette-pink-500);
-  --al-color-light-blue: var(--al-palette-cyan-500);
-  --al-color-dark-blue: var(--al-palette-purple-500);
-  --al-color-grey-1: var(--al-palette-gray-600);
-  --al-color-grey-2: var(--al-palette-gray-400);
-  --al-color-black: var(--al-palette-black);
-  --al-color-white: var(--al-palette-white);
-  --al-color-page: var(--al-color-canvas);
-  --al-color-text-primary: var(--al-color-text);
-  --al-color-text-muted: var(--al-color-text-secondary);
-  --al-color-focus-ring: var(--al-color-focus);
-  --al-color-error: var(--al-color-danger-dark);
-
-  --al-color-forest-950: var(--al-palette-purple-600);
-  --al-color-forest-800: var(--al-color-action-primary);
-  --al-color-forest-200: var(--al-palette-purple-100);
-  --al-color-forest-50: var(--al-color-surface-subtle);
-  --al-color-paper-50: var(--al-color-canvas);
-  --al-color-paper-100: var(--al-color-surface-subtle);
-  --al-color-orange-600: var(--al-color-action-secondary);
-  --al-color-amber-600: var(--al-color-warning-dark);
-  --al-color-blue-600: var(--al-color-info-dark);
-  --al-color-green-600: var(--al-color-success-dark);
-  --al-color-red-600: var(--al-color-danger-dark);
-
-  --al-font-brand: var(--al-font-sans);
-  --al-font-body: var(--al-font-sans);
-  --al-font-display: var(--al-font-sans);
-  --al-font-size-display: var(--al-font-size-h1);
-  --al-font-size-heading-2: var(--al-font-size-h2);
-  --al-font-size-heading-3: var(--al-font-size-h3);
-  --al-font-size-caption: var(--al-font-size-label);
-  --al-font-size-eyebrow: var(--al-font-size-label);
-  --al-line-height-display: var(--al-line-height-h1);
-  --al-line-height-heading-2: var(--al-line-height-h2);
-  --al-line-height-heading-3: var(--al-line-height-h3);
-  --al-line-height-caption: var(--al-line-height-label);
-
-  --al-space-8: var(--al-space-5);
-  --al-space-10: 40px;
-  --al-space-12: var(--al-space-6);
 }

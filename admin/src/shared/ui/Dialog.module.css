@@ -1,4 +1,4 @@
-.dialog { border: 0; border-radius: var(--al-radius-card); box-shadow: 0 20px 56px rgb(52 43 96 / 24%); max-height: calc(100vh - 32px); max-width: min(960px, calc(100vw - 32px)); padding: 0; width: 100%; }
-.dialog::backdrop { background: rgb(52 43 96 / 44%); }
+.dialog { border: 0; border-radius: var(--al-radius-layer); box-shadow: var(--al-elevation-3); max-height: calc(100vh - 32px); max-width: min(960px, calc(100vw - 32px)); padding: 0; width: 100%; }
+.dialog::backdrop { background: color-mix(in srgb, var(--al-color-action-primary-hover) 44%, transparent); }
 .content { background: var(--al-color-surface); }
 .visuallyHidden { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }

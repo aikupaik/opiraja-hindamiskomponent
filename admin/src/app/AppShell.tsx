@@ -5,5 +5,5 @@ import { FeatureNavigation, TopBar } from '../shared/layout/TopBar'
 import '../shared/styles/featureLayouts.css'
 
 export function AppShell({ session, route, courseError, onLock, children }: { session: AdminSession; route: AdminRouteId; courseError: string; onLock: () => void; children: ReactNode }) {
-  return <div className="app-shell"><TopBar activeArea={routes[route].area} operator={session.subject} onLock={onLock} /><FeatureNavigation route={route} />{courseError && <div className="global-error" role="alert">{courseError}</div>}{children}</div>
+  return <div className="app-shell"><a className="skipLink" href="#main-content">Liigu põhisisu juurde</a><TopBar activeArea={routes[route].area} operator={session.subject} onLock={onLock} /><FeatureNavigation route={route} />{courseError && <div className="global-error" role="alert">{courseError}</div>}{children}</div>
 }

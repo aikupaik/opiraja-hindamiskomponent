@@ -1,3 +1,6 @@
-.field { color: var(--al-color-text-primary); display: grid; font: 500 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); gap: var(--al-space-2); }
-.field small { color: var(--al-color-text-muted); font: 400 var(--al-font-size-caption)/var(--al-line-height-caption) var(--al-font-body); }.field .error { color: var(--al-color-error); }
-.control { background: var(--al-color-surface); border: 1px solid var(--al-color-border); border-radius: var(--al-radius-control); color: var(--al-color-text-primary); min-height: var(--al-control-min-height); padding: 9px var(--al-space-3); width: 100%; }
+.field { color: var(--al-color-text); display: grid; font: var(--al-font-weight-bold) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); gap: var(--al-space-2); }
+.field small { color: var(--al-color-text-secondary); font: var(--al-font-weight-regular) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); }.field .error { color: var(--al-color-danger-dark); }
+.control { background: var(--al-color-surface); border: var(--al-border-width) solid var(--al-color-border); border-radius: var(--al-radius-control); color: var(--al-color-text); min-height: var(--al-control-min-height); padding: 7px var(--al-space-3); width: 100%; }
+.control:hover:not(:disabled) { border-color: var(--al-color-text-secondary); }
+.control:disabled { background: var(--al-color-surface-subtle); border-color: var(--al-color-border-strong); color: var(--al-color-text-disabled); }
+.control[aria-invalid="true"] { border-color: var(--al-color-danger-dark); }

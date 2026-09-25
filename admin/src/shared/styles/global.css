@@ -1,12 +1,16 @@
 @import "../../../../assets/admin-ui.tokens.css";
 
-:root { color: var(--al-color-text-primary); background: var(--al-color-page); font-family: var(--al-font-body); font-synthesis: none; text-rendering: optimizeLegibility; }
+:root { color: var(--al-color-text); background: var(--al-color-canvas); font-family: var(--al-font-sans); font-synthesis: none; text-rendering: optimizeLegibility; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+html { background: var(--al-color-canvas); }
+body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--al-color-text); background: var(--al-color-canvas); font-size: var(--al-font-size-body); line-height: var(--al-line-height-body); }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 a, button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: var(--al-focus-ring-width) solid var(--al-color-focus-ring); outline-offset: 2px; }
-::selection { background: var(--al-color-burgundy); color: var(--al-color-white); }
+:focus-visible { outline: var(--al-focus-ring-width) solid var(--al-color-focus); outline-offset: var(--al-focus-ring-offset); box-shadow: 0 0 0 1px var(--al-color-action-primary-hover); }
+::selection { background: var(--al-color-action-secondary); color: var(--al-color-text-inverse); }
+.skipLink { position: fixed; z-index: 100; top: var(--al-space-2); left: var(--al-space-2); padding: var(--al-space-2) var(--al-space-3); border-radius: var(--al-radius-control); background: var(--al-color-action-primary); color: var(--al-color-text-inverse); transform: translateY(-150%); }
+.skipLink:focus { transform: translateY(0); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }

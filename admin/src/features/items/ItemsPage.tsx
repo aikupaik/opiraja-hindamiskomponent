@@ -222,7 +222,7 @@ export function ItemsPage({ courses }: Props) {
               : 'Ülesannete vaatamiseks otsi kursuse koodi.'}
           </div>
         ) : (
-          <TableContainer className="table-scroll">
+          <TableContainer className="table-scroll" aria-label={`${searchedCourse} ülesannete tabel`}>
             <table className="audit-table">
               <thead>
                 <tr>
@@ -233,7 +233,7 @@ export function ItemsPage({ courses }: Props) {
                   <th>Olek</th>
                   <th>Kasutuskorrad</th>
                   <th>Viimati kasutatud</th>
-                  <th />
+                  <th><span className="visually-hidden">Toimingud</span></th>
                 </tr>
               </thead>
               <tbody>

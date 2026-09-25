@@ -10,12 +10,12 @@ export function UnlockScreen({ loading, error, onUnlock }: { loading: boolean; e
     if (key.trim()) void onUnlock(key)
   }
   return <main className="unlock">
-    <div className="unlock-art" aria-hidden="true"><span className="orbit orbit-one" /><span className="orbit orbit-two" /><div className="unlock-monogram">OR</div></div>
+    <div className="unlock-art" aria-hidden="true"><div className="unlock-monogram">Hindamislabor</div><p>TalTechi digitaalne hindamiskeskkond</p></div>
     <form className="unlock-card" onSubmit={submit}>
       <p className="eyebrow">Piiratud ligipääsuga operaatorivaade</p><h1>Ava hindamislabor</h1>
       <label><span>Administraatori ligipääsuvõti</span><input type="password" autoComplete="current-password" value={key} onChange={(event) => setKey(event.target.value)} autoFocus /></label>
       {error && <Alert tone="error">{error}</Alert>}
-      <Button className="unlock-submit" type="submit" disabled={loading || !key}>{loading ? 'Kontrollin…' : 'Sisene'}</Button>
+      <Button className="unlock-submit" type="submit" disabled={!key} loading={loading}>{loading ? 'Kontrollin…' : 'Sisene'}</Button>
     </form>
   </main>
 }

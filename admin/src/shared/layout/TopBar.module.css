@@ -1,10 +1,45 @@
-.topBar { align-items: center; background: var(--al-color-surface); border-bottom: 1px solid var(--al-color-border); display: grid; gap: var(--al-space-5); grid-template-columns: minmax(210px, 1fr) auto minmax(210px, 1fr); min-height: 72px; padding: 0 24px; position: sticky; top: 0; z-index: 20; }
-.brand { align-items: center; color: var(--al-color-text-primary); display: inline-flex; gap: var(--al-space-3); text-decoration: none; width: fit-content; }
-.mark { align-items: center; background: var(--al-color-dark-blue); border-radius: 8px; color: white; display: inline-flex; font: 700 13px/1 var(--al-font-brand); height: 36px; justify-content: center; width: 36px; }
+.topBar {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+  align-items: center;
+  gap: var(--al-space-4);
+  min-height: 72px;
+  padding: 0 var(--al-layout-page-padding-lg);
+  border-bottom: var(--al-border-width) solid var(--al-color-border-subtle);
+  background: var(--al-color-surface);
+  box-shadow: var(--al-elevation-2);
+}
+
+.brand { display: inline-flex; align-items: center; gap: var(--al-space-3); width: fit-content; color: var(--al-color-text); text-decoration: none; }
+.brandAccent { width: 4px; height: 40px; border-radius: var(--al-radius-pill); background: var(--al-color-action-secondary); }
 .brand strong, .brand small, .areaNavigation strong, .areaNavigation small { display: block; }
-.brand strong { font: 600 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); }.brand small, .areaNavigation small { color: var(--al-color-text-muted); font: 400 var(--al-font-size-caption)/var(--al-line-height-caption) var(--al-font-sans); }
-.areaNavigation { align-self: stretch; display: flex; overflow-x: auto; white-space: nowrap; }.areaNavigation a { border-bottom: 2px solid transparent; color: var(--al-color-text-muted); display: block; padding: 14px 13px 10px; text-decoration: none; }.areaNavigation a:hover, .areaNavigation .active { border-bottom-color: var(--al-color-burgundy); color: var(--al-color-burgundy); }.areaNavigation strong { font: 600 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-brand); }
-.operator { align-items: center; display: flex; gap: var(--al-space-3); justify-self: end; }.operator > span { align-items: center; color: var(--al-color-text-muted); display: flex; font: 500 var(--al-font-size-caption)/var(--al-line-height-caption) var(--al-font-body); gap: 6px; }.operator i { background: var(--al-color-light-blue); border-radius: 50%; height: 7px; width: 7px; }
-.featureNavigation { background: var(--al-color-surface); border-bottom: 1px solid var(--al-color-border); overflow-x: auto; }.featureNavigation > div { display: flex; gap: var(--al-space-4); margin: 0 auto; max-width: 1440px; padding: 0 24px; }.featureNavigation a { border-bottom: 2px solid transparent; color: var(--al-color-text-muted); display: inline-block; font: 500 var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-body); padding: 11px 0 9px; text-decoration: none; white-space: nowrap; }.featureNavigation .featureActive { border-color: var(--al-color-burgundy); color: var(--al-color-burgundy); }
-@media (max-width: 900px) { .topBar { grid-template-columns: auto 1fr auto; padding: 0 16px; }.brand > span:last-child, .operator > span { display: none; }.areaNavigation { justify-content: start; }.areaNavigation small { display: none; } }
-@media (max-width: 540px) { .topBar { gap: var(--al-space-2); }.areaNavigation a { padding-inline: 8px; }.operator .button { padding-inline: 8px; } .featureNavigation > div { padding-inline: 16px; } }
+.brand strong { font: var(--al-font-weight-extra-bold) var(--al-font-size-body)/var(--al-line-height-body) var(--al-font-sans); }
+.brand small, .areaNavigation small { color: var(--al-color-text-secondary); font: var(--al-font-weight-regular) var(--al-font-size-label)/var(--al-line-height-label) var(--al-font-sans); }
+.areaNavigation { align-self: stretch; display: flex; overflow-x: auto; white-space: nowrap; }
+.areaNavigation a { display: grid; align-content: center; min-height: var(--al-target-min-size); padding: var(--al-space-2) var(--al-space-3); border-bottom: 3px solid transparent; color: var(--al-color-text-secondary); text-decoration: none; }
+.areaNavigation a:hover { background: var(--al-color-surface-subtle); color: var(--al-color-action-primary); }
+.areaNavigation .active { border-bottom-color: var(--al-color-action-secondary); color: var(--al-color-action-primary); }
+.areaNavigation strong { font: var(--al-font-weight-bold) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); }
+.operator { display: flex; align-items: center; gap: var(--al-space-3); justify-self: end; }
+.operator > span { display: flex; align-items: center; gap: var(--al-space-2); color: var(--al-color-text-secondary); font: var(--al-font-weight-regular) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); }
+.operator i { width: 8px; height: 8px; border-radius: 50%; background: var(--al-color-success-dark); }
+.featureNavigation { overflow-x: auto; border-bottom: var(--al-border-width) solid var(--al-color-border); background: var(--al-color-surface); }
+.featureNavigation > div { display: flex; gap: var(--al-space-4); max-width: var(--al-layout-container-max); margin: 0 auto; padding: 0 var(--al-layout-page-padding-lg); }
+.featureNavigation a { display: inline-block; min-height: var(--al-target-min-size); padding: 10px 0 8px; border-bottom: 2px solid transparent; color: var(--al-color-text-secondary); font: var(--al-font-weight-regular) var(--al-font-size-small)/var(--al-line-height-small) var(--al-font-sans); text-decoration: none; white-space: nowrap; }
+.featureNavigation a:hover { color: var(--al-color-link-hover); }
+.featureNavigation .featureActive { border-color: var(--al-color-action-secondary); color: var(--al-color-action-primary); font-weight: var(--al-font-weight-bold); }
+
+@media (max-width: 900px) {
+  .topBar { grid-template-columns: auto 1fr auto; padding-inline: var(--al-layout-page-padding-sm); }
+  .brand > span:last-child, .operator > span, .areaNavigation small { display: none; }
+  .areaNavigation { justify-content: start; }
+  .featureNavigation > div { padding-inline: var(--al-layout-page-padding-sm); }
+}
+
+@media (max-width: 576px) {
+  .topBar { gap: var(--al-space-2); padding-inline: var(--al-layout-page-padding-xs); }
+  .areaNavigation a { padding-inline: var(--al-space-2); }
+}

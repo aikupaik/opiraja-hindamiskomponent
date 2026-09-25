@@ -1,2 +1,3 @@
-.page { margin: 0 auto; max-width: 1440px; padding: 48px 24px 72px; width: 100%; }
-@media (max-width: 640px) { .page { padding: 32px 16px 48px; } }
+.page { width: 100%; max-width: var(--al-layout-container-max); margin: 0 auto; padding: var(--al-space-6) var(--al-layout-page-padding-lg) 72px; }
+@media (max-width: 991px) { .page { padding-inline: var(--al-layout-page-padding-sm); } }
+@media (max-width: 576px) { .page { padding: var(--al-space-5) var(--al-layout-page-padding-xs) var(--al-space-6); } }

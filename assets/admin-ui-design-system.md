@@ -32,9 +32,8 @@ and `OR` mark are not TalTech design-system rules. It is not a visual source of
 truth.
 
 `assets/admin-ui.tokens.css` and `assets/admin-ui.tokens.json` implement the
-foundation defined by this contract. The CSS file retains explicitly marked
-migration aliases required by current admin styles; new code must use the
-semantic token names, and the aliases must disappear as those styles migrate.
+foundation defined by this contract. Components use the semantic token names;
+legacy palette and typography aliases have been removed.
 
 ## Design principles
 
