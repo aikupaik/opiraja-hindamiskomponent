@@ -89,6 +89,9 @@ describe('welcome screen', () => {
     expect(screen.getByRole('dialog', { name: 'Kuidas test töötab?' })).toBeInTheDocument()
     expect(screen.getByText(/kohandub sinu vastuste järgi/)).toBeInTheDocument()
 
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Sulge testi info' })).toHaveFocus()
+
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Testi info' })).toHaveFocus()

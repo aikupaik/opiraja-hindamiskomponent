@@ -198,8 +198,8 @@ function TestPlayer({
   return (
     <main className="player-shell">
       <header className="brand" aria-label="Õpiraja hindamine">
-        <span className="brand-mark" aria-hidden="true">Õ</span>
-        <span>Õpiraja test</span>
+        <span className="brand-accent" aria-hidden="true" />
+        <span>Õpiraja hindamine</span>
       </header>
 
       <section className="player-card">
@@ -252,6 +252,7 @@ function TestPlayer({
 function WelcomeScreen({ onStart }: { onStart: () => void }) {
   const [showInfo, setShowInfo] = useState(false)
   const infoButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (!showInfo) return
@@ -260,6 +261,21 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
       if (event.key === 'Escape') {
         setShowInfo(false)
         infoButtonRef.current?.focus()
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable || focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
       }
     }
     document.addEventListener('keydown', closeOnEscape)
@@ -298,6 +314,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
           if (event.target === event.currentTarget) closeInfo()
         }}>
           <section
+            ref={dialogRef}
             className="info-modal"
             role="dialog"
             aria-modal="true"
@@ -469,7 +486,12 @@ function QuestionView({
         </p>
       )}
       <div className="actions">
-        <button type="submit" disabled={selection === null || submitting}>
+        <button
+          type="submit"
+          disabled={selection === null || submitting}
+          aria-busy={submitting}
+        >
+          {submitting && <span className="button-spinner" aria-hidden="true" />}
           {submitting ? 'Saadan…' : 'Edasi'}
         </button>
       </div>
@@ -504,10 +526,13 @@ function Feedback({
       <h1>Sinu tagasiside</h1>
       {feedback.summary !== null && <p className="summary">{feedback.summary}</p>}
       {feedback.confidence_limited && (
-        <p className="confidence-note">
-          See test ei suutnud sinu teadmisi antud teemal piisavalt kindlalt
-          eristada. Soovitatav on hiljem uuesti testida.
-        </p>
+        <div className="confidence-note" role="status">
+          <strong>Tulemuse kindlus on piiratud.</strong>
+          <p>
+            See test ei suutnud sinu teadmisi antud teemal piisavalt kindlalt
+            eristada. Soovitatav on hiljem uuesti testida.
+          </p>
+        </div>
       )}
       <div className="feedback-grid">
         <FeedbackSection
@@ -540,7 +565,12 @@ function QuestionResults({ results }: { results: PlayerQuestionResult[] }) {
   return (
     <details className="question-results">
       <summary>Näita küsimusi ja vastuseid</summary>
-      <div className="question-results-scroll">
+      <div
+        className="question-results-scroll"
+        role="region"
+        aria-label="Küsimuste ja vastuste tabel"
+        tabIndex={0}
+      >
         <table>
           <caption className="visually-hidden">
             Küsimuste ja vastuste tulemused

@@ -4,6 +4,7 @@ WORKDIR /build/frontend
 
 COPY shared/frontend-api /build/shared/frontend-api
 COPY shared/math-content /build/shared/math-content
+COPY assets/admin-ui.tokens.css /build/assets/admin-ui.tokens.css
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 

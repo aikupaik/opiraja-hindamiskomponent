@@ -1,35 +1,12 @@
+@import "../../assets/admin-ui.tokens.css";
+
 :root {
-  /* TalTech brand colours: CVI, 2022 edition. */
-  --taltech-burgundy: #aa1352;
-  --taltech-magenta: #e4067e;
-  --taltech-light-blue: #4dbed2;
-  --taltech-dark-blue: #342b60;
-  --taltech-grey-1: #9396b0;
-  --taltech-grey-2: #dadae4;
-  --taltech-black: #000000;
-  --taltech-white: #ffffff;
-
-  --paper: #f7f7fa;
-  --paper-deep: #f0f0f5;
-  --ink: #17151a;
-  --ink-muted: #555565;
-  --border: #dadae4;
-  --forest: var(--taltech-burgundy);
-  --forest-dark: #7e0e3c;
-  --forest-soft: #c96b92;
-  --mint: #f7e8ef;
-  --gold: var(--taltech-light-blue);
-
-  --font-brand: "Proxima Nova", Verdana, sans-serif;
-  --font-body: "Proxima Nova", Verdana, sans-serif;
-  --font-data: "IBM Plex Mono", Consolas, monospace;
-
-  color: var(--ink);
-  background: var(--paper);
-  font-family: var(--font-body);
-  font-size: 17px;
+  color: var(--al-color-text);
+  background: var(--al-color-canvas);
+  font-family: var(--al-font-sans);
+  font-size: var(--al-font-size-body);
   font-synthesis: none;
-  line-height: 1.55;
+  line-height: var(--al-line-height-body);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -42,8 +19,38 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: var(--paper);
+  color: var(--al-color-text);
+  background: var(--al-color-canvas);
 }
 
 button,
 input { font: inherit; }
+
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+button,
+input,
+summary { -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: var(--al-focus-ring-width) solid var(--al-color-focus);
+  outline-offset: var(--al-focus-ring-offset);
+  box-shadow: 0 0 0 1px var(--al-color-action-primary-hover);
+}
+
+::selection {
+  color: var(--al-color-text-inverse);
+  background: var(--al-color-action-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
