@@ -20,3 +20,4 @@ schema.sql
 .Rproj.user
 R/R.Rproj
 R/.Rhistory
+.ignore/
