@@ -21,3 +21,6 @@ schema.sql
 R/R.Rproj
 R/.Rhistory
 .ignore/
+followup_*
+review_queries*
+source_export_queries.sql

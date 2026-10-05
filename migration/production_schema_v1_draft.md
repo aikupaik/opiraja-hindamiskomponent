@@ -4,9 +4,9 @@
 **Target:** PostgreSQL 16, self-hosted database `hindamiskomponent`.  
 **Goal:** Reproduce the working pilot's application schema with targeted integrity, durability, and access-control improvements. Defer major redesign until after pilot integration.
 
-**Review update (2026-10-01):** Incorporates the four supplied Supabase schema query exports, all five follow-up results, and the user's decisions to preserve admin rule creation, use the current production backend as the generation contract, and preserve saved answer snapshots across later item edits. This remains an exploratory draft; application changes and executable DDL have not been implemented.
+**Scope:** Schema migration first; executable DDL and application integration are pending. Existing rows are mostly development data. Import exclusions, historical backfills, sequence resets, write freeze and cutover are deferred.
 
-**Current scope:** Schema migration first. The user confirms that existing rows are mostly development test data; detailed import exclusions, historical backfills, write-freeze handling and cutover policy are deferred. Audit exports remain supporting evidence, but development-data treatment is not a gate for this schema discussion. Production RLS is a required target capability; its proposed design is in section 6.1.
+**Decisions updated (2026-10-02):** V1 RLS/access boundaries, six-field snapshot nullability, result immutability, JSON CHECK corrections and queue scheduling are agreed. Executable DDL awaits restoration of the referenced CSV exports.
 
 ## 1. Scope and decisions
 
@@ -15,18 +15,18 @@
 - Keep `yg_tellimused.test_id` as an informational correlation field **without** a foreign key to `testisessioonid`. 
 - Keep repeated answers possible: `vastus_id` remains unique, but `(test_id, yp_id)` must **not** be unique.
 - Preserve assessment history: change `tulemustepank.test_id` from `ON DELETE CASCADE` to `ON DELETE RESTRICT`; change `testisessioonid.graaf_hash` from `ON DELETE SET NULL` to `ON DELETE RESTRICT`. Retain `tulemustepank.yp_id ON DELETE RESTRICT`. Consider separate controlled deletion procedures later if required by retention obligations.
-- Preserve the six existing answer-snapshot columns. Populate snapshots when saving new answers, retain their saved values on retries, and use them for historical feedback. Later item-bank edits must not rewrite or replace saved snapshots; see section 2.3.
-- Make `graafid_kst` append-only using a trigger, in addition to protecting it through privileges. Keep existing append-only triggers on KST configuration history and model cache.
+- Keep exactly the six existing answer-snapshot columns with nullability defined in section 2.3. Populate them on new answers, retain them on retries and use them for historical feedback; later item edits must not change saved snapshots.
+- Make `graafid_kst` and `tulemustepank` append-only using triggers, in addition to protecting them through privileges. Keep existing append-only triggers on KST configuration history and model cache.
 - Retain `yg_tellimused` as the durable job record and extend it with six worker fields. Do not recreate the Supabase HTTP webhook. The worker will poll and claim jobs using short transactions.
 - Use the current production backend's per-node generation requests and inventory logic as the worker's behavioral contract. `YG_edge_function_v2.ts` is the confirmed deployed prototype generator, but its behavior is not authoritative for the production pilot.
 - Replace `timezone('utc', now())` defaults on `timestamptz` columns with `now()`.
 - Use owner/migrator/runtime roles with table-specific grants, rather than broad default runtime DML permissions.
-- Enable production row-level security with explicit policies. Runtime database roles must be subject to those policies; database grants and API authorization remain necessary alongside RLS.
+- Enable and FORCE RLS on all ten tables. Use separate assessment, admin and worker logins with explicit policies, narrow grants and trusted transaction-local context.
 - Defer speculative indexing, item-bank normalization, general-purpose generation-source metadata, and larger schema changes.
 
 ## 2. Application tables
 
-The table below summarizes the target. The complete source inventory is [review_queries_1.csv](review_queries_1.csv) (88 columns across ten tables); exact source constraints, indexes and trigger metadata are in [review_queries_2.csv](review_queries_2.csv). Use these exports together with the explicit target changes in this draft when writing DDL. Preserve every source column, its full type (including numeric precision/scale), nullability and default unless an explicit change appears here.
+The table below summarizes the target. The complete source inventory is [review_queries_1.csv](review_queries_1.csv) (88 columns across ten tables); exact source constraints, indexes and trigger metadata are in [review_queries_2.csv](review_queries_2.csv). The reconstructed export queries are in [source_export_queries.sql](source_export_queries.sql); run each labeled query against Supabase and export its result under the referenced CSV name. Use these exports together with the explicit target changes in this draft when writing DDL. Preserve every source column, its full type (including numeric precision/scale), nullability and default unless an explicit change appears here.
 
 | Table | Primary key | Purpose | V1-specific notes |
 |---|---|---|---|
@@ -36,7 +36,7 @@ The table below summarizes the target. The complete source inventory is [review_
 | `kst_model_cache` | `(graph_hash, configuration_hash, model_schema_version)` | Versioned derived KST models | Preserve both restrictive FKs, JSON payload checks, supported schema-version check, append-only trigger. |
 | `repo_materjalid` | `id bigint GENERATED BY DEFAULT AS IDENTITY` | Course source material | Preserve `kursus`, `pealkiri`, `allika_url`, `sisu_tekst`, `lisatud`; timestamp default becomes `now()`. |
 | `testisessioonid` | `test_id text` | Session state and metadata | Preserve current fields, including nullable `kursus`, status/method checks, JSON defaults. Graph FK becomes `ON DELETE RESTRICT`; the current backend does not rely on `kursus`. |
-| `tulemustepank` | `id bigint GENERATED BY DEFAULT AS IDENTITY` | Per-answer records | Keep unique `vastus_id uuid NOT NULL DEFAULT gen_random_uuid()`, all six snapshot columns and repeat-answer support. Make `test_id` and `yp_id` NOT NULL; both FKs `ON DELETE RESTRICT`. `vastatud_ajal DEFAULT now()`. |
+| `tulemustepank` | `id bigint GENERATED BY DEFAULT AS IDENTITY` | Per-answer records | Keep unique `vastus_id uuid NOT NULL DEFAULT gen_random_uuid()`, exactly six snapshot columns (section 2.3) and repeat-answer support; append-only. Make `test_id` and `yp_id` NOT NULL; both FKs `ON DELETE RESTRICT`. `vastatud_ajal DEFAULT now()`. |
 | `yg_reeglid` | `id bigint GENERATED BY DEFAULT AS IDENTITY` | Course-specific generation rules | Preserve existing fields and constraints; runtime SELECT and INSERT retain admin rule creation. |
 | `yg_tellimused` | `id bigint GENERATED BY DEFAULT AS IDENTITY` | Durable generation requests/jobs | Retain all existing columns, including nullable `ylesande_taotlused` and `taitmise_tulemus` (both `DEFAULT '[]'::jsonb`), status/cognitive-level checks, and `test_id` without FK. Add worker fields in section 3. `maht NOT NULL DEFAULT 1 CHECK (maht > 0)`; `loodud DEFAULT now()`. |
 | `ylesandepank` | `yp_id bigint GENERATED BY DEFAULT AS IDENTITY` | Four-option item bank | Preserve all columns, including nullable `arvutuskaik` and `ebasobiv_signaale integer NOT NULL DEFAULT 0`. Retain `irt_a`/`irt_b numeric(4,2)` and `beeta_error`/`g_guess numeric(3,2)`. Set `ebaadekvaatne_arv integer NOT NULL DEFAULT 0 CHECK (ebaadekvaatne_arv >= 0)`. Retain atomic counter functions. |
@@ -54,7 +54,7 @@ The table below summarizes the target. The complete source inventory is [review_
 - `yg_tellimused.kognitiivne_tase` and `ylesandepank.kognitiivne_tase`: `mäletab`, `mõistab`, `rakendab`, `analüüsib`, `hindab`, `loob`.
 - `tulemustepank.vastus_id`: unique.
 
-**JSON CHECK review:** The export confirms a loophole in `kst_configuration_versions_payload_schema_version`: a missing `schema_version` produces SQL NULL and passes the source CHECK. `kst_model_cache_payload_shape` checks key presence, but JSON null values in its required fields can also produce SQL NULL and pass. PostgreSQL accepts CHECK expressions evaluating to NULL ([documentation](https://www.postgresql.org/docs/16/ddl-constraints.html#DDL-CONSTRAINTS-CHECK-CONSTRAINTS)). A proposed targeted correction is to require the existing complete expressions to evaluate `IS TRUE`. [followup_query_2.csv](followup_query_2.csv) reports zero rows failing either proposed expression. The correction remains proposed for executable DDL; verify rejection of missing/JSON-null required fields with synthetic schema fixtures.
+**Approved CHECK correction:** Require the complete `kst_configuration_versions_payload_schema_version` and `kst_model_cache_payload_shape` expressions to evaluate `IS TRUE`. Missing/JSON-null fields can otherwise produce SQL NULL, which PostgreSQL accepts in CHECK constraints ([documentation](https://www.postgresql.org/docs/16/ddl-constraints.html#DDL-CONSTRAINTS-CHECK-CONSTRAINTS)). [followup_query_2.csv](followup_query_2.csv) found no failing source rows; validate rejection using synthetic fixtures.
 
 ### 2.2 Referential integrity
 
@@ -72,32 +72,32 @@ Use `ON UPDATE RESTRICT` for immutable identifiers where appropriate; preserve e
 
 ### 2.3 Saved answer snapshots
 
-The source already contains six nullable text columns on `tulemustepank`:
+Retain exactly the six existing text columns on `tulemustepank` with these target constraints:
 
-```text
-graafi_objekt_snapshot
-juhis_snapshot
-tyvi_snapshot
-stiimul_snapshot
-voti_snapshot
-arvutuskaik_snapshot
-```
+| Snapshot column | Target nullability |
+|---|---|
+| `graafi_objekt_snapshot` | NOT NULL |
+| `tyvi_snapshot` | NOT NULL |
+| `voti_snapshot` | NOT NULL |
+| `juhis_snapshot` | Nullable |
+| `stiimul_snapshot` | Nullable |
+| `arvutuskaik_snapshot` | Nullable |
 
-**Confirmed requirement:** Snapshots record the answer's saved question state and retain that state across future item edits. Preserve existing snapshot values exactly during import. Normal runtime access remains SELECT and INSERT only on `tulemustepank`.
+Do not add option-order/ID or measurement-parameter snapshot columns in V1. Enforce result immutability with `tulemustepank_append_only`, rejecting UPDATE and DELETE.
 
-**Current implementation gap:** The source has no trigger on `tulemustepank`. The backend's `AnswerRecord`, `encode_answer`, answer SELECT columns and decoder omit all six fields. Completed-test feedback loads prompt, stimulus and answer key from the current `ylesandepank` row. Existing schema columns alone therefore do not satisfy the requirement.
+Snapshots retain the question state used for the answer across later item edits. Preserve imported values exactly. Runtime access is SELECT/INSERT only.
 
-**Development-data evidence:** [followup_query_1.csv](followup_query_1.csv) and [followup_query_4.csv](followup_query_4.csv) show that snapshot columns exist but are incompletely populated, including in v2 sessions. Their import/backfill treatment is deferred. Those development rows do not determine target nullability: decide required production snapshot fields from the new write contract, allowing optional instruction, stimulus and calculation text to be absent where appropriate.
+**Integration gap:** `AnswerRecord`, answer encoding/decoding and SELECT columns omit snapshots; completed feedback reads current item content. The source has no result trigger.
+
+Source snapshot completeness is documented in [followup_query_1.csv](followup_query_1.csv) and [followup_query_4.csv](followup_query_4.csv). Production nullability follows the write contract; development-data backfills are deferred.
 
 **Required integration behavior:**
 
-- Save the question content used for that submission together with the answer. For the current backend, copy node, instruction, prompt, stimulus and correct-option text from the persisted `tp_seisund.current_question`. Reading the latest item-bank content at answer insertion can capture an edit made after the question was presented and disagree with the backend's scoring state.
-- The backend currently does not carry `arvutuskaik` in `AssessmentItem` or `CurrentQuestion`; extend question capture to retain this optional calculation text so `arvutuskaik_snapshot` can preserve its saved state, including legitimate absence. Do not resolve it from the subsequently edited item during result retrieval.
-- Replaying the same `vastus_id` must read and reuse the original snapshot; it must not refresh snapshot values from the current item.
-- Completed-test results must use saved snapshots and the saved score/correctness, without requiring the current item content or answer key to match.
-- Required production snapshots must be enforced by the schema/write contract. Node, prompt and answer key are candidates for NOT NULL constraints; optional instruction, stimulus and calculation text need their legitimate absence represented. Finalize these constraints with the snapshot-aware insertion contract rather than weakening them to accommodate development rows.
-
-**Still to specify for the production schema:** Required snapshot-field constraints; whether full option order/IDs and measurement parameters must also be retained in the answer snapshot; and whether to add an append-only result trigger alongside restrictive runtime grants. This review does not approve additional snapshot columns or a final trigger implementation. Historical development-data handling is deferred.
+- Save node, instruction, prompt, stimulus and correct-option text from persisted `tp_seisund.current_question`, not the latest item-bank row.
+- Extend `AssessmentItem`/`CurrentQuestion` to capture optional `arvutuskaik`, including legitimate absence; save it without later item lookup.
+- Replaying `vastus_id` reuses the original snapshots and never refreshes them.
+- Completed feedback uses saved snapshots and score/correctness independently of current item content.
+- Enforce required snapshots through the schema/write contract; preserve legitimate absence of optional fields.
 
 ## 3. Durable generation worker (`yg_tellimused`)
 
@@ -114,22 +114,23 @@ completed_at    timestamptz
 
 **Production request contract:** Use the current backend (`backend/app/services/assessment.py` and `backend/app/persistence/supabase_mapping.py`) as the source of truth. A nonempty `ylesande_taotlused` array contains unique `node` values and positive `amount` values; generate the amount requested for each node. `graafi_objektid` and `maht` are legacy compatibility fields, with backend `maht` set to the largest requested amount. The backend decoder falls back to those fields for NULL/empty request arrays. Handling existing prototype orders belongs to the later data-migration phase.
 
-The confirmed deployed `YG_edge_function_v2.ts` instead uses `maht` for every node, inserts items one at a time, tests only whether each node has any usable item, and does not write `taitmise_tulemus`. Preserve reusable generation/prompt code only where it fits the production backend contract; do not reproduce prototype-specific behavior as a production requirement.
+Reuse deployed `YG_edge_function_v2.ts` generation/prompt code only where it satisfies this contract; its per-node quantities, individual commits and missing result reporting are not the production contract.
 
-**Development-data evidence:** The order audit is retained in [followup_query_3.csv](followup_query_3.csv) and [followup_query_5.csv](followup_query_5.csv). The user classified IDs `9`, `11`, `12` as obsolete prototype work. Import exclusions and source-job reconciliation are deferred; they are not schema-design gates.
+Order audits: [followup_query_3.csv](followup_query_3.csv), [followup_query_5.csv](followup_query_5.csv). IDs `9`, `11`, `12` are obsolete prototype work; import/reconciliation is deferred.
 
 When writing `taitmise_tulemus`, use the exact per-node fields accepted by the backend decoder: `node`, `requested`, `baseline_usable`, `created`, `usable_after`, `remaining` (nonnegative integer counts). Completion must account for the requested quantities. The backend recomputes actual item inventory and creates a smaller follow-up order after a terminal order if shortages remain; keep a retrying order in `ootel`/`tootmises` so that retries do not also provoke a follow-up for the same in-flight work.
 
-**Suggested initialization:** For new production orders, `next_attempt_at IS NULL` can mean immediately eligible; a newly inserted order may default to `now()` for clarity. Decide the precise eligibility predicate when implementing the worker, and use it consistently.
+**Queue scheduling:** `next_attempt_at` remains nullable and defaults to NULL (immediately eligible). An `ootel` job is eligible when `next_attempt_at` is NULL or due. A `tootmises` job with an expired `locked_until` is eligible for lease reclamation. Terminal `tehtud`/`viga` jobs are not claimable. Use these rules consistently for worker claims and retries.
 
 **Processing contract:**
+
 1. In a short transaction, claim an eligible order with `FOR UPDATE SKIP LOCKED`, increment `attempt_count`, assign a new `claim_token`, set `locked_until`, and change status to `tootmises`.
 2. Commit before calling the AI generator. Renew the lease if necessary.
 3. On success, in a new transaction lock the order row and verify status, claim token and unexpired ownership; persist generated items and mark the order `tehtud` atomically. Set `completed_at`, store `taitmise_tulemus`, and clear lease fields. An ownership check outside this transaction is insufficient.
 4. On recoverable failure, record a sanitized `last_error`, schedule retry with backoff, and return to `ootel`; after retry exhaustion set `viga`.
 5. Reclaim expired leases. A stale worker must not commit results after losing its claim.
 
-**Delivery semantics:** At-least-once processing, not exactly-once external AI calls. The source generator's individual inserts have no order-linked persistence key. A proposed production approach is to commit all generated items and terminal order status in the same transaction, guarded by the locked claim: an aborted transaction leaves neither persisted items nor completion, and an already completed order is not reprocessed. This may avoid adding a source-order FK or uniqueness constraint. Decide partial-output handling and verify crash/ambiguous-commit recovery before enabling automatic retries; do not reuse individually committed prototype inserts without a separate idempotency design.
+**Delivery semantics:** At-least-once external processing. Commit generated items and terminal order status together under the locked claim; rollback leaves neither items nor completion, and completed orders are not reprocessed. No source-order FK/uniqueness is approved. Finalize partial-output handling and validate crash/ambiguous-commit recovery before automatic retries; individually committed inserts require a separate idempotency design.
 
 **Indexes:** No additional queue index in the agreed V1 index set. Revisit only after observing the claim query and queue performance. The current order count is small.
 
@@ -142,6 +143,7 @@ When writing `taitmise_tulemus`, use the exact per-node fields accepted by the b
 - `public.reject_kst_configuration_mutation()` — reject UPDATE and DELETE on configuration versions and activations.
 - `public.reject_kst_model_cache_mutation()` — reject UPDATE and DELETE on model cache.
 - **New:** `public.reject_graph_mutation()` — reject UPDATE and DELETE on `graafid_kst`.
+- **New:** `public.reject_result_mutation()` — reject UPDATE and DELETE on `tulemustepank`.
 
 Use fully qualified table names and controlled function `search_path`. Explicitly revoke public execution and grant only the runtime functions needed by the application. Trigger functions need not be callable by the runtime role directly.
 
@@ -150,12 +152,15 @@ Use fully qualified table names and controlled function `search_path`. Explicitl
 ### 4.2 Triggers
 
 Preserve:
+
 - `kst_configuration_activations_append_only`
 - `kst_configuration_versions_append_only`
 - `kst_model_cache_append_only`
 
 Add:
+
 - `graafid_kst_append_only` (`BEFORE UPDATE OR DELETE`, invoking `reject_graph_mutation`).
+- `tulemustepank_append_only` (`BEFORE UPDATE OR DELETE`, invoking `reject_result_mutation`).
 
 **Remove:** `yg_order_webhook`, which calls `supabase_functions.http_request`. No database-side HTTP calls or embedded bearer credentials in production DDL.
 
@@ -190,97 +195,99 @@ CREATE INDEX tulemustepank_test_id_idx
 
 No additional speculative indexes in V1. Evaluate worker-claim indexing and other queries after integration and representative query plans.
 
-## 6. Ownership and least-privilege access
+## 6. Ownership, grants and RLS
 
-Roles already established on the target cluster:
+**Agreed V1 design (2026-10-02):** FastAPI validates callers; PostgreSQL enforces role privileges and backend-supplied transaction context. OR services retain cross-test access subject to their API scopes. Players are bound to their token's test. `kasutaja_id` remains learner metadata; V1 adds no organization/creating-OR ownership fields.
 
-| Role | Intended responsibility |
-|---|---|
-| `hindamiskomponent_owner` (`NOLOGIN`) | Owns database and application schema objects. |
-| `hindamiskomponent_migrator` (`LOGIN NOINHERIT`) | Runs versioned migrations after `SET ROLE hindamiskomponent_owner`. |
-| `hindamiskomponent_app` (`LOGIN`) | Existing application login; proposed assessment-runtime role under section 6.1. No DDL privileges. |
+### 6.1 Database roles and ownership
 
-**Migration execution:** use migrator credentials and `SET ROLE hindamiskomponent_owner` before creating application objects, so ownership and owner-scoped default privileges are consistent. Do not rely on the previously configured blanket default DML grants; replace them with explicit table grants and narrow future defaults. Revoke `CREATE` on the application schema from `PUBLIC` and revoke unnecessary default `EXECUTE` on functions from `PUBLIC`.
+| Role | Responsibility | Target status |
+|---|---|---|
+| `hindamiskomponent_owner` (`NOLOGIN`) | Owns database and application objects; permits controlled migration/seed DML. | Exists |
+| `hindamiskomponent_migrator` (`LOGIN NOINHERIT`) | Runs migrations after `SET ROLE hindamiskomponent_owner`. | Exists |
+| `hindamiskomponent_app` (`LOGIN`) | Authorized OR/player assessment operations. | Exists |
+| `hindamiskomponent_admin` (`LOGIN`) | Admin maintenance and explicit test-scoped simulation. | Create |
+| `hindamiskomponent_worker` (`LOGIN`) | Queue processing and generated-item persistence. | Create |
 
-The previous single-role grant matrix is superseded by the proposed role separation below. Keeping admin rule creation is an explicit requirement: the admin runtime connection must retain SELECT and INSERT on `yg_reeglid`. Configuration-version creation/activation also require SELECT and INSERT; cache writes retain insert-if-absent behavior. Grant identity-sequence USAGE only where each role inserts, and EXECUTE only on functions it needs.
+Runtime roles must be NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE and NOCREATEDB, own no application objects, and have no membership path to owner/migrator or another runtime role. Use separate runtime credentials/pools; choose the connection through validated API authorization. This separates database privileges, but does not contain a compromised process holding multiple credentials.
 
-### 6.1 Production RLS — proposed design for discussion
+Create objects as the owner. Replace blanket default DML grants with explicit table/column grants. Revoke schema CREATE and unnecessary function EXECUTE from PUBLIC; grant sequence USAGE and function EXECUTE only where needed. All runtime roles lack DELETE, TRUNCATE and DDL privileges.
 
-**Required target:** Enable RLS on all ten application tables and define explicit role/operation policies before enabling application access. Use `FORCE ROW LEVEL SECURITY` as a proposed additional safeguard. Runtime roles must be NOSUPERUSER and NOBYPASSRLS, own no application objects, and have no path to assume the owner/migrator roles. An enabled table with no applicable policy denies rows by default; superusers and BYPASSRLS roles bypass policies, and owners normally bypass them unless FORCE is set ([PostgreSQL RLS documentation](https://www.postgresql.org/docs/16/ddl-rowsecurity.html)). FORCE does not prevent an owner from changing its table's policies or disabling RLS.
+Enable and FORCE RLS on all ten tables. Define explicit command/role policies and an owner-targeted migration/seed policy before granting runtime access. FORCE subjects ordinary owner DML to RLS but does not prevent the owner from changing policies; superusers/BYPASSRLS still bypass it. [PostgreSQL RLS documentation](https://www.postgresql.org/docs/16/ddl-rowsecurity.html).
 
-**Existing identity model:** `AuthContext` already distinguishes OR, player and admin profiles. Player JWTs bind access to `authorized_test_id`; `kasutaja_id` is learner metadata supplied in the create request, not the authenticated service subject. The current authorization contract treats OR subjects as trusted services, not ownership tenants. Preserve that model unless organization/OR ownership isolation is explicitly chosen. There is no existing organization or creating-OR ownership column to filter on.
+### 6.2 Table access
 
-**Proposed database roles:**
+S = SELECT, I = INSERT, U = UPDATE. Grants are further restricted by operation policies and column privileges.
 
-- `hindamiskomponent_app`: assessment-service SQL for authorized OR/player requests.
-- `hindamiskomponent_admin`: a separate runtime login/pool for authorized admin operations and explicit simulation paths; limited grants and RLS policies, not ownership or BYPASSRLS.
-- `hindamiskomponent_worker`: a separate login for job claims and generated-item persistence; limited grants and RLS policies, not ownership or BYPASSRLS.
-
-The last two roles are proposals, not roles confirmed to exist on the target. Do not give the assessment login membership allowing it to assume the admin or worker role. Database role choice must follow validated API authorization, not a client-supplied role setting.
-
-**Proposed table access (S = SELECT, I = INSERT, U = UPDATE):**
-
-| Objects | Assessment runtime | Admin runtime | Worker runtime | RLS boundary |
+| Objects | Assessment runtime | Admin runtime | Worker runtime | Boundary |
 |---|---|---|---|---|
-| `testisessioonid` | S/I/U for permitted operations on the authorized test | S/I/U on the selected test for explicit simulation operations | None | Test-scoped |
-| `tulemustepank` | S/I for the authorized test; no U/DELETE | S/I for the selected simulation test; no U/DELETE | None | Test-scoped; immutable saved answers |
-| `yg_tellimused` | S/I for the authorized test | S/I for the selected simulation test | S/U for queue processing | Test-scoped submission/read; worker queue policies |
-| `ylesandepank` | S for assessment use; U only on counter columns/functions | S/I/U for item maintenance | S/I for generation | Shared item bank; role-specific operations; counter updates limited to items used by the authorized test |
-| `graafid_kst`, `kst_model_cache` | S/I for assessment preparation/cache writes | S/I for explicit simulation/cache writes | None | Shared immutable cache, role/operation policies |
-| `kst_configuration_versions`, `kst_configuration_activations` | S | S/I for configuration administration | None | Shared configuration; append-only administrative writes |
-| `repo_materjalid`, `yg_reeglid` | None | S/I for current admin features | S for generation context | Shared source material/rules; role-specific access |
+| `testisessioonid` | S/I/U | S/I/U for simulation | None | Selected test |
+| `tulemustepank` | S/I | S/I for simulation | None | Selected test; saved answers immutable |
+| `yg_tellimused` | S/I | S/I for simulation | S/U | Selected-test requests; shared worker queue |
+| `ylesandepank` | S; U on counters only | S/I/U for maintenance; counters for simulation | S/I | Shared reads; operation-specific writes |
+| `graafid_kst`, `kst_model_cache` | S/I for preparation/cache writes | S/I for simulation | None | Shared immutable caches |
+| `kst_configuration_versions`, `kst_configuration_activations` | S | S/I | None | Shared configuration; append-only writes |
+| `repo_materjalid`, `yg_reeglid` | None | S/I | S | Shared generation sources/rules |
 
-Shared reference rows may intentionally be visible to an allowed backend role across tests. An explicit role-scoped shared-read policy does not imply public access. Learners never connect to PostgreSQL; the backend still needs answer keys and server-only state for scoring, and API DTOs must continue hiding them. RLS controls rows; it does not replace column grants, snapshot immutability or API response filtering.
+Shared resources have no test ownership. Backend scoring may read answer keys; API DTOs must hide server-only data from learners. Admin maintenance grants no unrestricted session/answer access.
 
-**Passing verified context to PostgreSQL:**
+Restrict UPDATE to backend session-state fields, admin-editable item fields, assessment counters, or worker lifecycle/result fields. Exclude primary keys and session identity/learner metadata. Assessment/simulation order INSERT covers request fields, leaves worker fields to defaults, and requires initial status `ootel`. Do not combine table-wide UPDATE with column revocations: the table grant still applies. [PostgreSQL GRANT documentation](https://www.postgresql.org/docs/16/sql-grant.html).
 
-1. FastAPI validates the JWT and profile/scope/test binding through the existing authorization boundary.
-2. Each short repository transaction sets an authorized test ID and permitted operation using parameterized, transaction-local settings on the same checked-out connection, for example `set_config('hk.test_id', <validated ID>, true)`. For creation, use the backend-generated new test ID; for a player, it must match the validated token's binding. Trusted OR access can select any API-authorized test under the current contract, but each transaction is still scoped to that selected test.
-3. Policies use that context for `USING` on existing rows and `WITH CHECK` on inserted/updated rows. Missing/empty context must deny test-scoped access; a target row cannot be moved to another test by UPDATE. Context must be reset/set for every transaction, including retries.
-4. Use request-scoped/explicit authorization context, not mutable caller fields on the currently shared repository/service objects. Do not hold a database transaction open while calling R or the AI generator. `SET LOCAL`/`set_config(..., true)` lasts only for the transaction ([PostgreSQL SET documentation](https://www.postgresql.org/docs/16/sql-set.html)).
+### 6.3 Authorized operations
 
-For illustration, the assessment SELECT policy on session rows can include:
+| API authorization and route | Context operation | Permitted assessment effects |
+|---|---|---|
+| OR `tests:create` | `test_create` | Read configuration/items/caches; insert missing caches, new session and initial order. |
+| OR `tests:read` | `test_read` | Read selected session. |
+| OR `tests:launch` | `test_launch` | Read selected session for link eligibility; token issuance has no database write. |
+| Player `tests:play`, start | `player_start` | Read session/graph/items/orders and completed answer history; update preparation state, activate session, insert follow-up order. |
+| Player `tests:play`, answer | `player_answer` | Read session/items/answers; insert answer snapshots, increment usage once for a new accepted answer, update session; replay saved answers. |
+| Player `tests:play`, report | `player_report` | Read active session; increment inadequate-item counter for its current question. |
+| Admin `admin:simulation`, existing simulation routes | Simulated route's operation, through admin login | Same selected-test effects; no player-token issuance or question reporting. |
 
-```sql
-test_id = NULLIF(current_setting('hk.test_id', true), '')
-```
+Admin maintenance policies separately authorize source/rule creation, item maintenance, and configuration creation/activation. Worker policies authorize generation reads, item insertion, and queue lifecycle updates.
 
-This is only the test-boundary predicate, not complete executable policy DDL. INSERT/UPDATE permissions also need the permitted operation and role checks. Do not add a general unrestricted policy for the assessment role: permissive policies combine with OR and could defeat the test restriction. Worker/admin allowances should target their separate roles ([PostgreSQL CREATE POLICY documentation](https://www.postgresql.org/docs/16/sql-createpolicy.html)).
+### 6.4 Transaction context and policies
 
-**Trust boundary:** Plain custom settings are assertions supplied by the trusted backend, not independently verified identities. A database client able to issue arbitrary SQL as the assessment login can change such context. This design protects against accidental cross-test queries but does not independently contain a compromised backend credential or context-changing SQL. If production requires PostgreSQL to reject forged caller context independently of FastAPI, choose a verified-context mechanism (such as database verification of signed claims) before finalizing policies. Do not claim arbitrary `hk.actor = 'admin'` settings provide role separation.
+- FastAPI validates JWT profile, scopes and player binding. Set `hk.operation` and `hk.actor` from that authorization and the server-selected operation; set `hk.test_id` to the authorized path test or backend-generated creation ID. Optional `hk.subject` is attribution only.
+- Initialize every relevant field using parameterized `set_config(..., true)` inside each explicit transaction, on the connection executing protected SQL. Reinitialize on retries; keep session/pool defaults free of authorization context. Missing/empty test IDs or missing/unknown operations deny test-scoped access. [PostgreSQL SET documentation](https://www.postgresql.org/docs/16/sql-set.html).
+- Use immutable request-bound or explicit context, never mutable caller fields on shared services/repositories. Creation-time configuration/item/cache access uses `test_create` without requiring an existing session; session/order writes require the generated test ID.
+- Combine the selected-test predicate with permitted actor/operation checks. Use SELECT USING, INSERT WITH CHECK and UPDATE USING/WITH CHECK; include SELECT visibility required by UPDATE, RETURNING and conflict/replay paths. No unrestricted assessment policy may independently admit test-scoped rows: permissive policies combine with OR. [PostgreSQL policy documentation](https://www.postgresql.org/docs/16/sql-createpolicy.html).
+- Commit before R/AI calls. Recheck expected session/submission state or worker claim in the subsequent write transaction.
 
-**Integration details to resolve with policy DDL:**
+**Trust boundary:** Plain transaction settings are trusted FastAPI assertions. They protect against accidental overbroad SQL; an arbitrary-SQL client using the same login can change them. V1 does not verify signed caller context in PostgreSQL. Actor settings cannot grant another database role's privileges.
 
-- Check `USING`, `WITH CHECK`, SELECT policies for RETURNING/insert-if-absent, and the worker's SELECT FOR UPDATE SKIP LOCKED claim path.
-- Keep counter functions SECURITY INVOKER with role-appropriate column UPDATE grants. Counter-row eligibility must cover current-question reports and usage after a saved answer; assessment callers must not gain item-content UPDATE.
-- Specify a controlled schema-seed/migration DML path under FORCE without granting its authority to runtime roles.
-- Test under the actual non-owner runtime logins: missing context, access to another test, mismatched answer/order insertion, attempted test-ID reassignment, context reuse after commit/rollback/concurrent requests, admin rule creation, worker claims, and denied runtime DDL/DELETE/TRUNCATE. Tests need fresh synthetic data, not the development import.
+### 6.5 Counters, worker and operational access
 
-**Networking:** Continue TLS-only SCRAM authentication from the authorized application VM, CA verification (`sslmode=verify-full`), and OpenStack security-group restrictions already tested.
+**Counters:** Retain SECURITY INVOKER and grant UPDATE only on `ebaadekvaatne_arv`, `kasutamiste_arv` and `viimane_kasutus`, subject to operation-specific RLS. This intentionally permits direct assignments to eligible counter columns; V1 does not require function-only increments. Application writes use the retained atomic functions. [PostgreSQL function documentation](https://www.postgresql.org/docs/16/sql-createfunction.html).
+
+Report eligibility requires the selected active session's persisted `tp_seisund.current_question.item_id`; historical use or a caller-supplied item setting is insufficient. Usage eligibility derives from the saved answer/current submission according to commit ordering. Counting usage once on replay is enforced by the atomic answer-write contract.
+
+**Worker:** The trusted worker uses direct SQL within its limited grants. Policies support claim, renewal, completion, retry, failure and expired-lease reclamation, including visibility for row locking and RETURNING. The locked claim-token/lease checks and atomic completion transaction in section 3 enforce job ownership. RLS does not independently enforce that protocol against arbitrary worker SQL. No function-only lifecycle interface is required in V1. The informational order `test_id` grants no session/answer access.
+
+**Operational access:** Seed through the owner policy with RLS enabled. Readiness uses a bounded connection/schema check without unscoped assessment-data access. Retain TLS-only SCRAM from the authorized application VM, CA verification (`sslmode=verify-full`) and OpenStack security-group restrictions.
 
 ## 7. Schema migration and validation
 
 1. Create and review version-controlled executable V1 DDL for a fresh target schema, including ownership, grants, RLS policies, constraints, functions and triggers. **Do not modify the live Supabase pilot during this review.**
-2. Validate schema installation and any required configuration seed under the intended migrator/owner path. Verify RLS and grants under actual runtime credentials, rather than relying on successful owner queries.
-3. Use synthetic fixtures to verify append-only graph/configuration/cache behavior, restrictive FKs, repeat-answer support, production snapshots, both approved indexes and role-specific operations.
-4. Verify the backend PostgreSQL authorization-context contract, cross-test denial, pooling/concurrency isolation, admin features and worker claims. RLS must be active before runtime access is considered ready.
+2. Validate installation/seeding through the owner policy, then test grants/RLS using actual runtime logins.
+3. Use synthetic fixtures to verify append-only graph/configuration/cache/result behavior, restrictive FKs, repeat-answer support, required/optional snapshot nullability, JSON CHECK rejection of missing/null fields, queue scheduling, both approved indexes and role-specific operations.
+4. Test own-test success, cross-test denial without WHERE, missing/wrong context, mismatched inserts, forbidden columns, RETURNING/conflict/replay, admin simulation exclusions, worker lifecycle/stale claims and denied DDL/DELETE/TRUNCATE. Integration must additionally verify context propagation and commit/rollback/retry/concurrent pool isolation.
 5. Run an integration flow for unequal per-node generation amounts, worker failure/retry and crash recovery, snapshot-preserving answer saving/replay and result retrieval after item edits.
 
-Data import, development-row exclusions, historical backfills, sequence resets after import and cutover procedures will be addressed in the data-migration phase. Existing audit counts are evidence snapshots, not current acceptance targets.
+Use fresh synthetic fixtures for schema acceptance. Data import and cutover remain a later phase.
 
 ## 8. Outstanding checks before executable migration
 
-These are implementation checks, **not reasons to reopen the agreed architecture**:
+Implement the agreed role, grant and RLS contract in section 6. Remaining checks:
 
-- Identity generation modes and sequence options are confirmed; preserve them in target DDL.
-- Agree the production RLS access model: preserve current trusted-OR/player/admin authorization, or explicitly introduce organization/OR ownership isolation and the fields it requires.
-- Finalize assessment/admin/worker role separation, per-command policies and the trust boundary for request context. Verify target grants against the replacement PostgreSQL repositories/worker; current admin rule INSERT and generator item INSERT must remain supported.
+- Restore the referenced CSV exports and verify the exact source definitions before writing executable DDL.
+- Define exact column grants and per-command policy DDL; preserve admin rule creation and generated-item insertion.
 - Check whether any application queries depend on Supabase Auth, Storage, Realtime, RLS, non-public functions, or other extension-specific objects; migrate or replace only genuine dependencies.
 - Specify the canonical graph hashing/insertion contract and append-only enforcement. Auditing or correcting existing prototype graph payloads/hashes is deferred to data migration.
 - Define worker claim SQL and retry/idempotency behavior before turning on automatic retries. No new queue index is approved yet.
-- Agree required production snapshot fields/constraints and the final JSON CHECK correction; development-data handling is deferred.
 - Specify snapshot-aware answer saving/reading and verify edit/retry stability with synthetic production-format fixtures.
-- Define RLS-aware configuration seeds, health probes, counter calls and worker claims; test using non-owner runtime logins and pooled concurrent requests.
+- Implement owner-policy seeds, bounded readiness checks, counter eligibility and the full worker lifecycle.
 
 ---
 
